@@ -9,7 +9,7 @@ Initialize the project in the current repo using npm.
 3. Run: `npm run dev` and confirm it loads.
 
 ## Acceptance
-- [ ] App runs locally without errors
-- [ ] Project uses TypeScript, Tailwind, App Router, and `src/`
-- [ ] No extra features added yet
+- [x] App runs locally without errors
+- [x] Project uses TypeScript, Tailwind, App Router, and `src/`
+- [x] No extra features added yet
 
