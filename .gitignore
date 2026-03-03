@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# deps + builds
+node_modules/
+frontend/.next/
+backend/dist/
+backend/.nest/
+.DS_Store
+.env
+.env.*

@@ -1,0 +1,47 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Design tokens as CSS variables */
+:root,
+[data-theme='light'],
+[data-theme='dark'] {
+  --radius-card: 12px;
+  --radius-input: 10px;
+  --radius-pill: 999px;
+  --shadow-soft: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+  --spacing-page: 24px;
+  --spacing-card: 24px;
+}
+
+[data-theme='dark'] {
+  --color-bg: #0b1220;
+  --color-surface: #111827;
+  --color-surface-alt: #1f2937;
+  --color-border: #334155;
+  --color-text: #e5e7eb;
+  --color-text-muted: #9ca3af;
+  --color-primary: #123b6b;
+  --color-primary-hover: #0f3159;
+}
+
+[data-theme='light'] {
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f1f5f9;
+  --color-border: #cbd5e1;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+  --color-primary: #123b6b;
+  --color-primary-hover: #0f3159;
+}
+
+body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  transition: background-color 0.2s, color 0.2s;
+}
