@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Geo Wushu Competition System
 
-## Getting Started
+Monorepo with **frontend** (Next.js) and **backend** (NestJS + Prisma).
 
-First, run the development server:
+## Structure
+
+```
+├── frontend/     Next.js (React) app — port 3000
+├── backend/      NestJS + Prisma API — port 4000
+├── package.json  Workspace root
+└── README.md
+```
+
+## Install
+
+```bash
+npm install
+```
+
+## Run both apps
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Frontend: http://localhost:3000
+- Backend: http://localhost:4000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Or run separately:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev:frontend   # Next.js on :3000
+npm run dev:backend   # NestJS on :4000
+```
 
-## Learn More
+## Migrations
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+cd backend
+npm run prisma:migrate
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+For production:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+cd backend
+npm run prisma:migrate:deploy
+```
 
-## Deploy on Vercel
+## Environment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Backend** (`backend/.env`):
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `DATABASE_URL` — PostgreSQL connection string
+- `JWT_SECRET` — Secret for JWT signing
+- `PORT` — API port (default 4000)
+- `FRONTEND_URL` — CORS origin (default http://localhost:3000)
+
+**Frontend** (`frontend/.env.local`):
+
+- `NEXT_PUBLIC_API_URL` — Backend URL (default http://localhost:4000)
+
+Copy the example files:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.local.example frontend/.env.local
+```
+
+## Build
+
+```bash
+npm run build
+```
+
+Builds backend first (Prisma generate + Nest), then frontend.

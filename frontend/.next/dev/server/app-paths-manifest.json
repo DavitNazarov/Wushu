@@ -1,9 +1,0 @@
-{
-  "/[locale]/admin/events/page": "app/[locale]/admin/events/page.js",
-  "/[locale]/admin/page": "app/[locale]/admin/page.js",
-  "/[locale]/admin/rulesets/page": "app/[locale]/admin/rulesets/page.js",
-  "/[locale]/admin/settings/page": "app/[locale]/admin/settings/page.js",
-  "/[locale]/admin/users/page": "app/[locale]/admin/users/page.js",
-  "/[locale]/login/page": "app/[locale]/login/page.js",
-  "/[locale]/page": "app/[locale]/page.js"
-}
