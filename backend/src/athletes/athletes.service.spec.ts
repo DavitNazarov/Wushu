@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException } from '@nestjs/common';
 import type { Athlete, AthleteSex } from '@prisma/client';
 import { AthletesService } from './athletes.service';
 

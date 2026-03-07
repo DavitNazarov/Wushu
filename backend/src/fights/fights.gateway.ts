@@ -18,7 +18,7 @@ export class FightsGateway {
     @ConnectedSocket() client: Socket,
   ) {
     const room = `event:${data.eventId}`;
-    client.join(room);
+    void client.join(room);
     return { ok: true, room };
   }
 
@@ -28,7 +28,7 @@ export class FightsGateway {
     @ConnectedSocket() client: Socket,
   ) {
     const room = `mat:${data.matId}`;
-    client.join(room);
+    void client.join(room);
     return { ok: true, room };
   }
 

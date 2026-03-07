@@ -16,9 +16,16 @@ export class AuthGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const token =
-      req.cookies?.[JWT_COOKIE_NAME] ??
-      req.headers.authorization?.replace('Bearer ', '');
+    const authHeader = req.headers.authorization;
+    const bearerToken =
+      typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice('Bearer '.length)
+        : null;
+    const cookies = req.cookies as Record<string, unknown> | undefined;
+    const rawCookieToken = cookies?.[JWT_COOKIE_NAME];
+    const cookieToken =
+      typeof rawCookieToken === 'string' ? rawCookieToken : null;
+    const token = cookieToken ?? bearerToken;
 
     if (!token) {
       throw new UnauthorizedException('UNAUTHENTICATED');

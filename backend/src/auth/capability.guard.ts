@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { AuthGuard, type AuthenticatedRequest } from './auth.guard';
+import type { AuthenticatedRequest } from './auth.guard';
 
 export const REQUIRE_CAPABILITY = 'require_capability';
 

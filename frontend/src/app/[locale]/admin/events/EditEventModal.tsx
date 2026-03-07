@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
@@ -68,19 +68,19 @@ export function EditEventModal({ open, onClose, event }: Props) {
     enabled: open,
   });
 
-  // When data arrives and selection hasn't been set yet, initialise from existing categories
-  useEffect(() => {
-    if (!existingCategories || categorySelection !== null || !rulesets?.length) return;
-    if (!existingCategories.ageGroups.length) return;
+  const initialCategorySelection = useMemo<CategorySelection | null>(() => {
+    if (!existingCategories || !rulesets?.length) return null;
+    if (!existingCategories.ageGroups.length) return null;
     const rulesetId = rulesets[0].id;
-    setCategorySelection({
+    return {
       rulesetId,
       ageGroups: existingCategories.ageGroups.map((ag) => ({
         rulesetAgeGroupId: ag.rulesetAgeGroupId,
         weightCategoryIds: ag.weightCategories.map((wc) => wc.rulesetWeightCategoryId),
       })),
-    });
-  }, [existingCategories, rulesets, categorySelection]);
+    };
+  }, [existingCategories, rulesets]);
+  const effectiveCategorySelection = categorySelection ?? initialCategorySelection;
 
   const slugIsValid = !slug || SLUG_RE.test(slug);
 
@@ -150,8 +150,8 @@ export function EditEventModal({ open, onClose, event }: Props) {
         }
       }
       const updated = await apiPatch<EventRow>(`/api/events/${event.id}`, payload);
-      if (categorySelection && categorySelection.ageGroups.length > 0) {
-        await apiPost(`/api/events/${event.id}/categories`, categorySelection);
+      if (effectiveCategorySelection && effectiveCategorySelection.ageGroups.length > 0) {
+        await apiPost(`/api/events/${event.id}/categories`, effectiveCategorySelection);
         queryClient.invalidateQueries({ queryKey: ['event-categories', event.id] });
       }
       return updated;
@@ -313,7 +313,7 @@ export function EditEventModal({ open, onClose, event }: Props) {
           {rulesets && rulesets.length > 0 ? (
             <CategorySelector
               rulesets={rulesets}
-              value={categorySelection}
+              value={effectiveCategorySelection}
               onChange={(v) => setCategorySelection(v)}
             />
           ) : (

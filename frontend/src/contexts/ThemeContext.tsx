@@ -29,19 +29,12 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('dark');
-  const [mounted, setMounted] = useState(false);
+  const [theme, setThemeState] = useState<Theme>(() => getStoredTheme());
 
   useEffect(() => {
-    setThemeState(getStoredTheme());
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem(STORAGE_KEY, theme);
-  }, [theme, mounted]);
+  }, [theme]);
 
   const setTheme = useCallback((t: Theme) => setThemeState(t), []);
   const toggleTheme = useCallback(

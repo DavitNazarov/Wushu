@@ -123,7 +123,11 @@ export function CategorySelector({ rulesets, value, onChange, error }: Props) {
 
   function handleToggleWc(wcId: string, checked: boolean) {
     const next = new Set(selectedWcIds);
-    checked ? next.add(wcId) : next.delete(wcId);
+    if (checked) {
+      next.add(wcId);
+    } else {
+      next.delete(wcId);
+    }
     onChange(buildSelection(next));
   }
 

@@ -24,6 +24,13 @@ import { CapabilityGuard } from '../auth/capability.guard';
 import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
 import { CreateEventSchema, UpdateEventSchema } from './event.types';
+import type { EventLifecycle } from '@prisma/client';
+
+function hasCode(err: unknown, code: string): boolean {
+  if (!err || typeof err !== 'object') return false;
+  if (!('code' in err)) return false;
+  return (err as { code?: unknown }).code === code;
+}
 
 @Controller('events')
 @UseGuards(AuthGuard, CapabilityGuard)
@@ -124,7 +131,7 @@ export class EventsController {
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown';
-      if (msg === 'SLUG_ALREADY_IN_USE' || e?.code === 'P2002') {
+      if (msg === 'SLUG_ALREADY_IN_USE' || hasCode(e, 'P2002')) {
         throw new HttpException(
           {
             code: 'VALIDATION_ERROR',
@@ -177,7 +184,7 @@ export class EventsController {
       const msg = e instanceof Error ? e.message : 'Unknown';
       if (msg === 'EVENT_NOT_FOUND')
         throw new HttpException('EVENT_NOT_FOUND', HttpStatus.NOT_FOUND);
-      if (e?.code === 'P2002') {
+      if (hasCode(e, 'P2002')) {
         throw new HttpException(
           {
             code: 'VALIDATION_ERROR',
@@ -230,7 +237,7 @@ export class EventsController {
         eventId: id,
         organisationId: auth.organisationId,
         actorUserId: auth.sub,
-        targetState: target as any,
+        targetState: target as EventLifecycle,
         reason: body.reason ?? null,
         allowOverride: body.override ?? false,
       });

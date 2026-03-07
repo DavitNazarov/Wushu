@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { use } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
@@ -73,7 +73,7 @@ export default function MatScreenPage({
   const matIdRef = useRef<string | null>(null);
   const timerDisplay = useTimer(feed?.now?.timerState ?? null);
 
-  async function loadFeed() {
+  const loadFeed = useCallback(async () => {
     try {
       const res = await fetch(
         `/api/public/mat?eventSlug=${encodeURIComponent(eventSlug)}&mat=${encodeURIComponent(matName)}`,
@@ -93,10 +93,12 @@ export default function MatScreenPage({
     } catch {
       setConnected(false);
     }
-  }
+  }, [eventSlug, matName]);
 
   useEffect(() => {
-    loadFeed();
+    queueMicrotask(() => {
+      void loadFeed();
+    });
     const socketBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? window.location.origin;
     const socket = io(socketBaseUrl, {
       transports: ['websocket', 'polling'],
@@ -137,7 +139,7 @@ export default function MatScreenPage({
       socket.close();
       if (socketRef.current === socket) socketRef.current = null;
     };
-  }, [eventSlug, matName]);
+  }, [eventSlug, matName, loadFeed]);
 
   const decodedMatName = decodeURIComponent(matName);
 
