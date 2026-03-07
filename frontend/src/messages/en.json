@@ -2,18 +2,102 @@
   "app": {
     "title": "Geo Wushu Competition System",
     "badge": "GEO WUSHU",
-    "subtitle": "Competition System",
+    "subtitle": "",
     "tagline": "Control brackets, schedule, and live scoring from a single panel.",
     "statusLive": "Live event",
-    "pillMvp": "MVP",
+    "pillMvp": "",
     "pillOrg": "Geo Wushu"
   },
   "nav": {
-    "home": "Home"
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "events": "Events",
+    "registrations": "Registrations",
+    "weighin": "Weigh-in",
+    "draw": "Draw",
+    "brackets": "Brackets",
+    "schedule": "Schedule",
+    "live": "Live",
+    "results": "Results",
+    "clubs": "Clubs",
+    "athletes": "Athletes",
+    "users": "Users",
+    "rulesets": "Rulesets",
+    "news": "News",
+    "inbox": "Inbox",
+    "settings": "Settings",
+    "me": "My profile",
+    "section_overview": "Overview",
+    "section_tournament": "Tournament",
+    "section_people": "People",
+    "section_admin": "Admin",
+    "integrity": "Integrity"
+  },
+  "common": {
+    "search": "Search",
+    "new": "New",
+    "create": "Create",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "reasonRequired": "Reason is required",
+    "override": "Override",
+    "confirm": "Confirm",
+    "publish": "Publish",
+    "unpublish": "Unpublish",
+    "retry": "Retry",
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "noData": "No data",
+    "actions": "Actions",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "back": "Back",
+    "notImplementedTitle": "Coming soon",
+    "notImplementedDescription": "This feature is not implemented yet. It will be available in a future update.",
+    "goToDashboard": "Go to Dashboard",
+    "goToEvents": "Go to Events",
+    "loadError": "Couldn't load data",
+    "saveSuccess": "Saved successfully",
+    "saveFailed": "Save failed",
+    "deleteConfirm": "Are you sure you want to delete this?",
+    "fights": "fights",
+    "done": "done",
+    "fightStatus": {
+      "QUEUED": "Queued",
+      "ON_DECK": "On deck",
+      "IN_PROGRESS": "In progress",
+      "PAUSED": "Paused",
+      "COMPLETE": "Complete",
+      "CONFIRMED": "Confirmed"
+    }
+  },
+  "event": {
+    "newEvent": "New event",
+    "location": "Location",
+    "timezone": "Timezone",
+    "registrationWindow": "Registration window",
+    "weighinWindow": "Weigh-in window",
+    "competitionWindow": "Competition dates",
+    "advanceStage": "Advance stage",
+    "lockRegistration": "Lock registration"
+  },
+  "status": {
+    "regOpen": "Registration open",
+    "weighin": "Weigh-in",
+    "locked": "Locked",
+    "drawn": "Drawn",
+    "published": "Published",
+    "live": "Live",
+    "completed": "Completed"
   },
   "public": {
     "viewEvents": "View events",
-    "adminSignIn": "Admin sign in",
+    "adminSignIn": "Sign in",
+    "adminDashboard": "Admin dashboard",
+    "coachDashboard": "Coach dashboard",
+    "athleteProfile": "Athlete profile",
     "heroTitle": "Geo Wushu Competition System",
     "heroSubtitle": "Events, brackets, schedule, and live results — in one place.",
     "featureLiveSchedule": "Live schedule",
@@ -36,6 +120,16 @@
     "notPublished": "Not published yet",
     "notPublishedDescription": "This content is not yet available. Check back later.",
     "noEventsYet": "No published events yet. Check back later.",
+    "stage": "Stage",
+    "lifecycle": {
+      "REG_OPEN": "Registration open",
+      "WEIGHIN": "Weigh-in",
+      "LOCKED": "Registration locked",
+      "DRAWN": "Draw executed",
+      "PUBLISHED": "Published",
+      "LIVE": "Competition live",
+      "COMPLETED": "Completed"
+    },
     "about": "About",
     "rules": "Rules",
     "clubs": "Clubs & coaches",
@@ -45,13 +139,33 @@
     "newsTitle": "News",
     "newsSubtitle": "Announcements and updates about Geo Wushu events.",
     "noNewsYet": "No news has been published yet.",
+    "readMore": "Read more",
+    "relatedEvent": "Related event",
+    "noEventLinked": "No event linked",
+    "viewEvent": "View event",
+    "bracketsNotPublished": "Brackets not published yet",
+    "scheduleNotPublished": "Schedule not published yet",
+    "noMatData": "No mat data available",
+    "matSelect": "Mat",
+    "now": "Now",
+    "next": "Next",
+    "onDeck": "On deck",
+    "overview": "Overview",
+    "mat": "Mat",
     "contact": "Contact",
+    "more": "More",
+    "membershipInterest": "Membership",
+    "menu": "Menu",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "language": "Language",
     "contactTitle": "Contact",
     "contactSubtitle": "How to reach organisers and federation contacts.",
     "contactBody": "For event-related questions, use this form and your message will be forwarded to the relevant organiser.",
     "contactName": "Your name",
     "contactEmail": "Email",
     "contactMessage": "Message",
+    "contactClubName": "Club name (optional)",
     "contactSubmit": "Send message",
     "contactSubmitting": "Sending…",
     "contactSuccess": "Thank you. Your message has been received.",
@@ -85,6 +199,10 @@
     "rulesPublishingText": "Brackets, schedule, and results are only visible to the public after the organiser publishes them. Until then, these pages show \"Not published yet\". This ensures spectators and participants see accurate, finalised information."
   },
   "auth": {
+    "signIn": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "login": "Log in",
     "subtitle": "Sign in to access your dashboard.",
     "emailLabel": "Email",
     "passwordLabel": "Password",
@@ -92,7 +210,12 @@
     "errorGeneric": "Something went wrong. Please try again.",
     "submitIdle": "Sign in",
     "submitSubmitting": "Signing in…",
-    "forgotPassword": "Forgot password?"
+    "forgotPassword": "Forgot password?",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "logout": "Log out",
+    "refreshing": "Refreshing session…",
+    "redirecting": "Redirecting…"
   },
   "noAccess": {
     "title": "No access",
@@ -115,8 +238,10 @@
       "dashboard": "Dashboard",
       "events": "Events",
       "rulesets": "Rulesets",
+      "athletes": "Athletes",
       "users": "Users",
-      "settings": "Settings"
+      "settings": "Settings",
+      "integrity": "Integrity"
     },
     "topbar": {
       "eventSelectLabel": "Event",
@@ -146,6 +271,8 @@
       "new": "New Event",
       "emptyTitle": "No events yet",
       "emptyDescription": "Create your first event to start registration.",
+      "sectionPublished": "Published",
+      "sectionUnpublished": "Unpublished",
       "recentTitle": "Recent events",
       "kpiActive": "Active",
       "kpiUpcoming": "Upcoming",
@@ -165,6 +292,21 @@
         "LIVE": "Competition live",
         "COMPLETED": "Completed"
       },
+      "lifecycleShort": {
+        "REG_OPEN": "Open",
+        "WEIGHIN": "Weigh-in",
+        "LOCKED": "Locked",
+        "DRAWN": "Drawn",
+        "PUBLISHED": "Published",
+        "LIVE": "Live",
+        "COMPLETED": "Done"
+      },
+      "phaseBar": {
+        "weighIn": "Weigh-in days",
+        "fights": "Fight days",
+        "weighInDays": "weigh-in days",
+        "fightDays": "fight days"
+      },
       "advance": {
         "button": "Advance stage",
         "noEventSelected": "Select an event to advance its stage.",
@@ -178,23 +320,222 @@
         "success": "Event stage updated.",
         "errorGeneric": "Could not advance stage. Please try again.",
         "errorInvalidTransition": "This stage change is not allowed.",
+        "errorRegistrationOpen": "Registration period is still open. Use override with a reason to force this transition.",
+        "errorCompetitionNotStarted": "Competition date has not started yet. Use override with a reason to force this transition.",
         "errorOverrideReasonRequired": "Reason is required for override transitions."
+      },
+      "timezone": "Timezone",
+      "dates": {
+        "start": "Event start",
+        "end": "Event end"
+      },
+      "datesSummary": {
+        "eventDays": "Event days",
+        "regDays": "Registration/Weigh-in days",
+        "fightDays": "Fight days",
+        "date": "Date",
+        "registration": "Registration/Weigh-in",
+        "fight": "Fight day",
+        "registrationShort": "Weigh-in",
+        "fightShort": "Fight"
+      },
+      "registrationWindow": {
+        "label": "Online registration window",
+        "opensAt": "Online registration opens",
+        "closesAt": "Online registration closes",
+        "closesAtAuto": "Auto: first weigh-in day ({date})",
+        "errorOpensAfterCloses": "Opening date must be on or before the closing date.",
+        "errorClosesAfterWeighin": "Closing date must be on or before the first weigh-in day ({date})."
+      },
+      "autoAdvanceStage": {
+        "label": "Automatically advance event stages",
+        "helper": "When enabled, the system will automatically move the event through its lifecycle stages based on configured dates.",
+        "badge": "Auto-advance on",
+        "badgeOff": "Auto-advance off",
+        "runNow": "Run auto-advance",
+        "advanced": "Stage automatically advanced to Weigh-in",
+        "noChange": "Stage is already up to date"
+      },
+      "delete": {
+        "button": "Delete event",
+        "title": "Delete event",
+        "description": "This will permanently delete the event and all its data — registrations, weigh-ins, brackets, fights, and results. This cannot be undone.",
+        "confirm": "Delete permanently",
+        "cancel": "Cancel"
+      },
+      "edit": {
+        "title": "Edit event",
+        "description": "Update event details. Dates and slug changes take effect immediately."
+      },
+      "validation": {
+        "summary": "Please fix the highlighted fields."
+      },
+      "detail": {
+        "published": "Published",
+        "kpiRegistrations": "Registrations",
+        "kpiAthletes": "Athletes",
+        "kpiClubs": "Clubs",
+        "kpiApproved": "Approved",
+        "datesTitle": "Dates",
+        "dateOnlineReg": "Online registration",
+        "dateRegistration": "Registration",
+        "legendWeighin": "Weigh-in",
+        "legendFight": "Fight day",
+        "dateWeighIn": "Weigh-in",
+        "dateCompetition": "Competition",
+        "detailsTitle": "Details",
+        "regBreakdownTitle": "Registration breakdown",
+        "quickLinksTitle": "Quick links",
+        "link_registrations": "Registrations",
+        "link_weighin": "Weigh-in",
+        "link_draw": "Draw",
+        "link_brackets": "Brackets",
+        "link_schedule": "Schedule",
+        "link_live": "Live"
       }
     },
     "users": {
       "title": "Users",
       "new": "Add User",
       "emptyTitle": "No users yet",
-      "emptyDescription": "Add users to manage events and permissions."
+      "emptyDescription": "Add coaches and athletes to manage events and registrations.",
+      "createDescription": "Create a new coach or athlete account. They will receive the credentials you set.",
+      "fieldEmail": "Email",
+      "fieldPassword": "Password",
+      "fieldDisplayName": "Display name",
+      "fieldRole": "Role",
+      "displayNamePlaceholder": "e.g. Giorgi Beridze",
+      "passwordHint": "At least 6 characters",
+      "roleAdmin": "Admin",
+      "roleCoach": "Coach",
+      "roleAthlete": "Athlete",
+      "columns": {
+        "displayName": "Name",
+        "email": "Email",
+        "role": "Role",
+        "status": "Status",
+        "createdAt": "Created"
+      },
+      "statusActive": "Active",
+      "statusInactive": "Inactive",
+      "errorEmailInUse": "This email is already registered.",
+      "errorForbidden": "You do not have permission to add users."
     },
     "settings": {
       "title": "Settings",
-      "emptyDescription": "Configure organisation and system preferences."
+      "emptyDescription": "Configure organisation and system preferences.",
+      "sectionOrganisation": "Organisation",
+      "sectionProfile": "My Profile",
+      "sectionCapabilities": "My Capabilities",
+      "sectionQuickLinks": "Quick Links",
+      "fieldOrgName": "Organisation",
+      "fieldOrgId": "Organisation ID",
+      "fieldDisplayName": "Display Name",
+      "fieldRole": "Role",
+      "fieldClub": "Club",
+      "linkUsers": "User Management",
+      "linkRulesets": "Rulesets"
     },
     "theme": {
       "light": "Switch to light mode",
       "dark": "Switch to dark mode"
     }
+  },
+  "coach": {
+    "title": "Coach Dashboard",
+    "sidebarSubtitle": "Coach",
+    "events": {
+      "title": "Events",
+      "subtitle": "Pick an event to manage registrations or view tournament info.",
+      "openEvent": "Open event",
+      "searchPlaceholder": "Search by name or location…",
+      "emptyTitle": "No events yet",
+      "emptyDescription": "No events are available for registration or viewing. Check back later."
+    },
+    "registrations": {
+      "title": "Registrations",
+      "addRegistration": "Add registration",
+      "withdraw": "Withdraw",
+      "withdrawConfirm": "Are you sure you want to withdraw this registration?",
+      "withdrawReason": "Reason (optional)",
+      "emptyTitle": "No registrations yet",
+      "emptyDescription": "Register athletes from your club into this event.",
+      "pickAthlete": "Pick athlete",
+      "pickCategory": "Category",
+      "notesOptional": "Notes (optional)",
+      "regStatusUpcoming": "Registration opens on {date}",
+      "regStatusOpen": "Registration open — closes on {date}",
+      "regStatusClosed": "Registration is closed for this event.",
+      "regClosedError": "Registration is not open for this event. The server rejected the request."
+    },
+    "athletes": {
+      "title": "Athletes",
+      "subtitle": "Manage your club athlete roster.",
+      "addAthlete": "Add athlete",
+      "askAdminHint": "Ask admin to add athletes to your club.",
+      "emptyTitle": "No athletes yet",
+      "emptyDescription": "Add athletes to your club to register them for events."
+    },
+    "brackets": {
+      "title": "Brackets",
+      "emptyTitle": "Brackets not published yet",
+      "emptyDescription": "Brackets will appear here once the draw is executed and published."
+    },
+    "schedule": {
+      "title": "Schedule",
+      "emptyTitle": "Schedule not available",
+      "emptyDescription": "The schedule will appear here once the draw is executed and published."
+    },
+    "live": {
+      "title": "Live mat",
+      "now": "Now",
+      "next": "Next",
+      "onDeck": "On deck",
+      "refresh": "Refresh",
+      "emptyTitle": "No fights yet",
+      "emptyDescription": "Fights will appear here when the competition starts."
+    },
+    "me": {
+      "title": "My profile",
+      "subtitle": "Your account and club information.",
+      "name": "Name",
+      "role": "Role",
+      "club": "Club",
+      "organisation": "Organisation"
+    },
+    "noClub": {
+      "title": "No club assigned",
+      "description": "You must be assigned to a club to use the coach dashboard. Contact your administrator."
+    }
+  },
+  "athletes": {
+    "title": "Athletes",
+    "searchPlaceholder": "Search by name or document ID…",
+    "filters": {
+      "allClubs": "All clubs"
+    },
+    "columns": {
+      "name": "Athlete",
+      "dob": "Date of birth",
+      "club": "Club",
+      "document": "Document ID",
+      "dedupe": "Possible duplicates"
+    },
+    "merge": {
+      "button": "Merge selected",
+      "dialogTitle": "Merge athletes",
+      "dialogDescription": "You are about to merge two athlete records. This action is irreversible and will be logged.",
+      "primaryLabel": "Keep as primary",
+      "secondaryLabel": "Merge into primary",
+      "reasonLabel": "Reason for merge",
+      "confirm": "Confirm merge",
+      "cancel": "Cancel",
+      "errorGeneric": "Could not merge athletes. Please try again.",
+      "errorValidation": "Select two different athletes and provide a reason."
+    },
+    "emptyTitle": "No athletes yet",
+    "emptyDescription": "Create athletes as registration opens and link them to clubs.",
+    "dedupeHint": "Rows with a higher duplicate count may need review."
   },
   "content": {
     "title": "Content",
@@ -221,5 +562,262 @@
     "saving": "Saving…",
     "saveError": "Could not save the news post. Please try again.",
     "validationRequired": "Title and slug are required."
+  },
+  "clubs": {
+    "title": "Clubs",
+    "new": "New club",
+    "emptyTitle": "No clubs yet",
+    "emptyDescription": "Create clubs to organise athletes by their teams.",
+    "columns": {
+      "name": "Club",
+      "city": "City",
+      "country": "Country"
+    },
+    "fields": {
+      "name": "Club name",
+      "city": "City",
+      "country": "Country"
+    }
+  },
+  "registrations": {
+    "title": "Registrations",
+    "new": "Register athlete",
+    "emptyTitle": "No registrations yet",
+    "emptyDescription": "Register athletes into event categories.",
+    "selectEvent": "Select an event",
+    "selectEventSubtitle": "Registrations are managed per event.",
+    "selectEventPlaceholder": "Select event",
+    "noResults": "No registrations found",
+    "noResultsHint": "Try adjusting filters or select a different event.",
+    "filterStatus": "Status",
+    "filterClub": "Club",
+    "filterClubAll": "All clubs",
+    "filterSearch": "Search athlete…",
+    "filterCategory": "Category",
+    "filterCategoryAll": "All categories",
+    "clearFilters": "Clear filters",
+    "columns": {
+      "athlete": "Athlete",
+      "club": "Club",
+      "category": "Category",
+      "status": "Status",
+      "notes": "Notes",
+      "updated": "Updated",
+      "actions": "Actions"
+    },
+    "status": {
+      "PENDING": "Pending",
+      "SUBMITTED": "Submitted",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected",
+      "WITHDRAWN": "Withdrawn"
+    },
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "withdraw": "Withdraw"
+    },
+    "statusUpdated": "Registration status updated.",
+    "approveSuccess": "Registration approved",
+    "rejectSuccess": "Registration rejected",
+    "withdrawSuccess": "Registration withdrawn",
+    "updateFailed": "Failed to update registration",
+    "confirmApprove": "Approve registration?",
+    "confirmReject": "Reject registration?",
+    "confirmWithdraw": "Withdraw registration?",
+    "reasonOptional": "Reason (optional)",
+    "registrationsLocked": "Registrations are locked for this event.",
+    "actionDisabled": {
+      "approve": "Approve only when status is Pending, Submitted or Rejected",
+      "reject": "Reject only when status is Pending, Submitted or Approved",
+      "withdraw": "Already withdrawn"
+    }
+  },
+  "weighin": {
+    "title": "Weigh-in",
+    "searchPlaceholder": "Search by name or document ID…",
+    "pass": "Pass",
+    "reweigh": "Reweigh",
+    "fail": "Fail",
+    "override": "Override",
+    "overrideReason": "Override reason",
+    "weight": "Weight (kg)",
+    "decision": "Decision",
+    "attempts": "Attempts",
+    "noRegistrations": "No registrations found.",
+    "recorded": "Weigh-in recorded.",
+    "emptyTitle": "No athletes for weigh-in",
+    "emptyDescription": "Select an event with registrations to begin weigh-in.",
+    "record": "Record",
+    "one_hour": "1-Hour Rule",
+    "deadline": "Deadline",
+    "resolve": "Resolve",
+    "resolved": "Resolved.",
+    "resolvedAs": "Resolved as:",
+    "moveUp": "Move Up",
+    "dq": "DQ",
+    "newCategoryCode": "New category code (e.g. U18-M-68)"
+  },
+  "draw": {
+    "title": "Draw & Brackets",
+    "runDraw": "Run draw",
+    "resetDraw": "Reset draw",
+    "seed": "Seed (optional)",
+    "sameClubSeparation": "Separate same-club athletes",
+    "emptyTitle": "No draw yet",
+    "emptyDescription": "Lock the event first, then run the draw.",
+    "resetWarning": "This will delete all brackets, fights, and schedule for this event.",
+    "confirmReset": "Type CONFIRM to proceed",
+    "drawSuccess": "Draw executed successfully.",
+    "resetSuccess": "Draw reset successfully.",
+    "reasonLabel": "Reason",
+    "bracketsGenerated": "brackets generated",
+    "viewBrackets": "View brackets"
+  },
+  "brackets": {
+    "title": "Brackets",
+    "category": "Category",
+    "round": "Round",
+    "vs": "vs",
+    "bye": "BYE",
+    "emptyTitle": "No brackets yet",
+    "emptyDescription": "Run the draw to generate brackets.",
+    "columns": {
+      "round": "Round",
+      "red": "Red corner",
+      "blue": "Blue corner",
+      "status": "Status"
+    }
+  },
+  "schedule": {
+    "title": "Schedule",
+    "addMat": "Add mat",
+    "autoSchedule": "Auto-schedule",
+    "moveFight": "Move",
+    "startTime": "Start time",
+    "avgBout": "Avg bout (seconds)",
+    "buffer": "Buffer (seconds)",
+    "restMinutes": "Rest (minutes)",
+    "emptyTitle": "No schedule yet",
+    "emptyDescription": "Add mats and run auto-schedule.",
+    "matName": "Mat name",
+    "addMatDesc": "Create a new mat for this event.",
+    "autoScheduleDesc": "Configure auto-scheduling parameters.",
+    "unscheduled": "Unscheduled",
+    "matAdded": "Mat added",
+    "scheduleUpdated": "Schedule updated",
+    "errorGeneric": "Could not complete the action."
+  },
+  "live": {
+    "title": "Live",
+    "selectMat": "Select mat",
+    "noFights": "No active fights on this mat.",
+    "now": "NOW",
+    "next": "NEXT",
+    "onDeck": "ON DECK",
+    "start": "Start",
+    "pause": "Pause",
+    "resume": "Resume",
+    "reset": "Reset",
+    "setResult": "Set result",
+    "winner": "Winner",
+    "method": "Method",
+    "red": "Red",
+    "blue": "Blue",
+    "confirm": "Confirm result",
+    "complete": "Complete",
+    "setOnDeck": "Set on deck",
+    "startFight": "Start fight",
+    "resultSuccess": "Result saved",
+    "errorGeneric": "Action failed",
+    "notes": "Notes",
+    "methods": {
+      "POINTS": "Points",
+      "KO": "KO",
+      "DQ": "DQ",
+      "WO": "Walkover"
+    }
+  },
+  "results": {
+    "title": "Results",
+    "placements": "Placements",
+    "medalTable": "Medal table",
+    "export": "Export",
+    "emptyTitle": "No results yet",
+    "emptyDescription": "Results will appear after fights are confirmed.",
+    "columns": {
+      "category": "Category",
+      "round": "Round",
+      "red": "Red",
+      "blue": "Blue",
+      "winner": "Winner",
+      "method": "Method"
+    }
+  },
+  "news": {
+    "title": "News",
+    "new": "New post",
+    "create": "Create news",
+    "createTitle": "Create news post",
+    "emptyTitle": "No news posts yet",
+    "emptyDescription": "Create news posts to keep everyone informed.",
+    "columns": {
+      "title": "Title",
+      "slug": "Slug",
+      "published": "Published"
+    },
+    "fields": {
+      "title": "Title",
+      "slug": "Slug",
+      "body": "Body",
+      "published": "Published",
+      "event": "Related event",
+      "eventPlaceholder": "Select event (optional)"
+    },
+    "slugHint": "URL-friendly identifier (auto-generated from title)",
+    "validationSlug": "Slug must be lowercase letters, numbers, and hyphens only"
+  },
+  "inbox": {
+    "title": "Inbox",
+    "emptyTitle": "Inbox is empty",
+    "emptyDescription": "Contact form submissions will appear here.",
+    "columns": {
+      "type": "Type",
+      "name": "Name",
+      "email": "Email",
+      "created": "Received",
+      "status": "Status"
+    },
+    "status": {
+      "NEW": "New",
+      "HANDLED": "Handled"
+    },
+    "markHandled": "Mark handled"
+  },
+  "integrity": {
+    "title": "Integrity Check",
+    "subtitle": "Verify data quality before locking registration.",
+    "lock": "Lock registration",
+    "lockModal": {
+      "title": "Lock registration",
+      "description": "This will prevent new registrations and prepare the event for draw.",
+      "issueWarning": "There are unresolved issues. Provide a reason to lock with override.",
+      "confirm": "Lock",
+      "reason": "Override reason"
+    },
+    "noIssues": "All checks passed",
+    "noIssuesDescription": "No data quality issues found. Ready to lock.",
+    "issueCount": "issues found",
+    "sampleIds": "Sample IDs",
+    "lockSuccess": "Registration locked.",
+    "lockError": "Could not lock. Check issues or provide override reason.",
+    "emptyTitle": "Select an event",
+    "emptyDescription": "Choose an event to run integrity checks.",
+    "codes": {
+      "MISSING_CATEGORY": "Missing category code",
+      "MISSING_DOB": "Missing date of birth",
+      "DUPLICATE_ATHLETE": "Duplicate athletes",
+      "UNRESOLVED_FAIL_WEIGHIN": "Unresolved failed weigh-in"
+    }
   }
 }

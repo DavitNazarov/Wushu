@@ -10,29 +10,63 @@ export type AuthContext =
       organisationId: string;
       role: UserRole;
       capabilities: string[];
+      clubId?: string | null;
+      displayName?: string;
+      clubName?: string | null;
+      organisationName?: string | null;
     }
   | {
       userId: null;
       organisationId: null;
       role: null;
       capabilities: [];
+      clubId?: null;
+      needsRefresh?: boolean;
     };
 
 export async function getAuthContext(): Promise<AuthContext> {
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
-  if (!token) {
+  const refreshToken = cookieStore.get('gw_refresh')?.value;
+  if (!token && !refreshToken) {
     return { userId: null, organisationId: null, role: null, capabilities: [] };
   }
 
-  const res = await fetch(getApiUrl('/api/auth/me'), {
-    headers: { Cookie: `${AUTH_COOKIE_NAME}=${token}` },
-    cache: 'no-store',
-  });
+  // Only access token works for /me; if we have only refresh, try refresh flow
+  if (!token) {
+    return { userId: null, organisationId: null, role: null, capabilities: [], needsRefresh: true };
+  }
 
-  if (!res.ok) {
+  const fetchMe = () =>
+    fetch(getApiUrl('/api/auth/me'), {
+      headers: { Cookie: `${AUTH_COOKIE_NAME}=${token}` },
+      cache: 'no-store',
+    });
+
+  let res: Response;
+  try {
+    res = await fetchMe();
+  } catch {
+    // API unreachable (ECONNREFUSED, network error) → treat as unauthenticated
     return { userId: null, organisationId: null, role: null, capabilities: [] };
+  }
+
+  // 401 = expired access token → try refresh via redirect
+  if (res.status === 401) {
+    return { userId: null, organisationId: null, role: null, capabilities: [], needsRefresh: true };
+  }
+
+  // Transient errors: retry once before treating as logout
+  if (!res.ok) {
+    try {
+      res = await fetchMe();
+    } catch {
+      return { userId: null, organisationId: null, role: null, capabilities: [] };
+    }
+    if (!res.ok) {
+      return { userId: null, organisationId: null, role: null, capabilities: [] };
+    }
   }
 
   const data = (await res.json()) as {
@@ -40,6 +74,10 @@ export async function getAuthContext(): Promise<AuthContext> {
     organisationId: string | null;
     role: UserRole | null;
     capabilities: string[];
+    clubId?: string | null;
+    displayName?: string;
+    clubName?: string | null;
+    organisationName?: string | null;
   };
 
   if (!data.userId || !data.organisationId) {
@@ -51,7 +89,22 @@ export async function getAuthContext(): Promise<AuthContext> {
     organisationId: data.organisationId,
     role: data.role ?? 'athlete',
     capabilities: data.capabilities ?? [],
+    clubId: data.clubId ?? null,
+    displayName: data.displayName,
+    clubName: data.clubName,
+    organisationName: data.organisationName,
   };
+}
+
+export function getAuthRedirectUrl(
+  auth: AuthContext,
+  locale: string,
+  nextPath: string,
+): string {
+  if ('needsRefresh' in auth && auth.needsRefresh) {
+    return `/${locale}/auth/refresh?next=${encodeURIComponent(nextPath)}`;
+  }
+  return `/${locale}/login?next=${encodeURIComponent(nextPath)}`;
 }
 
 export function canAccessAdmin(role: UserRole | null, capabilities: string[]): boolean {

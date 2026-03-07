@@ -1,30 +1,28 @@
-import { Controller, Post, Body, Req, HttpException, HttpStatus } from '@nestjs/common';
-import Express from 'express';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Req,
+  Param,
+  HttpException,
+  HttpStatus,
+  UseGuards,
+} from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
-
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 5;
-const rateLimitStore = new Map<string, number[]>();
-
-function isRateLimited(key: string): boolean {
-  const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-  const existing = rateLimitStore.get(key) ?? [];
-  const recent = existing.filter((ts) => ts >= windowStart);
-  if (recent.length >= RATE_LIMIT_MAX) {
-    rateLimitStore.set(key, recent);
-    return true;
-  }
-  recent.push(now);
-  rateLimitStore.set(key, recent);
-  return false;
-}
+import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
+import { CapabilityGuard } from '../auth/capability.guard';
+import { RequireCapability } from '../auth/capability.decorator';
+import { CAPABILITIES } from '../auth/capabilities';
 
 @Controller('forms')
 export class FormsController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Post('contact')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async contact(
     @Body()
     body: {
@@ -35,17 +33,7 @@ export class FormsController {
       type: 'contact' | 'membership';
       website?: string | null;
     },
-    @Req() req: Express.Request,
   ) {
-    const ip =
-      (req.headers['x-forwarded-for'] as string) ??
-      req.ip ??
-      'unknown';
-
-    if (isRateLimited(ip)) {
-      throw new HttpException('RATE_LIMITED', HttpStatus.TOO_MANY_REQUESTS);
-    }
-
     if (body.website?.trim?.()) {
       return { ok: true };
     }
@@ -56,7 +44,10 @@ export class FormsController {
 
     const org = await this.prisma.organisation.findFirst();
     if (!org) {
-      throw new HttpException('NO_ORGANISATION', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'NO_ORGANISATION',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
 
     await this.prisma.contactSubmission.create({
@@ -71,5 +62,31 @@ export class FormsController {
     });
 
     return { ok: true };
+  }
+
+  @Get('submissions')
+  @UseGuards(AuthGuard, CapabilityGuard)
+  @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
+  async listSubmissions(@Req() req: AuthenticatedRequest) {
+    const auth = req.auth!;
+    return this.prisma.contactSubmission.findMany({
+      where: { organisationId: auth.organisationId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  @Post('submissions/:id/handled')
+  @UseGuards(AuthGuard, CapabilityGuard)
+  @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
+  async markHandled(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    const auth = req.auth!;
+    const submission = await this.prisma.contactSubmission.findFirst({
+      where: { id, organisationId: auth.organisationId },
+    });
+    if (!submission) throw new HttpException('NOT_FOUND', HttpStatus.NOT_FOUND);
+    return this.prisma.contactSubmission.update({
+      where: { id },
+      data: { status: 'HANDLED', handledAt: new Date() },
+    });
   }
 }

@@ -11,6 +11,27 @@ Monorepo with **frontend** (Next.js) and **backend** (NestJS + Prisma).
 └── README.md
 ```
 
+## Database
+
+Start PostgreSQL (once, persists across reboots):
+
+```bash
+docker compose up -d db
+```
+
+Then apply migrations and bootstrap the first admin:
+
+```bash
+cd backend && npx prisma migrate deploy
+curl -X POST http://localhost:4000/api/auth/bootstrap-admin \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@geo.com","password":"admin123","displayName":"Admin"}'
+```
+
+> If you prefer Homebrew PostgreSQL instead of Docker, create the role manually:
+> `createuser -s geo` then set password `geo123` and `createdb geo_wushu -O geo`.
+> Run `brew services start postgresql@16` to auto-start at login.
+
 ## Install
 
 ```bash

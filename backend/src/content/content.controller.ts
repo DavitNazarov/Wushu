@@ -21,13 +21,22 @@ export class ContentController {
   @Post()
   async upsertNews(
     @Req() req: AuthenticatedRequest,
-    @Body() body: { id?: string; title: string; slug: string; body: string; published: boolean },
+    @Body()
+    body: {
+      id?: string;
+      eventId?: string | null;
+      title: string;
+      slug: string;
+      body: string;
+      published: boolean;
+    },
   ) {
     const auth = req.auth!;
     return this.content.upsertNews({
       organisationId: auth.organisationId,
       actorUserId: auth.sub,
       id: body.id,
+      eventId: body.eventId,
       title: body.title,
       slug: body.slug,
       body: body.body,

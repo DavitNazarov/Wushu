@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getAuthContext } from '@/services/permissions';
+import { getAuthContext, getAuthRedirectUrl } from '@/services/permissions';
 
 type Props = {
   params: Promise<{ locale: string }>;
@@ -10,7 +10,7 @@ export default async function DashboardRedirectPage({ params }: Props) {
   const auth = await getAuthContext();
 
   if (!auth.userId || !auth.role) {
-    redirect(`/${locale}/login`);
+    redirect(getAuthRedirectUrl(auth, locale, `/${locale}/dashboard`));
   }
 
   if (auth.role === 'admin') redirect(`/${locale}/admin`);

@@ -11,10 +11,33 @@ export class RulesetsService {
   ) {}
 
   async list(organisationId: string | null) {
+    // Include system-level rulesets (organisationId: null) alongside org-specific ones
     return this.prisma.ruleset.findMany({
-      where: { organisationId: organisationId ?? undefined },
-      orderBy: [{ organisationId: 'asc' }, { name: 'asc' }, { version: 'desc' }],
+      where: {
+        OR: [
+          { organisationId: organisationId ?? undefined },
+          { organisationId: null },
+        ],
+      },
+      orderBy: [
+        { organisationId: 'asc' },
+        { name: 'asc' },
+        { version: 'desc' },
+      ],
     });
+  }
+
+  async getAgeGroupTree(rulesetId: string) {
+    const ageGroups = await this.prisma.rulesetAgeGroup.findMany({
+      where: { rulesetId },
+      include: {
+        weightCategories: {
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return ageGroups;
   }
 
   async create(input: {
@@ -25,7 +48,10 @@ export class RulesetsService {
     actorUserId?: string | null;
   }) {
     const last = await this.prisma.ruleset.findFirst({
-      where: { organisationId: input.organisationId ?? undefined, name: input.name },
+      where: {
+        organisationId: input.organisationId ?? undefined,
+        name: input.name,
+      },
       orderBy: { version: 'desc' },
     });
     const nextVersion = (last?.version ?? 0) + 1;
@@ -52,6 +78,48 @@ export class RulesetsService {
       });
 
       return created;
+    });
+  }
+
+  async activate(input: {
+    organisationId: string;
+    rulesetId: string;
+    actorUserId: string;
+  }) {
+    const ruleset = await this.prisma.ruleset.findFirst({
+      where: { id: input.rulesetId, organisationId: input.organisationId },
+    });
+    if (!ruleset) throw new Error('RULESET_NOT_FOUND');
+    if (ruleset.status === 'ACTIVE') return ruleset;
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.ruleset.updateMany({
+        where: { organisationId: input.organisationId, status: 'ACTIVE' },
+        data: { status: 'DRAFT' },
+      });
+
+      const updated = await tx.ruleset.update({
+        where: { id: input.rulesetId },
+        data: { status: 'ACTIVE' },
+      });
+
+      await this.audit.write({
+        organisationId: input.organisationId,
+        actorUserId: input.actorUserId,
+        action: 'RULESET_ACTIVATED',
+        entityType: 'ruleset',
+        entityId: updated.id,
+        before: ruleset as unknown as Prisma.JsonValue,
+        after: updated as unknown as Prisma.JsonValue,
+      });
+
+      return updated;
+    });
+  }
+
+  async getActive(organisationId: string) {
+    return this.prisma.ruleset.findFirst({
+      where: { organisationId, status: 'ACTIVE' },
     });
   }
 }

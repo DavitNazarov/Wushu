@@ -25,6 +25,8 @@ enum UserRole {
   admin
   coach
   athlete
+  judge
+  timekeeper
 }
 
 enum SubmissionStatus {
@@ -32,42 +34,115 @@ enum SubmissionStatus {
   HANDLED
 }
 
+enum RegistrationStatus {
+  PENDING
+  SUBMITTED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum WeighInDecision {
+  PASS
+  REWEIGH
+  FAIL
+  ONE_HOUR
+}
+
+enum FightStatus {
+  QUEUED
+  ON_DECK
+  IN_PROGRESS
+  PAUSED
+  COMPLETE
+  CONFIRMED
+}
+
+enum TimerStateEnum {
+  IDLE
+  RUNNING
+  PAUSED
+  FINISHED
+}
+
+enum WinMethod {
+  POINTS
+  KO
+  DQ
+  WO
+}
+
+enum AthleteSex {
+  MALE
+  FEMALE
+}
+
 model Organisation {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   name      String
-  slug      String  @unique
+  slug      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users      User[]
-  events     Event[]
-  rulesets   Ruleset[]
-  auditLogs  AuditLog[]
-  newsPosts  NewsPost[]
-  documents  DocumentLink[]
-  clubs      Club[]
-  contacts   ContactSubmission[]
+  users         User[]
+  events        Event[]
+  rulesets      Ruleset[]
+  auditLogs     AuditLog[]
+  newsPosts     NewsPost[]
+  documents     DocumentLink[]
+  clubs         Club[]
+  contacts      ContactSubmission[]
+  athletes      Athlete[]
+  athleteMerges AthleteMerge[]
+  registrations Registration[]
+  weighIns      WeighInAttempt[]
+  mats          Mat[]
+  brackets      Bracket[]
+  fights        Fight[]
+  timerStates   TimerState[]
 }
 
 model User {
   id             String   @id @default(cuid())
   organisationId String
-  email          String   @unique
+  email          String
   passwordHash   String
   displayName    String
   role           UserRole @default(athlete)
+  clubId         String?
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organisation Organisation @relation(fields: [organisationId], references: [id])
-  capabilities UserCapability[]
-  auditLogs    AuditLog[]  @relation("AuditActor")
+  organisation   Organisation     @relation(fields: [organisationId], references: [id])
+  capabilities   UserCapability[]
+  auditLogs      AuditLog[]       @relation("AuditActor")
+  weighIns       WeighInAttempt[] @relation("WeighInOperator")
+  fightConfirms  Fight[]          @relation("FightConfirmedBy")
+  timerUpdates   TimerState[]     @relation("TimerUpdatedBy")
+  refreshTokens  RefreshToken[]
+
+  @@unique([organisationId, email])
+  @@index([email])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
 }
 
 model Capability {
-  id          String  @id @default(cuid())
-  code        String  @unique
+  id          String @id @default(cuid())
+  code        String @unique
   description String
 
   users UserCapability[]
@@ -86,52 +161,147 @@ model UserCapability {
 }
 
 model Event {
-  id             String  @id @default(cuid())
+  id             String         @id @default(cuid())
   organisationId String
   name           String
-  slug           String  @unique
-  startDate      DateTime?
-  endDate        DateTime?
+  slug           String
   location       String?
+  timezone       String         @default("Asia/Tbilisi")
   lifecycle      EventLifecycle @default(REG_OPEN)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  published           Boolean        @default(false)
+  autoAdvanceStage    Boolean        @default(false)
 
-  organisation Organisation          @relation(fields: [organisationId], references: [id])
+  registrationStartDate DateTime
+  registrationEndDate   DateTime
+  weighInStartDate      DateTime?
+  weighInEndDate        DateTime?
+  competitionStartDate  DateTime
+  competitionEndDate    DateTime
+
+  /// When the online registration window opens. Can be before competitionStartDate.
+  /// Null = legacy event; fall back to lifecycle-based check.
+  registrationOpensAt  DateTime?
+  /// When the online registration window closes (exclusive). Auto-set to start of first
+  /// weigh-in/registration day when not supplied.
+  registrationClosesAt DateTime?
+
+  /// Canonical date-only model for the event.
+  /// Structure:
+  /// {
+  ///   range: { startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD" },
+  ///   registrationDays: string[],
+  ///   fightDays: string[]
+  /// }
+  dates Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation    Organisation          @relation(fields: [organisationId], references: [id])
   rulesetSnapshot EventRulesetSnapshot?
-  auditLogs       AuditLog[]         @relation("AuditEvent")
+  auditLogs       AuditLog[]            @relation("AuditEvent")
+  registrations   Registration[]
+  weighIns        WeighInAttempt[]
+  mats            Mat[]
+  brackets        Bracket[]
+  fights          Fight[]
+  newsPosts       NewsPost[]
+  eventAgeGroups  EventAgeGroup[]
+
+  @@unique([organisationId, slug])
 }
 
 model Ruleset {
-  id             String  @id @default(cuid())
+  id             String        @id @default(cuid())
   organisationId String?
   name           String
   version        Int
   status         RulesetStatus @default(DRAFT)
   definition     Json
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  organisation Organisation?         @relation(fields: [organisationId], references: [id])
-  snapshots     EventRulesetSnapshot[]
+  organisation Organisation?          @relation(fields: [organisationId], references: [id])
+  snapshots    EventRulesetSnapshot[]
+  ageGroups    RulesetAgeGroup[]
 
   @@unique([organisationId, name, version])
 }
 
+model RulesetAgeGroup {
+  id                   String     @id @default(cuid())
+  rulesetId            String
+  code                 String
+  name                 String
+  sex                  AthleteSex?
+  minAge               Int?
+  maxAge               Int?
+  roundDurationSeconds Int        @default(120)
+  sortOrder            Int        @default(0)
+
+  ruleset          Ruleset                @relation(fields: [rulesetId], references: [id], onDelete: Cascade)
+  weightCategories RulesetWeightCategory[]
+  eventAgeGroups   EventAgeGroup[]
+
+  @@unique([rulesetId, code])
+  @@index([rulesetId])
+}
+
+model RulesetWeightCategory {
+  id                String  @id @default(cuid())
+  ageGroupId        String
+  name              String
+  minWeightKgExcl   Float?
+  maxWeightKgIncl   Float?
+  sortOrder         Int     @default(0)
+
+  ageGroup        RulesetAgeGroup    @relation(fields: [ageGroupId], references: [id], onDelete: Cascade)
+  eventCategories EventWeightCategory[]
+
+  @@index([ageGroupId])
+}
+
+model EventAgeGroup {
+  id                String @id @default(cuid())
+  eventId           String
+  rulesetAgeGroupId String
+
+  event           Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  rulesetAgeGroup RulesetAgeGroup   @relation(fields: [rulesetAgeGroupId], references: [id])
+  weightCategories EventWeightCategory[]
+
+  @@unique([eventId, rulesetAgeGroupId])
+  @@index([eventId])
+}
+
+model EventWeightCategory {
+  id                      String @id @default(cuid())
+  eventAgeGroupId         String
+  rulesetWeightCategoryId String
+
+  eventAgeGroup         EventAgeGroup         @relation(fields: [eventAgeGroupId], references: [id], onDelete: Cascade)
+  rulesetWeightCategory RulesetWeightCategory @relation(fields: [rulesetWeightCategoryId], references: [id])
+  registrations         Registration[]
+  fights                Fight[]
+
+  @@unique([eventAgeGroupId, rulesetWeightCategoryId])
+  @@index([eventAgeGroupId])
+}
+
 model EventRulesetSnapshot {
-  id         String  @id @default(cuid())
-  eventId    String  @unique
-  rulesetId  String
-  version    Int
-  snapshot   Json
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  eventId   String   @unique
+  rulesetId String
+  version   Int
+  snapshot  Json
+  createdAt DateTime @default(now())
 
   event   Event   @relation(fields: [eventId], references: [id])
   ruleset Ruleset @relation(fields: [rulesetId], references: [id])
 }
 
 model AuditLog {
-  id             String  @id @default(cuid())
+  id             String   @id @default(cuid())
   organisationId String
   eventId        String?
   actorUserId    String?
@@ -141,7 +311,9 @@ model AuditLog {
   before         Json?
   after          Json?
   reason         String?
+  override       Boolean  @default(false)
   ipAddress      String?
+  userAgent      String?
   createdAt      DateTime @default(now())
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
@@ -150,27 +322,32 @@ model AuditLog {
 }
 
 model NewsPost {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organisationId String
+  eventId        String?
   title          String
-  slug           String   @unique
+  slug           String
   body           String
+  published      Boolean   @default(false)
   publishedAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
+  event        Event?       @relation(fields: [eventId], references: [id])
+
+  @@unique([organisationId, slug])
 }
 
 model DocumentLink {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organisationId String
   title          String
-  slug           String   @unique
+  slug           String    @unique
   url            String
   publishedAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
 }
@@ -184,7 +361,9 @@ model Club {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organisation Organisation @relation(fields: [organisationId], references: [id])
+  organisation  Organisation   @relation(fields: [organisationId], references: [id])
+  athletes      Athlete[]
+  registrations Registration[]
 }
 
 model ContactSubmission {
@@ -200,4 +379,186 @@ model ContactSubmission {
   handledAt      DateTime?
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
+}
+
+model Athlete {
+  id             String      @id @default(cuid())
+  organisationId String
+  clubId         String?
+  firstName      String
+  lastName       String
+  dateOfBirth    DateTime
+  documentId     String?
+  sex            AthleteSex?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organisation   Organisation   @relation(fields: [organisationId], references: [id])
+  club           Club?          @relation(fields: [clubId], references: [id])
+  registrations  Registration[]
+  redFights      Fight[]        @relation("FightRedAthlete")
+  blueFights     Fight[]        @relation("FightBlueAthlete")
+  wonFights      Fight[]        @relation("FightWinner")
+  mergedFrom     AthleteMerge[] @relation("MergePrimary")
+  mergedInto     AthleteMerge[] @relation("MergeSecondary")
+
+  @@index([organisationId, lastName, firstName])
+  @@index([organisationId, dateOfBirth, documentId])
+}
+
+model AthleteMerge {
+  id                String   @id @default(cuid())
+  organisationId    String
+  primaryAthleteId  String
+  secondaryAthleteId String
+  reason            String
+  mergedByUserId    String?
+  createdAt         DateTime @default(now())
+
+  organisation     Organisation @relation(fields: [organisationId], references: [id])
+  primaryAthlete   Athlete      @relation("MergePrimary", fields: [primaryAthleteId], references: [id])
+  secondaryAthlete Athlete      @relation("MergeSecondary", fields: [secondaryAthleteId], references: [id])
+}
+
+model Registration {
+  id                    String             @id @default(cuid())
+  organisationId        String
+  eventId               String
+  athleteId             String
+  clubId                String?
+  categoryCode          String
+  eventWeightCategoryId String?
+  status                RegistrationStatus @default(PENDING)
+  notes                 String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  organisation        Organisation        @relation(fields: [organisationId], references: [id])
+  event               Event               @relation(fields: [eventId], references: [id])
+  athlete             Athlete             @relation(fields: [athleteId], references: [id])
+  club                Club?               @relation(fields: [clubId], references: [id])
+  eventWeightCategory EventWeightCategory? @relation(fields: [eventWeightCategoryId], references: [id])
+  weighIns            WeighInAttempt[]
+
+  @@unique([eventId, athleteId])
+  @@index([organisationId, eventId])
+  @@index([organisationId, eventId, status])
+  @@index([eventWeightCategoryId])
+}
+
+model WeighInAttempt {
+  id             String          @id @default(cuid())
+  organisationId String
+  eventId        String
+  registrationId String
+  attemptNo      Int
+  weightKg       Float
+  decision       WeighInDecision
+  deadlineAt     DateTime?
+  resolvedAt     DateTime?
+  resolvedAction String?
+  operatorUserId String?
+  override       Boolean         @default(false)
+  reason         String?
+  createdAt      DateTime        @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  event        Event        @relation(fields: [eventId], references: [id])
+  registration Registration @relation(fields: [registrationId], references: [id])
+  operator     User?        @relation("WeighInOperator", fields: [operatorUserId], references: [id])
+
+  @@index([organisationId, eventId])
+  @@index([registrationId])
+}
+
+model Mat {
+  id             String @id @default(cuid())
+  organisationId String
+  eventId        String
+  name           String
+  order          Int
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  event        Event        @relation(fields: [eventId], references: [id])
+  fights       Fight[]
+
+  @@unique([eventId, name])
+  @@index([organisationId, eventId])
+}
+
+model Bracket {
+  id             String   @id @default(cuid())
+  organisationId String
+  eventId        String
+  categoryCode   String
+  seed           Int?
+  createdAt      DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  event        Event        @relation(fields: [eventId], references: [id])
+  fights       Fight[]
+
+  @@unique([eventId, categoryCode])
+  @@index([organisationId, eventId])
+}
+
+model Fight {
+  id             String      @id @default(cuid())
+  organisationId String
+  eventId        String
+  bracketId      String?
+  categoryCode   String
+  eventWeightCategoryId String?
+  roundDurationSeconds  Int?
+  round          Int
+  boutNo         Int
+
+  redAthleteId  String?
+  blueAthleteId String?
+  status        FightStatus @default(QUEUED)
+
+  matId              String?
+  orderInMat         Int?
+  scheduledStartTime DateTime?
+
+  winnerAthleteId   String?
+  winMethod         WinMethod?
+  notes             String?
+  confirmedByUserId String?
+  confirmedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation        Organisation         @relation(fields: [organisationId], references: [id])
+  event               Event                @relation(fields: [eventId], references: [id])
+  bracket             Bracket?             @relation(fields: [bracketId], references: [id])
+  mat                 Mat?                 @relation(fields: [matId], references: [id])
+  redAthlete          Athlete?             @relation("FightRedAthlete", fields: [redAthleteId], references: [id])
+  blueAthlete         Athlete?             @relation("FightBlueAthlete", fields: [blueAthleteId], references: [id])
+  winnerAthlete       Athlete?             @relation("FightWinner", fields: [winnerAthleteId], references: [id])
+  confirmedBy         User?                @relation("FightConfirmedBy", fields: [confirmedByUserId], references: [id])
+  eventWeightCategory EventWeightCategory? @relation(fields: [eventWeightCategoryId], references: [id])
+  timerState          TimerState?
+
+  @@index([organisationId, eventId])
+  @@index([organisationId, eventId, status])
+  @@index([matId, orderInMat])
+  @@index([eventWeightCategoryId])
+}
+
+model TimerState {
+  fightId        String         @id
+  organisationId String
+  state          TimerStateEnum @default(IDLE)
+  round          Int            @default(1)
+  startedAt      DateTime?
+  pausedAt       DateTime?
+  pausedMs       Int            @default(0)
+  updatedAt      DateTime       @updatedAt
+  updatedByUserId String?
+
+  fight       Fight  @relation(fields: [fightId], references: [id])
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  updatedBy   User?  @relation("TimerUpdatedBy", fields: [updatedByUserId], references: [id])
 }

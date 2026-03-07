@@ -1,13 +1,27 @@
 import { Module } from '@nestjs/common';
 import { EventsService } from './events.service';
+import { EventOpsService } from './event-ops.service';
 import { EventsController } from './events.controller';
+import { EventStageAutomationService } from './event-stage-automation.service';
+import { EventCategoriesService } from './event-categories.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
+import { RulesetsModule } from '../rulesets/rulesets.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, RulesetsModule],
   controllers: [EventsController],
-  providers: [EventsService],
-  exports: [EventsService],
+  providers: [
+    EventsService,
+    EventOpsService,
+    EventStageAutomationService,
+    EventCategoriesService,
+  ],
+  exports: [
+    EventsService,
+    EventOpsService,
+    EventStageAutomationService,
+    EventCategoriesService,
+  ],
 })
 export class EventsModule {}

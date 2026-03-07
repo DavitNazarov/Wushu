@@ -8,5 +8,6 @@ import { AuthModule } from '../auth/auth.module';
   imports: [PrismaModule, AuthModule],
   controllers: [RulesetsController],
   providers: [RulesetsService],
+  exports: [RulesetsService],
 })
 export class RulesetsModule {}

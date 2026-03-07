@@ -5,10 +5,30 @@ import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { useAuthRole } from '@/hooks/useAuthRole';
 
 export default function PublicHomePage() {
   const tPublic = useTranslations('public');
   const locale = useLocale();
+  const { role, isLoading } = useAuthRole();
+
+  const heroAuthHref =
+    role === 'admin'
+      ? `/${locale}/admin`
+      : role === 'coach'
+        ? `/${locale}/coach`
+        : role === 'athlete'
+          ? `/${locale}/athlete`
+          : `/${locale}/login`;
+
+  const heroAuthLabel =
+    role === 'admin'
+      ? tPublic('adminDashboard')
+      : role === 'coach'
+        ? tPublic('coachDashboard')
+        : role === 'athlete'
+          ? tPublic('athleteProfile')
+          : tPublic('adminSignIn');
 
   return (
     <PublicLayout>
@@ -25,10 +45,12 @@ export default function PublicHomePage() {
               <PrimaryButton>{tPublic('viewEvents')}</PrimaryButton>
             </Link>
             <Link
-              href={`/${locale}/login`}
-              className="text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              href={heroAuthHref}
+              className={`text-sm font-medium hover:opacity-90 ${
+                role ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+              }`}
             >
-              {tPublic('adminSignIn')}
+              {isLoading ? tPublic('adminSignIn') : heroAuthLabel}
             </Link>
           </div>
         </section>

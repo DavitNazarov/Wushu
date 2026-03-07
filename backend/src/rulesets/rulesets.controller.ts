@@ -1,14 +1,21 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { RulesetsService } from './rulesets.service';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CapabilityGuard } from '../auth/capability.guard';
 import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
-import { Req } from '@nestjs/common';
 
 @Controller('rulesets')
 @UseGuards(AuthGuard, CapabilityGuard)
-@RequireCapability(CAPABILITIES.CAN_MANAGE_RULESETS)
+@RequireCapability(CAPABILITIES.RULESETS_MANAGE)
 export class RulesetsController {
   constructor(private readonly rulesets: RulesetsService) {}
 
@@ -19,7 +26,10 @@ export class RulesetsController {
   }
 
   @Post()
-  async create(@Req() req: AuthenticatedRequest, @Body() body: { name: string; definition: unknown }) {
+  async create(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { name: string; definition: unknown },
+  ) {
     const auth = req.auth!;
     return this.rulesets.create({
       organisationId: auth.organisationId,
@@ -27,5 +37,20 @@ export class RulesetsController {
       definition: body.definition,
       actorUserId: auth.sub,
     });
+  }
+
+  @Post(':id/activate')
+  async activate(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    const auth = req.auth!;
+    return this.rulesets.activate({
+      organisationId: auth.organisationId,
+      rulesetId: id,
+      actorUserId: auth.sub,
+    });
+  }
+
+  @Get(':id/age-groups')
+  async getAgeGroups(@Param('id') id: string) {
+    return this.rulesets.getAgeGroupTree(id);
   }
 }

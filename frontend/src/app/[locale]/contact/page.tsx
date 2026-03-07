@@ -5,6 +5,7 @@ import { FormEvent, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { Card } from '@/components/ui/Card';
+import { InlineAlert } from '@/components/ui/InlineAlert';
 
 type FormState = 'idle' | 'submitting' | 'success' | 'error';
 
@@ -35,9 +36,9 @@ export default function ContactPage() {
         body: JSON.stringify({
           name,
           email,
-          clubName: type === 'membership' ? clubName : null,
           message,
-          website,
+          clubName: type === 'membership' ? clubName : (clubName || null),
+          website: website || '',
           type,
         }),
       });
@@ -110,6 +111,16 @@ export default function ContactPage() {
               </div>
               <div className="space-y-1">
                 <label className="block text-[12px] font-medium text-[var(--color-text)]">
+                  {tPublic('contactClubName')}
+                </label>
+                <input
+                  className="h-11 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                  value={clubName}
+                  onChange={(event) => setClubName(event.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[12px] font-medium text-[var(--color-text)]">
                   {tPublic('contactMessage')}
                 </label>
                 <textarea
@@ -129,14 +140,12 @@ export default function ContactPage() {
                 </label>
               </div>
               {formState === 'success' && (
-                <p className="text-[12px] text-[var(--color-success)]">
-                  {tPublic('contactSuccess')}
-                </p>
+                <InlineAlert variant="success">{tPublic('contactSuccess')}</InlineAlert>
               )}
               {formState === 'error' && (
-                <p className="text-[12px] text-[var(--color-danger)]">
+                <InlineAlert variant="error">
                   {error ?? tPublic('contactError')}
-                </p>
+                </InlineAlert>
               )}
               <button
                 type="submit"
@@ -195,6 +204,17 @@ export default function ContactPage() {
                   required
                 />
               </div>
+              <div className="hidden" aria-hidden="true">
+                <label>
+                  Website
+                  <input
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                  />
+                </label>
+              </div>
               <div className="space-y-1">
                 <label className="block text-[12px] font-medium text-[var(--color-text)]">
                   {tPublic('membershipNotes')}
@@ -207,14 +227,12 @@ export default function ContactPage() {
                 />
               </div>
               {formState === 'success' && (
-                <p className="text-[12px] text-[var(--color-success)]">
-                  {tPublic('membershipSuccess')}
-                </p>
+                <InlineAlert variant="success">{tPublic('membershipSuccess')}</InlineAlert>
               )}
               {formState === 'error' && (
-                <p className="text-[12px] text-[var(--color-danger)]">
+                <InlineAlert variant="error">
                   {error ?? tPublic('contactError')}
-                </p>
+                </InlineAlert>
               )}
               <button
                 type="submit"

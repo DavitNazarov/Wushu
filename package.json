@@ -2,17 +2,26 @@
   "name": "geo-wushu",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["frontend", "backend"],
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  
   "scripts": {
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run prisma:studio\"",
     "dev:backend": "npm run dev -w backend",
     "dev:frontend": "npm run dev -w frontend",
+
+    "prisma:studio": "npm run prisma:studio -w backend",
+    "prisma:migrate": "npm run prisma:migrate -w backend",
+
     "build": "npm run build -w backend && npm run build -w frontend",
     "build:backend": "npm run build -w backend",
     "build:frontend": "npm run build -w frontend",
     "lint": "npm run lint -w frontend"
   },
+  
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.2.1"
   }
 }

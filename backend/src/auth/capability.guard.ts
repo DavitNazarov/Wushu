@@ -14,7 +14,10 @@ export class CapabilityGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const required = this.reflector.get<string>(REQUIRE_CAPABILITY, context.getHandler());
+    const required = this.reflector.get<string>(
+      REQUIRE_CAPABILITY,
+      context.getHandler(),
+    );
     if (!required) return true;
 
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();

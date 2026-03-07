@@ -12,14 +12,18 @@ type AuditParams = {
   before?: Prisma.JsonValue | null;
   after?: Prisma.JsonValue | null;
   reason?: string | null;
+  override?: boolean;
   ipAddress?: string | null;
+  userAgent?: string | null;
 };
+
+type AuditClient = Pick<PrismaService, 'auditLog'> | Prisma.TransactionClient;
 
 @Injectable()
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async write(params: AuditParams): Promise<void> {
+  async write(params: AuditParams, tx?: AuditClient): Promise<void> {
     const {
       organisationId,
       eventId,
@@ -30,10 +34,13 @@ export class AuditService {
       before,
       after,
       reason,
+      override,
       ipAddress,
+      userAgent,
     } = params;
 
-    await this.prisma.auditLog.create({
+    const client = tx ?? this.prisma;
+    await client.auditLog.create({
       data: {
         organisationId,
         eventId,
@@ -44,7 +51,9 @@ export class AuditService {
         before: before ?? undefined,
         after: after ?? undefined,
         reason: reason ?? undefined,
+        override: override ?? false,
         ipAddress: ipAddress ?? undefined,
+        userAgent: userAgent ?? undefined,
       },
     });
   }

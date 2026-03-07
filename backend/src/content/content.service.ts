@@ -13,6 +13,7 @@ export class ContentService {
   async listNews(organisationId: string): Promise<NewsPost[]> {
     return this.prisma.newsPost.findMany({
       where: { organisationId },
+      include: { event: { select: { id: true, name: true, slug: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -21,6 +22,7 @@ export class ContentService {
     organisationId: string;
     actorUserId: string;
     id?: string;
+    eventId?: string | null;
     title: string;
     slug: string;
     body: string;
@@ -30,15 +32,21 @@ export class ContentService {
       ? await this.prisma.newsPost.findFirst({
           where: { id: input.id, organisationId: input.organisationId },
         })
-      : null;
+      : await this.prisma.newsPost.findFirst({
+          where: { slug: input.slug, organisationId: input.organisationId },
+        });
 
     return this.prisma.$transaction(async (tx) => {
       const data = {
         organisationId: input.organisationId,
+        eventId: input.eventId || null,
         title: input.title,
         slug: input.slug,
         body: input.body,
-        publishedAt: input.published ? (existing?.publishedAt ?? new Date()) : null,
+        published: input.published,
+        publishedAt: input.published
+          ? (existing?.publishedAt ?? new Date())
+          : null,
       };
 
       const post = existing

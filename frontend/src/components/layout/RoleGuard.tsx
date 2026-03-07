@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
-import { getAuthContext } from '@/services/permissions';
 import {
+  getAuthContext,
+  getAuthRedirectUrl,
   canAccessAdmin,
   canAccessCoach,
   canAccessAthlete,
@@ -11,11 +12,11 @@ type GuardType = 'admin' | 'coach' | 'athlete';
 export async function requireRole(
   guardType: GuardType,
   locale: string,
-): Promise<{ userId: string; organisationId: string; role: string }> {
+): Promise<{ userId: string; organisationId: string; role: string; clubId?: string | null }> {
   const auth = await getAuthContext();
 
   if (!auth.userId || !auth.organisationId) {
-    redirect(`/${locale}/login?next=/${locale}/${guardType}`);
+    redirect(getAuthRedirectUrl(auth, locale, `/${locale}/${guardType}`));
   }
 
   let allowed = false;
@@ -35,5 +36,6 @@ export async function requireRole(
     userId: auth.userId,
     organisationId: auth.organisationId,
     role: auth.role ?? 'athlete',
+    clubId: 'clubId' in auth ? auth.clubId : undefined,
   };
 }

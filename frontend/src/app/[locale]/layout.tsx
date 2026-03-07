@@ -1,6 +1,7 @@
 import { NextIntlClientProvider } from 'next-intl';
 import { ReactNode } from 'react';
 import { getMessages } from 'next-intl/server';
+import { QueryProvider } from '@/lib/api/query-provider';
 
 type Props = {
   children: ReactNode;
@@ -12,7 +13,7 @@ export default async function LocaleLayout({ children }: Props) {
 
   return (
     <NextIntlClientProvider messages={messages}>
-      {children}
+      <QueryProvider>{children}</QueryProvider>
     </NextIntlClientProvider>
   );
 }

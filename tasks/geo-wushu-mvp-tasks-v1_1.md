@@ -1,506 +1,606 @@
-# Geo Wushu Competition System
-## MVP Task Plan + UI/Logic/Security Spec (Updated) — 03 Mar 2026
+# Geo Wushu Competition System — Tournament MVP (Backend → Frontend)
+## Cursor Master Build Prompt (Source of Truth)
 
-You said: *Cursor writes code; I take care of UI/logic/security requirements.*  
-Phase 0 is done. Everything below is the updated plan starting **Phase 1**.
+You (Cursor) write code. I (human) will review.  
+Non-negotiables: ship bias, manual override everywhere, DB is truth for fight/timer, audit for critical actions, i18n EN+KA (no hardcoded strings), dark mode default, strict TS.
 
----
+Tech (locked):
+- Backend: NestJS + TS strict + Postgres + Prisma + Zod + JWT httpOnly cookies + Socket.IO + Pino
+- Frontend: Next.js (App Router) + TS + Tailwind + i18n (EN/KA)
 
-## Non‑negotiables (Cursor must follow)
-- **Ship bias:** smallest version that runs a real tournament (no Excel, no “which fight now?”).
-- **Manual override:** every automation has an admin override path.
-- **Single source of truth:** fight status + timer state live in DB; UI derives display only.
-- **Auditability:** weigh‑in decisions, draw, scheduling overrides, results are traceable.
-- **i18n from day one:** English + Georgian, **no hardcoded strings**.
-- **Dark mode by default:** consistent tokens; no random colours.
-
----
-
-## Working assumptions (verify early)
-- Web stack: React/Next (or similar) + Node backend + **Postgres recommended**.
-- Primary scope: **Sanda fight ops** (Taolu = Phase 2+ if needed).
-- Rules follow **Georgia Wushu / IWUF** defaults unless event overrides.
-- Devices: admin laptop/tablet, judge tablets, public TV/monitor for Mat Screen.
-
-> Verification tasks are included in **P1‑01**.
+Engineering rules:
+- No 1000-line files. Split controllers/services/dtos/schemas.
+- UI components dumb; business logic in services.
+- Every query scoped by organisationId (multi-tenant).
+- Critical writes append audit_log with before/after + reason when override.
 
 ---
 
-# Global UI Design Spec (applies to ALL UI tasks)
-**Style:** minimalistic, business‑reliable, high contrast, fast to read in noisy venues.
+# 0) Canonical API List (MVP)
+Keep already-made endpoints, and ADD only what’s needed for real tournament ops.
 
-## Colour tokens (Light + Dark)
-- **Primary (Geo Navy):** `#123B6B`
-- **Accent (sparingly, Wushu Red):** `#C81D25`
-- **Success:** `#16A34A`
-- **Warning:** `#D97706`
-- **Danger:** `#DC2626`
-- **Text light:** `#0F172A`
-- **Text dark:** `#E5E7EB`
-- **BG light:** `#F8FAFC`
-- **BG dark:** `#0B1220`
-- **Surface light:** `#FFFFFF`
-- **Surface dark:** `#111827`
-- **Border:** `#CBD5E1` (light) / `#334155` (dark)
+## Auth (/api/auth)
+- GET  /api/auth/me
+- POST /api/auth/login               { email, password } -> sets gw_auth cookie
+- POST /api/auth/signup              (cap: ATHLETES_MANAGE) { email, password, displayName, role: 'coach'|'athlete'|'judge'|'timekeeper' }
+- POST /api/auth/bootstrap-admin      one-time bootstrap
 
-## Typography + spacing
-- Font: **Inter** or system UI (fallback SF Pro/Segoe/Roboto).
-- Base: **14px** (tables 13px), dense admin text 12px max.
-- Headings: **24 / 20 / 16px** (H1/H2/H3).
-- Button + input height: **44px** (touch friendly).
-- Radius: **10px** cards/inputs, **12px** modals, **999px** pills.
-- Spacing scale: **4/8/12/16/24/32px**.
+## Events (/api/events) (cap: EVENTS_MANAGE)
+- GET  /api/events
+- POST /api/events                   { name, slug, location, timezone?, dates:{ registrationStartDate, registrationEndDate, weighInStartDate?, weighInEndDate?, competitionStartDate, competitionEndDate } }
+- GET  /api/events/:id
+- POST /api/events/:id/lifecycle     { to, override?: boolean, reason?: string }
 
-## Layout rules
-- Max content width: **1100px** (admin), **960px** (public site).
-- Admin: **left sidebar** (icons + labels), top bar with event selector + user menu.
-- Most admin screens: **table + filters + detail drawer**.
-- Primary action **top-right**; destructive actions red + confirm modal.
-- Accessibility: keyboard nav + visible focus ring; colour not the only indicator.
+## Rulesets (/api/rulesets) (cap: RULESETS_MANAGE)
+- GET  /api/rulesets
+- POST /api/rulesets                 { name, definition }  // versioned
+- POST /api/rulesets/:id/activate    // set active for org (audit)
 
-## Core components (MVP)
-- AppShell (Sidebar + Topbar)
-- DataTable (sortable, filterable)
-- StatusPill (Draft/Open/Locked/Live/Completed)
-- Drawer (right side details)
-- Modal (confirm + edit forms)
-- Toast notifications
-- Mat Screen (full-screen, huge typography, high contrast)
+## Clubs (/api/clubs) (cap: ATHLETES_MANAGE)
+- GET  /api/clubs
+- POST /api/clubs                    { id?, name, city?, country? }
 
----
+## Athletes (/api/athletes) (cap: ATHLETES_MANAGE)
+- GET  /api/athletes                 filters: search, clubId, dateOfBirth, documentId
+- POST /api/athletes                 { id?, clubId?, firstName, lastName, dateOfBirth, documentId?, sex? }
+- POST /api/athletes/merge           { primaryId, secondaryId, reason }
 
-# 🔒 Locked Technology Stack (No Deviations)
+## Registration (/api/registrations) (cap: ATHLETES_MANAGE; coaches limited to their club)
+- GET  /api/registrations?eventId=&clubId=&status=
+- POST /api/registrations            { eventId, athleteId, categoryCode, notes? }  // upsert by (eventId, athleteId)
+- POST /api/registrations/:id/status { status:'SUBMITTED'|'APPROVED'|'REJECTED'|'WITHDRAWN', override?, reason? }
 
-Backend:
-- Runtime: **Node.js**
-- Language: **TypeScript (strict mode = true)**
-- Framework: **NestJS**
-- Database: **PostgreSQL**
-- ORM: **Prisma**
-- Validation: **Zod**
-- Auth: **JWT in httpOnly cookies**
-- Realtime: **WebSocket (Socket.IO)**
-- Logging: **Pino (structured logging)**
+## Weigh-in (/api/weighin) (cap: WEIGHIN_RUN)
+- GET  /api/weighin?eventId=&q=      // station search (name/docId)
+- POST /api/weighin                  { registrationId, weightKg, decision:'PASS'|'REWEIGH'|'FAIL', override?, reason? }
 
-Frontend:
-- React / Next.js (App Router preferred)
-- Shared types with backend via generated Prisma types or shared DTO package
+## Event Integrity (/api/integrity) (cap: EVENTS_MANAGE)
+- GET  /api/integrity?eventId=       // returns machine-readable issues before LOCK
+- POST /api/integrity/lock           { eventId, override?, reason? }  // sets lifecycle LOCKED if pass/override
 
----
+## Draw + Brackets (/api/draw, /api/brackets) (cap: DRAW_RUN)
+- POST /api/draw                     { eventId, seed?: number, sameClubSeparation?: boolean, override?, reason? }
+- POST /api/draw/reset               { eventId, override:true, reason } // destructive
+- GET  /api/brackets?eventId=
+- GET  /api/brackets/:id
 
-# Engineering Rules (Mandatory)
+## Mats + Schedule (/api/mats, /api/schedule) (cap: SCHEDULE_MANAGE)
+- GET  /api/mats?eventId=
+- POST /api/mats                     { eventId, id?, name, order }
+- GET  /api/schedule?eventId=&matId=
+- POST /api/schedule/auto            { eventId, startTimeIso, avgBoutSeconds, bufferSeconds, restMinutes, seed?: number, override?, reason? }
+- POST /api/schedule/move            { fightId, toMatId, toOrder, override?, reason? }
 
-- No 1000-line files.
-- Business logic lives in services, NOT controllers.
-- UI components are dumb; no business logic inside them.
-- DB is single source of truth for:
-  - fight state
-  - timer state
-  - event lifecycle
-- All critical actions logged in audit_log.
-- All endpoints protected by capability guards.
-- i18n enforced (English + Georgian).
-- Dark mode default.
-- No hardcoded strings.
+## Live Fight Ops (/api/fights) (cap: LIVE_RUN)
+- GET  /api/fights?eventId=&matId=&status=
+- GET  /api/fights/:id
+- POST /api/fights/:id/state         { to:'ON_DECK'|'IN_PROGRESS'|'PAUSED'|'COMPLETE'|'CONFIRMED', override?, reason? }
+- POST /api/fights/:id/timer         { action:'START'|'PAUSE'|'RESUME'|'RESET', round?: number }
+- POST /api/fights/:id/result        { winner:'RED'|'BLUE', method:'POINTS'|'KO'|'DQ'|'WO', notes?, override?, reason? }
 
-Folder Structure (backend):
+## Results + Exports (/api/results, /api/exports) (cap: RESULTS_MANAGE / EXPORTS_MANAGE)
+- GET  /api/results?eventId=
+- POST /api/exports                  { eventId, types:['registrations','brackets','schedule','results'] } -> returns links
 
-src/
- ├── modules/
- │    ├── auth/
- │    ├── events/
- │    ├── rulesets/
- │    ├── users/
- │    └── audit/
- ├── common/
- │    ├── guards/
- │    ├── decorators/
- │    ├── interceptors/
- │    └── utils/
- └── prisma/
+## Content: News (/api/admin/news) (cap: CONTENT_MANAGE)
+- GET  /api/admin/news
+- POST /api/admin/news               { id?, title, slug, body, published }
+
+## Public (/api/public)
+- GET  /api/public/events
+- GET  /api/public/events/:slug
+- GET  /api/public/news
+- GET  /api/public/news/:slug
+- GET  /api/public/clubs
+- GET  /api/public/brackets?eventSlug=
+- GET  /api/public/schedule?eventSlug=
+- GET  /api/public/mat?eventSlug=&mat=   // NOW/NEXT/ONDECK read-only
+
+## Forms (/api/forms)
+- POST /api/forms/contact            { name, email, message, clubName?, type:'contact'|'membership', website? }
+
+## Realtime (Socket.IO)
+Namespaces/rooms:
+- room: event:{eventId}
+- room: mat:{matId}
+Emit on: fight state change, timer change, schedule updates.
 
 ---
 
-# Phase 1 Goal
+# 1) Backend Build Order (Do exactly in this sequence)
 
-By the end of Phase 1 we must have:
+## 1.1 Project foundation
+- Create Nest app with modules folder structure.
+- Add Pino logger (request id, actor id, org id when present).
+- Add Zod validation pipe.
+- Add Throttler for /login + /forms/contact.
+- JWT cookie auth: gw_auth httpOnly, SameSite=Lax, Secure in prod.
 
-- Secure authentication
-- Capability-based permissions
-- Event lifecycle engine
-- Versioned rulesets
-- Audit logging system
-- Admin AppShell with bilingual support
+## 1.2 Prisma schema v1 (multi-tenant)
+Models (minimum fields + indexes):
+- Organisation(id, name, createdAt)
+- User(id, organisationId, email unique per org, passwordHash, displayName, role enum, clubId?, createdAt)
+- Capability(code PK, description)
+- UserCapability(userId, capabilityCode) composite PK
+- AuditLog(id, organisationId, actorUserId?, action, entityType, entityId, beforeJson, afterJson, reason?, override:boolean, createdAt, ip?, userAgent?)
+- Club(id, organisationId, name, city?, country?, createdAt)
+- Athlete(id, organisationId, clubId?, firstName, lastName, dateOfBirth, documentId?, sex?, createdAt)
+- AthleteMerge(id, organisationId, primaryAthleteId, secondaryAthleteId, reason, mergedByUserId, createdAt)
+- Ruleset(id, organisationId, name, version:int, status:'DRAFT'|'ACTIVE', definitionJson, createdAt)
+- Event(id, organisationId, name, slug, location, timezone default 'Asia/Tbilisi',
+  registrationStartDate, registrationEndDate, weighInStartDate?, weighInEndDate?,
+  competitionStartDate, competitionEndDate,
+  lifecycle enum: REG_OPEN|WEIGHIN|LOCKED|DRAWN|PUBLISHED|LIVE|COMPLETED,
+  published boolean default false,
+  createdAt)
+- EventRulesetSnapshot(id, eventId unique, rulesetId, snapshotJson, createdAt)
+- Registration(id, organisationId, eventId, athleteId, clubId?, categoryCode, status enum, notes?, createdAt, updatedAt, UNIQUE(eventId, athleteId))
+- WeighInAttempt(id, organisationId, eventId, registrationId, attemptNo, weightKg, decision, operatorUserId, override:boolean, reason?, createdAt)
+- Mat(id, organisationId, eventId, name, order)
+- Bracket(id, organisationId, eventId, categoryCode, seed?, createdAt)
+- Fight(id, organisationId, eventId, bracketId?, categoryCode, round:int, boutNo:int,
+  redAthleteId?, blueAthleteId?, status enum,
+  matId?, orderInMat?, scheduledStartTime?,
+  winnerAthleteId?, winMethod?, notes?,
+  confirmedByUserId?, confirmedAt?,
+  createdAt)
+- TimerState(fightId PK, organisationId, state enum, round:int, startedAt?, pausedAt?, pausedMs:int default 0, updatedAt, updatedByUserId)
 
-Nothing else.
+- NewsPost(id, organisationId, title, slug unique per org, body, published boolean, publishedAt?, updatedAt)
+- FormSubmission(id, type, name, email, message, clubName?, status:'NEW'|'HANDLED', createdAt)
+
+Migrations + seed:
+- Seed capabilities + one organisation + bootstrap admin.
+
+## 1.3 Auth module
+- bootstrap-admin: creates org + admin if none exists.
+- login: verify password, issue JWT with userId + organisationId + role + caps.
+- me: returns safe user info.
+- signup: only with ATHLETES_MANAGE; creates user.
+- Guards:
+  - AuthGuard (cookie JWT)
+  - CapsGuard (@RequireCaps('EVENTS_MANAGE'))
+  - OrgScope helper ensures Prisma queries include organisationId.
+- Audit log: login attempts (success/fail) minimal (no passwords).
+
+## 1.4 Audit module (append-only)
+- Service to write audit entries for:
+  - lifecycle transitions
+  - ruleset activate
+  - athlete merge
+  - draw/reset
+  - schedule auto/move
+  - fight state/timer/result
+  - content publish
+Store before/after JSON. If override, require reason.
+
+## 1.5 Events module (business-correct dates)
+POST /api/events uses body: { name, slug, location, timezone?, dates:{registrationStartDate,registrationEndDate,weighInStartDate?,weighInEndDate?,competitionStartDate,competitionEndDate}}
+Validation gates:
+- slug kebab-case
+- registrationStartDate <= registrationEndDate <= competitionStartDate
+- weighIn optional: weighInStart <= weighInEnd <= competitionStartDate
+- competitionStartDate <= competitionEndDate
+On create:
+- attach ACTIVE ruleset snapshot into EventRulesetSnapshot (copy definition + version + timestamp).
+- lifecycle default REG_OPEN
+Audit: EVENT_CREATE.
+
+Lifecycle endpoint:
+- enforce allowed transitions:
+  REG_OPEN -> WEIGHIN -> LOCKED -> DRAWN -> PUBLISHED -> LIVE -> COMPLETED
+- gate by dates:
+  - cannot WEIGHIN before registrationEndDate unless override
+  - cannot LIVE before competitionStartDate unless override
+- override requires reason, audit always.
+
+## 1.6 Rulesets module (versioned + snapshot)
+- Create ruleset as DRAFT with version auto-increment per org.
+- Activate endpoint: sets one ACTIVE, others to DRAFT (audit).
+- Event create always snapshots ACTIVE ruleset into EventRulesetSnapshot.
+
+## 1.7 Clubs + Athletes modules
+- Upsert endpoints (id?).
+- Athlete merge:
+  - move registrations/weigh-ins/fights references from secondary -> primary
+  - mark secondary as merged (or delete, but keep merge record)
+  - audit with reason (required)
+
+## 1.8 Registration module (minimum to run tournament)
+Rules:
+- Coaches can only create registrations for athletes in their club (enforce).
+- Status transitions controlled; APPROVED only before LOCKED unless override.
+- Duplicate prevention via UNIQUE(eventId, athleteId).
+
+## 1.9 Weigh-in module (station workflow)
+Rules:
+- Only allowed during WEIGHIN lifecycle unless override.
+- attemptNo auto increments per registration.
+- decision PASS/REWEIGH/FAIL stored; allow override with reason.
+Audit: WEIGHIN_DECISION with before/after.
+
+## 1.10 Integrity module (pre-lock checks)
+GET issues for eventId returns list like:
+[{ code:'MISSING_DOB', count, sampleIds:[...] }, ...]
+Checks:
+- registration missing category
+- athlete missing DOB
+- duplicates by (firstName,lastName,dateOfBirth) within event
+- FAIL weigh-in present but status not handled
+POST lock:
+- if issues exist -> block unless override+reason
+- sets lifecycle LOCKED and audit.
+
+## 1.11 Draw + Brackets (small but real)
+POST /api/draw:
+- only allowed when LOCKED unless override
+- groups registrations by categoryCode
+- generate single-elim bracket with byes
+- optional sameClubSeparation best-effort (don’t over-engineer)
+- create Bracket + Fight rows (QUEUED) with red/blue assignments
+- store seed used
+- set lifecycle DRAWN
+Audit: DRAW_EXECUTED (store seed + counts)
+
+Reset:
+- destructive: deletes brackets/fights/schedule/timer for event (transaction)
+- requires override=true + reason
+Audit: DRAW_RESET
+
+## 1.12 Mats + Schedule
+- Mats CRUD minimal: name + order
+Auto schedule:
+- assign fights to mats in order, respecting restMinutes (simple greedy)
+- store matId + orderInMat + scheduledStartTime (optional if provided)
+- create schedule “version” via audit meta (MVP: store settings in audit)
+Move fight:
+- update fight mat/order (transaction), reason if override
+- emit websocket updates
+
+## 1.13 Live fight ops + Timer (DB truth)
+Fight state machine enforced in service.
+TimerState:
+- actions START/PAUSE/RESUME/RESET update DB only; UI derives remaining.
+- conflict safety: use updatedAt optimistic check; reject stale updates.
+- emit websocket updates to mat rooms.
+Result:
+- winner + method + notes
+- CONFIRMED locks unless override+reason
+- audit amendments.
+
+## 1.14 Public endpoints
+- Only published events/news.
+- Public event by slug returns: competition dates, location, lifecycle, published.
+- Public schedule/brackets/mat feed read-only (no PII beyond name + club).
+
+## 1.15 Tests (minimum)
+- Guards + org scoping tests
+- lifecycle transition tests
+- draw edge cases: 1 athlete, odd count, byes
+- timer concurrency test
+
+Deliverable backend DoD:
+- All endpoints above implemented + validated + audited.
+- Websocket emits for mat screen + live ops.
+- Prisma migrations + seed script work.
 
 ---
 
-# ☑ P1-01 Ruleset System (Versioned Templates)
+# 2) Frontend Build Order (After backend DoD)
 
-Goal:
-Collect official Georgia Wushu / IWUF defaults and encode as versioned templates.
+## 2.1 Global UI system
+Design tokens (Tailwind config):
+Primary Navy #123B6B, Accent Red #C81D25, BG dark #0B1220, Surface dark #111827, Text dark #E5E7EB, Border dark #334155.
+Dark mode default.
+Typography: Inter, base 14px; H1 24, H2 20, H3 16.
+Inputs/buttons height 44px, radius 10px, modals radius 12px.
+Max widths: admin 1100px, public 960px.
 
-UI:
-Admin page "Rulesets"
-- DataTable
-- Primary button: "New Ruleset"
-- Status pill (Draft / Active)
-- Detail drawer editor
-- Max width 1100px
-- 14px base font
-- Primary buttons Geo Navy (#123B6B)
-
-Logic:
-- Rulesets stored as versioned JSON structures
-- When event created → snapshot copied to event_ruleset_snapshot
-- Cannot modify snapshot after event creation
-
-Security:
-- Only CAN_MANAGE_RULESETS capability
-- All changes write before/after diff into audit_log
-
----
-
-# ☑ P1-02 Authentication + Capabilities
-
-Goal:
-Secure login + capability-based access (NO role explosion).
-
-UI:
-Login screen:
-- Centered card (max 420px)
-- Dark background (#0B1220)
-- Inputs height 44px
-- Primary button Geo Navy
-
-After login:
-- Admin AppShell
-- Sidebar + top event selector
-
-Logic:
-Capability examples:
-- CAN_MANAGE_EVENT
-- CAN_WEIGHIN
-- CAN_RUN_DRAW
-- CAN_SCHEDULE
-- CAN_RUN_LIVE
-- CAN_VIEW_PUBLIC
-
-Server enforces permissions via NestJS Guards.
-
-Security:
-- JWT stored httpOnly
-- Rate limit login
-- Log sign-in attempts
-- CSRF protection
-
----
-
-# ☑ P1-03 Database Schema v1 + Audit Log
-
-Goal:
-Create core schema.
-
-Tables:
-- organisations
-- users
-- capabilities
-- events
-- rulesets
-- event_ruleset_snapshot
-- audit_log
-
-Event lifecycle enum:
-REG_OPEN
-WEIGHIN
-LOCKED
-DRAWN
-PUBLISHED
-LIVE
-COMPLETED
-
-Logic:
-- Lifecycle transitions validated via service
-- No direct DB state mutation
-
-Security:
-- Row-level access control via organisation_id
-- audit_log append-only
-
----
-
-# ☑ P1-04 Admin AppShell + i18n
-
-Goal:
-Stable admin layout + bilingual foundation.
-
-UI:
-Sidebar items:
-Dashboard
-Events
-Rulesets
-Users
-Settings
-
+AppShell (admin):
+- Left sidebar width 240px (collapsed 72px optional later)
+- Topbar height 56px
+- Content area max 1100px centered with 24px padding
+- Sidebar items (icons + labels):
+  - Dashboard
+  - Events
+  - Registrations
+  - Weigh-in
+  - Draw & Brackets
+  - Schedule
+  - Live
+  - Results
+  - Clubs
+  - Athletes
+  - Rulesets
+  - News
+  - Inbox
+  - Settings
 Topbar:
-- Event selector dropdown
-- Status pill
-- Language switcher (EN / KA)
+- Event selector dropdown (left)
+- Lifecycle StatusPill next to it
+- Language switch (EN/KA) right
+- User menu (logout)
 
-Design rules:
-- Max width 1100px
-- Inter font
-- Base 14px
-- Spacing 8/16/24px
-- Radius 10px
-- Dark mode default
+Core components:
+- DataTable (sticky header, sortable columns, row hover)
+- FilterBar (search left, filters middle, primary action right)
+- Drawer (right side 420px)
+- ConfirmModal (danger requires typing “CONFIRM” for destructive)
+- StatusPill colours:
+  - Draft/Reg Open: navy outline
+  - Weigh-in: amber
+  - Locked: slate
+  - Drawn: purple (optional) else navy
+  - Published: green outline
+  - Live: red outline (sparingly)
+  - Completed: green solid
+- Toasts (top-right)
 
-Logic:
-- Central translation keys
-- No hardcoded text allowed
+i18n:
+- Use keys only. Provide en.json + ka.json.
+- Microcopy style: short, “luxury” (clean, confident, no shouting).
 
-Security:
-- Prevent XSS via translation sanitisation
-- Enforce translation key existence via lint rule
+## 2.2 Pages (admin) — pixel-level specs
 
----
+### /admin/login
+- Fullscreen background: #0B1220
+- Center card: 420px width, padding 24px, radius 12px, bg #111827, border #334155
+- Title 20px: t('auth.signIn')
+- Inputs 44px height
+- Primary button full width: bg #123B6B, text white
+- Error text 13px, red #DC2626
 
-# ☑ P1-05 Event Creation + Lifecycle Engine
+### /admin/events
+Layout:
+- Header row: left H1 24px “Events”, right primary button “New event”
+- FilterBar: search by name/slug, filter by lifecycle, published toggle
+DataTable columns:
+- Name, Slug, Competition dates, Registration window, Lifecycle, Published
+Row click -> Event detail page
 
-Goal:
-Admin creates event and advances through stages with strict gates.
+New Event modal (max 560px):
+Fields:
+- Name
+- Slug (auto from name, editable)
+- Location (single string)
+- Timezone (default Asia/Tbilisi)
+- Registration start/end (datetime)
+- Weigh-in start/end (optional)
+- Competition start/end (datetime)
+Validation inline (red helper text)
+Primary: “Create event”
 
+### /admin/events/[id]
+- Top: H1 (event name) + StatusPill
+- Subline: location + competition dates (small 13px, text #94A3B8)
+- Right: primary button “Advance stage”
+- Secondary: “Publish” toggle (only if DRAWN and ready)
+Advance modal:
+- Shows current -> next
+- If override: requires reason textarea (min 10 chars)
+- Confirm button label changes: “Advance” / “Advance with override”
+
+Tabs (minimal):
+- Overview (dates)
+- Audit (read-only list of last 50 actions for event)
+
+### /admin/rulesets
+Table columns: Name, Version, Status, Updated
+Drawer editor:
+- JSON textarea + basic validation
+- Activate button (only one active)
+- Audit on activate
+
+### /admin/clubs
+Table: Name, City, Country
+Drawer: edit fields
+Primary: “New club”
+
+### /admin/athletes
+Filters: search, club, DOB, documentId
+Table: Name, Club, DOB, Document ID
+Drawer: profile + registrations history
+Merge tool:
+- Two athlete selectors
+- Preview: what will move
+- Confirm requires reason + typing “MERGE”
+
+### /admin/registrations?eventId=
+Table: Athlete, Club, Category, Status, Notes
+Actions per row: Approve / Reject / Withdraw
+Bulk actions: Approve selected (confirm)
+Coach view: only their club; admin sees all
+
+### /admin/weighin?eventId=
+Full-screen “station mode” option:
+- Top fixed search bar (height 56px)
+- Results list big cards
+Selected athlete panel:
+- Name 24px
+- Category + target (if known) 16px
+- Input weight (numeric) 56px height
+Buttons row (big 56px):
+- PASS (green #16A34A)
+- REWEIGH (amber #D97706)
+- FAIL (red #DC2626)
+Override: small link “Override” opens reason textarea
+Show attempt history list under (12–13px)
+
+### /admin/integrity?eventId=
+Checklist cards:
+- Each issue card shows count + “View” button
+- Lock button top-right disabled until zero issues OR override reason
+Lock modal: lists issues summary, requires reason if override
+
+### /admin/draw?eventId=
+Panel:
+- Seed (optional)
+- Toggle same-club separation
+- Primary: “Run draw”
+After draw:
+- Brackets list per category + “View”
+Reset draw: danger button bottom, requires typing CONFIRM + reason
+
+### /admin/brackets?eventId=
+Bracket viewer:
+- Simple rounds columns
+- Fight cards show Red vs Blue (names 14–16px)
+- Status dot + bout number
+Print button (A4 minimal)
+
+### /admin/schedule?eventId=
+Mats sidebar left (200px)
+Main grid list (MVP):
+- Per mat column with ordered fight cards
+Auto schedule modal:
+- Start time
+- Avg bout seconds
+- Buffer
+- Rest minutes
+- Seed
+Move fight: drag/drop optional later; MVP uses “Move” modal (to mat + position) with reason when override
+
+### /admin/live?eventId=&matId=
+Live console:
+- Very large timer 72px
+- Now fight card: names 32–40px
+Controls:
+- Start/Pause/Resume/Reset
+- State: On deck / In progress / Complete / Confirmed
+Result button opens modal:
+- Winner (Red/Blue)
+- Method (Points/KO/DQ/WO)
+- Notes optional
+Confirm locks unless override reason
+
+### /admin/results?eventId=
+Tabs:
+- Placements
+- Medal table
+Export drawer: checkboxes + Generate
+
+### /admin/news
+Table: Title, Slug, Published
+Drawer editor: markdown textarea + preview tab
+Publish toggle
+
+### /admin/inbox (forms)
+Table: Type, Name, Email, Created, Status
+Drawer: message + “Mark handled”
+
+## 2.3 Public site (minimal, credible)
+Routes:
+- / (hero + upcoming events + news)
+- /events, /events/[slug]
+- /clubs
+- /news, /news/[slug]
+- /contact
+Public design:
+- max width 960px
+- H1 32px, body 16px
+- Navy links, red only for highlights
+Public event page includes:
+- registration dates, competition dates, location
+- brackets/schedule tabs if published
+
+## 2.4 Mat Screen (public “which fight now?” killer)
+Route: /mat/[eventSlug]/[matName]
 UI:
-Events DataTable
-Event detail page:
-- Header with event name
-- Status pill
-- Primary button: "Advance Stage"
-- Confirmation modal required
+- Fullscreen dark bg #0B1220
+- NOW label 48px, names 40px, NEXT 28px
+- High contrast, minimal chrome
+Realtime:
+- Socket room mat:{matId}
+Fallback:
+- if disconnected show overlay “Reconnecting…” + last update time
 
-Logic:
-Stage gates:
-- Cannot move to DRAWN unless LOCKED
-- Cannot move to LIVE unless PUBLISHED
-- Override requires reason (stored)
-
-Security:
-- Only CAN_MANAGE_EVENT can advance
-- All transitions logged (who, when, from, to, reason)
-
-Implementation rule:
-Lifecycle service is single authority. No controller-level mutation.
+Deliverable frontend DoD:
+- Admin can run full flow: create event -> registrations -> weigh-in -> integrity lock -> draw -> schedule -> live -> results -> publish.
+- Public can view published event + mat screen.
 
 ---
 
-# Definition of Done (Phase 1)
+# 3) i18n Keys (minimum)
+Create en.json + ka.json with these keys (KA can be simple; keep keys identical):
 
-- Auth fully functional with capability guards
-- Rulesets versioned and snapshotting works
-- Event lifecycle transitions enforced
-- Audit log capturing all critical actions
-- Admin AppShell bilingual and consistent
-- Strict TypeScript enabled
-- No direct DB writes outside services
+auth.signIn
+auth.email
+auth.password
+auth.login
 
-If Phase 1 is not stable, Phase 2 must NOT start.
-"""
+nav.dashboard
+nav.events
+nav.registrations
+nav.weighin
+nav.draw
+nav.brackets
+nav.schedule
+nav.live
+nav.results
+nav.clubs
+nav.athletes
+nav.rulesets
+nav.news
+nav.inbox
+nav.settings
 
----
+common.search
+common.new
+common.create
+common.save
+common.cancel
+common.close
+common.reasonRequired
+common.override
+common.confirm
+common.publish
+common.unpublish
 
-# Phase 2 — Public informational site (Geo Wushu business)
-**Outcome:** public site + basic content publishing to build credibility and drive participation.
+event.newEvent
+event.location
+event.timezone
+event.registrationWindow
+event.weighinWindow
+event.competitionWindow
+event.advanceStage
+event.lockRegistration
 
-### ☑ P2-01 Public site pages (MVP)
-- **Goal:** Home, About (Geo Wushu + federation), Clubs/Coaches directory, Events calendar, News, Rules/Documents, Contact.
-- **UI:** max width 960px; H1 32px, body 16px; generous whitespace; sticky top nav; primary links Geo Navy; accent red only for highlights.
-- **Logic:** events + clubs read-only from DB; news can start as Markdown entries.
-- **Security:** public fetches **published only**; admin endpoints protected.
-- **Cursor notes:** split routes: `/` public + `/admin` system; shared design tokens.
+status.regOpen
+status.weighin
+status.locked
+status.drawn
+status.published
+status.live
+status.completed
 
-### ☑ P2-02 Content model + simple publishing workflow
-- **Goal:** publish/update News posts, Documents (PDF links), federation contacts, club profiles.
-- **UI:** Admin “Content” DataTable + editor drawer; markdown textarea + preview tab; publish toggle.
-- **Logic:** `published_at`, drafts hidden, unique slug.
-- **Security:** admin-only publish; sanitize markdown; restrict uploads to PDF; audit edits.
-- **Cursor notes:** minimal now; version history later.
-
-### ☑ P2-03 Contact + membership interest forms
-- **Goal:** capture leads (messages + club membership interest).
-- **UI:** single-column forms (max 600px), 44px inputs, clear labels, strong success state.
-- **Logic:** store submissions with status (new/handled).
-- **Security:** honeypot + rate limit (+ optional CAPTCHA). Restrict PII access.
-- **Cursor notes:** admin inbox view with status pill and “mark handled”.
-
----
-
-# Phase 3 — Registration + athlete management + weigh‑in
-**Outcome:** clubs register, admins weigh-in fast, mistakes are hard to make.
-
-### ☐ P3-01 Clubs + athlete directory (dedupe)
-- **Goal:** create athletes, link to clubs, avoid duplicates/name collisions.
-- **UI:** Athletes DataTable + search (name/DOB/doc id) + filters; detail drawer tabs (Profile/History).
-- **Logic:** dedupe warnings (DOB + doc id); admin merge tool.
-- **Security:** protect PII; audit merges.
-- **Cursor notes:** merge preview + irreversible confirm.
-
-### ☐ P3-02 Registration flow (club portal)
-- **Goal:** clubs submit athletes during `REG_OPEN`; admin can add manually.
-- **UI:** stepper (Athletes → Categories → Review), big “Add athlete”, inline validation.
-- **Logic:** auto-assign category from ruleset; category change requests need admin approval.
-- **Security:** clubs can only edit their athletes; rate limit.
-- **Cursor notes:** club dashboard + event registration screen.
-
-### ☐ P3-03 Weigh‑in station workflow
-- **Goal:** station mode: search athlete, record weight, pass/reweigh/fail.
-- **UI:** full-screen station mode; search top; big results; athlete card with name/category/target weight; buttons **PASS green / REWEIGH amber / FAIL red**.
-- **Logic:** track attempts + timestamps; overweight rule supports reweigh window (configurable); override requires reason.
-- **Security:** station accounts limited; log operator id, scale id, time, old/new weight.
-- **Cursor notes:** station route; offline queue optional later.
-
-### ☐ P3-04 Registration lock + integrity checks
-- **Goal:** pre-lock checks: missing DOB, duplicates, missing docs, no category, unpaid fees (if used).
-- **UI:** checklist screen with issue counts → opens filtered tables; block “Lock” until fixed or override reason.
-- **Logic:** validators server-side; issue codes.
-- **Security:** override lock admin-only; audit lock + reasons.
-- **Cursor notes:** implement validator framework (machine-readable).
+weighin.pass
+weighin.reweigh
+weighin.fail
 
 ---
 
-# Phase 4 — Draw + brackets (who meets who)
-**Outcome:** one click brackets, printable, with controlled overrides.
-
-### ☐ P4-01 Draw execution (seed + random)
-- **Goal:** generate brackets; byes; optional same-club separation.
-- **UI:** Brackets page with “Run draw” primary button; after draw: bracket view + PDF download; warnings panel.
-- **Logic:** deterministic seed option; store seed + input snapshot.
-- **Security:** admin-only; reset requires explicit permission + reason; audit.
-- **Cursor notes:** draw service with tests (1 athlete, odd, byes, same-club).
-
-### ☐ P4-02 Bracket viewer (admin + public + print)
-- **Goal:** clear brackets for venue + web; public read-only.
-- **UI:** bracket cards with names/club/status; print A4 minimal colour (navy headers).
-- **Logic:** bracket progression links stored; bracket separate from schedule.
-- **Security:** public shows only name/club (no sensitive PII). Publish gate.
-- **Cursor notes:** include version stamp on print.
-
-### ☐ P4-03 Edge cases: no-show, moved category, DQ
-- **Goal:** controlled incident workflows with audit trail.
-- **UI:** incident modal (No-show/Move/DQ) with consequence preview; reason required.
-- **Logic:** update bracket + schedule; mark fights “needs review”.
-- **Security:** head admin/jury only for DQ/move; audit + optional attachments.
-- **Cursor notes:** incident engine produces patch + reversible log when possible.
+# 4) Professional Mock Event (must work with POST /api/events)
+{
+  "name": "Geo Wushu Open 2026",
+  "slug": "geo-wushu-open-2026",
+  "location": "Olympic Palace, Tbilisi, Georgia",
+  "timezone": "Asia/Tbilisi",
+  "dates": {
+    "registrationStartDate": "2026-03-15T09:00:00+04:00",
+    "registrationEndDate":   "2026-05-05T23:59:00+04:00",
+    "weighInStartDate":      "2026-05-09T18:00:00+04:00",
+    "weighInEndDate":        "2026-05-09T20:00:00+04:00",
+    "competitionStartDate":  "2026-05-10T10:00:00+04:00",
+    "competitionEndDate":    "2026-05-11T19:00:00+04:00"
+  }
+}
 
 ---
 
-# Phase 5 — Scheduling + mats (when they fight)
-**Outcome:** schedule with rest constraints + Mat Screen kills “which fight now?”
+# 5) Stop Conditions (no moving on unless green)
+Backend stop:
+- All endpoints compile + pass tests + seed works + swagger (optional) reflects contracts.
+Frontend stop:
+- Admin flow can run a toy event end-to-end with mock data and realtime mat screen.
 
-### ☐ P5-01 Mat setup + schedule builder
-- **Goal:** mats + sessions + schedule blocks; assign fights to mats/times.
-- **UI:** grid (cols=mats, rows=time) drag/drop fight cards; inline conflict warnings.
-- **Logic:** rest constraint default (same athlete cannot fight within X minutes/X fights).
-- **Security:** scheduler permission; manual moves require reason stored.
-- **Cursor notes:** validate endpoint returns conflicts.
-
-### ☐ P5-02 Auto-schedule with rest constraints (MVP)
-- **Goal:** one-click auto assignment + manual tune.
-- **UI:** modal: start time, avg duration, rest minutes; shows estimated end time.
-- **Logic:** greedy heuristic ok; deterministic seed option; schedule versioning.
-- **Security:** log seed + settings; rollback supported; audit versions.
-- **Cursor notes:** schedule_versions table + diff.
-
-### ☐ P5-03 Mat Screen (public “which fight now?” killer)
-- **Goal:** full-screen view per mat: NOW/NEXT/ON DECK + timers.
-- **UI:** dark background; NOW title 48px, names 40px, next 28px; navy accents; red only for urgent. QR/link for mobile.
-- **Logic:** realtime updates from DB; resilient to refresh/reconnect.
-- **Security:** public read-only; no admin actions; rate limit.
-- **Cursor notes:** `/mat/:id` with websocket/SSE + reconnection logic.
-
----
-
-# Phase 6 — Competition live (fight ops)
-**Outcome:** judges/timekeepers run fights without confusion.
-
-### ☐ P6-01 Fight state machine + timer (DB truth)
-- **Goal:** fight states `QUEUED -> ON_DECK -> IN_PROGRESS -> PAUSED -> COMPLETE -> CONFIRMED`.
-- **UI:** Live console: big controls; timer 72px; show bout/names/mat.
-- **Logic:** timer stored in DB (start_ts, paused_ms, state); UI computes display only.
-- **Security:** only timekeeper/head judge controls timer; log every transition; prevent double-control.
-- **Cursor notes:** transaction-safe transitions; multi-device conflict handling.
-
-### ☐ P6-02 Result entry (MVP)
-- **Goal:** record winner + method (points/KO/DQ/WO), round, notes.
-- **UI:** result modal with radio buttons; required fields; “Confirm result”. Lock edits unless override.
-- **Logic:** progress bracket + update schedule statuses.
-- **Security:** confirm requires capability; edits require override + reason; amendment log.
-- **Cursor notes:** immutable result record + amendments.
-
-### ☐ P6-03 Judge console (minimal)
-- **Goal:** simple scoring/decision depending on verified ruleset.
-- **UI:** tablet-friendly; big buttons 64px; high contrast.
-- **Logic:** server aggregates judge inputs; tie-break configurable.
-- **Security:** judge auth per mat; prevent spoofing; rate limit; log.
-- **Cursor notes:** gate behind P1‑01; start with decision vote if uncertain.
-
----
-
-# Phase 7 — Results, publishing, exports
-**Outcome:** instant results online + print/export for federation records.
-
-### ☐ P7-01 Results tables + medals
-- **Goal:** placements per bracket + medal tables per club/athlete.
-- **UI:** Results page filters; medal cards + DataTable; print button.
-- **Logic:** pure computation; handle bronze rules per format.
-- **Security:** public read-only; regen action audit-logged.
-- **Cursor notes:** build as pure function + tests.
-
-### ☐ P7-02 Exports (PDF/CSV)
-- **Goal:** export registrations, brackets, schedule, results.
-- **UI:** export drawer with checkboxes + Generate; show last generated + download links.
-- **Logic:** server-side generation with version stamps.
-- **Security:** access controlled; PDFs must not leak hidden PII.
-- **Cursor notes:** sync ok if fast; otherwise basic job runner.
-
-### ☐ P7-03 Public event hub page
-- **Goal:** one link per event: schedule + brackets + live + results.
-- **UI:** event landing with tabs; minimal mobile friendly.
-- **Logic:** published-only data.
-- **Security:** protect endpoints; cache.
-- **Cursor notes:** `/events/:slug` tied to publish stage.
-
----
-
-# Phase 8 — Hardening + release
-**Outcome:** stable for real tournament: backups, permission tests, venue resilience.
-
-### ☐ P8-01 Permission test suite + security review
-- **Goal:** automated tests prove access control is correct.
-- **UI:** none (optional badge in Settings).
-- **Logic:** integration tests across capability gates.
-- **Security:** CSP + headers, validation, upload restrictions, dependency scanning.
-- **Cursor notes:** CI checks + small threat-model doc.
-
-### ☐ P8-02 Backups + restore drill
-- **Goal:** daily backups + documented restore; simulate restore before first event.
-- **UI:** Settings → Backups shows last backup timestamp.
-- **Logic:** retention policy.
-- **Security:** encrypt backups; limit access.
-- **Cursor notes:** runbook + log restore drills.
-
-### ☐ P8-03 Operational modes (venue resilience)
-- **Goal:** handle bad Wi‑Fi; Mat Screen never goes blank.
-- **UI:** “Reconnecting…” overlay + last update time.
-- **Logic:** reconnect backoff; snapshot endpoint.
-- **Security:** avoid leaking private data via caches.
-- **Cursor notes:** heartbeat + load test (e.g., 200 viewers).
-
----
-
-## Definition of Done (MVP)
-- Club registers athletes; admins run weigh‑in; lock with integrity checks.
-- Draw runs; brackets publish; schedule built with rest constraints + Mat Screens.
-- Fights run with timer + results; results publish instantly.
-- Public site has federation info + event hub + news + contact.
-- Server-side permissions + audit log; bilingual UI; dark mode default.
+Do not implement Phase-2 nice-to-haves until the full tournament loop is stable.

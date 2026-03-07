@@ -34,7 +34,7 @@ export function TopbarToggles() {
               : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
           }`}
         >
-          KA
+          ქართ
         </Link>
       </div>
 
