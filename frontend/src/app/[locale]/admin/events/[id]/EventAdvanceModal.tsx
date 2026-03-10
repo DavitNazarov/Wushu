@@ -13,6 +13,8 @@ interface Props {
   nextLifecycle: EventLifecycle | null;
   reason: string;
   onReasonChange: (v: string) => void;
+  override: boolean;
+  onOverrideChange: (v: boolean) => void;
   isPending: boolean;
   onConfirm: () => void;
   tAdvance: (key: string) => string;
@@ -27,6 +29,8 @@ export function EventAdvanceModal({
   nextLifecycle,
   reason,
   onReasonChange,
+  override,
+  onOverrideChange,
   isPending,
   onConfirm,
   tAdvance,
@@ -67,6 +71,14 @@ export function EventAdvanceModal({
             />
           </div>
           <div>
+            <label className="mb-2 flex items-center gap-2 text-[13px] font-medium text-[var(--color-text)]">
+              <input
+                type="checkbox"
+                checked={override}
+                onChange={(e) => onOverrideChange(e.target.checked)}
+              />
+              {tCommon('override')}
+            </label>
             <label className="block text-[13px] font-medium text-[var(--color-text)]">
               {tAdvance('reasonLabel')}
             </label>

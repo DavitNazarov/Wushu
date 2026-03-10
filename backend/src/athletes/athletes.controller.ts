@@ -140,6 +140,7 @@ export class AthletesController {
       const merged = await this.athletes.merge({
         organisationId: auth.organisationId,
         actorUserId: auth.sub,
+        actorClubId: auth.role === 'coach' ? (auth.clubId ?? null) : null,
         primaryId: body.primaryId,
         secondaryId: body.secondaryId,
         reason: body.reason.trim(),

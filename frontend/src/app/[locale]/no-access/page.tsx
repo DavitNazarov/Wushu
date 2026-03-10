@@ -22,7 +22,7 @@ export default async function NoAccessPage() {
             <PrimaryButton>{tNoAccess('goHome')}</PrimaryButton>
           </Link>
           <Link
-            href={`/${locale}/login`}
+            href={`/${locale}/login?force=1`}
             className="inline-flex h-11 items-center justify-center rounded-[var(--radius-input)] border border-[var(--color-border)] px-4 text-sm font-medium text-[var(--color-text)] hover:bg-[var(--color-surface-alt)]"
           >
             {tNoAccess('signInDifferent')}

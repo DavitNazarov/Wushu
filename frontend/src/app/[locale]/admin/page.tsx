@@ -7,11 +7,11 @@ import { Calendar, FileText, ClipboardList, Scale, Shuffle, Trophy } from 'lucid
 import { PageHeader } from '@/components/ui/PageHeader';
 import { KpiCard } from '@/components/ui/KpiCard';
 import { StatusChip } from '@/components/ui/StatusChip';
-import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SkeletonKpiRow, SkeletonRows } from '@/components/ui/Skeleton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { apiGet } from '@/lib/api/client';
 import type { EventRow } from '@/types/api';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 export default function AdminDashboardPage() {
   const t = useTranslations('admin.dashboard');
@@ -62,9 +62,12 @@ export default function AdminDashboardPage() {
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
 
       {error && (
-        <InlineAlert variant="error" actions={<button onClick={() => refetch()} className="text-[13px] font-medium underline">{tCommon('retry')}</button>}>
-          {tCommon('loadError')}
-        </InlineAlert>
+        <AdminErrorAlert
+          error={error}
+          fallbackMessage={tCommon('loadError')}
+          retryLabel={tCommon('retry')}
+          onRetry={() => refetch()}
+        />
       )}
 
       {isLoading ? (

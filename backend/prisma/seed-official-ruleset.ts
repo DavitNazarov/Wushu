@@ -1,170 +1,182 @@
 /**
- * Seeds the official Georgian Sanda ruleset with structured age groups and weight categories.
- * Safe to run multiple times — uses upsert logic on the ruleset name.
- *
- * Run:  npx ts-node --project tsconfig.json prisma/seed-official-ruleset.ts
+ * Seeds default IWUF 2024 Sanda templates as reusable system rules.
+ * Safe to run multiple times.
  */
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-const connectionString = process.env['DATABASE_URL'] ?? 'postgresql://geo:geo123@localhost:5432/geo_wushu';
+const connectionString =
+  process.env['DATABASE_URL'] ?? 'postgresql://geo:geo123@localhost:5432/geo_wushu';
 const adapter = new PrismaPg({ connectionString });
-const prisma = new PrismaClient({ adapter } as ConstructorParameters<typeof PrismaClient>[0]);
+const prisma = new PrismaClient({
+  adapter,
+} as ConstructorParameters<typeof PrismaClient>[0]);
 
-type WC = { name: string; minExcl: number | null; maxIncl: number | null };
+type WeightCategorySeed = {
+  name: string;
+  minExcl: number | null;
+  maxIncl: number | null;
+};
 
-function buildCategories(boundaries: (number | null)[]): WC[] {
-  const cats: WC[] = [];
+type AgeGroupSeed = {
+  code: string;
+  name: string;
+  minAge: number;
+  maxAge: number;
+  sortOrder: number;
+  roundDurationSeconds: number;
+  weights: WeightCategorySeed[];
+};
+
+function buildWeightCategories(boundaries: number[], openTop = false): WeightCategorySeed[] {
+  const categories: WeightCategorySeed[] = [];
   for (let i = 0; i < boundaries.length; i++) {
-    const lower = boundaries[i - 1] ?? null;
     const upper = boundaries[i];
-    const name = upper === null ? `+${boundaries[i - 1]}kg` : `${upper}kg`;
-    cats.push({ name, minExcl: lower, maxIncl: upper });
+    const lower = i === 0 ? null : boundaries[i - 1];
+    categories.push({
+      name: `${upper}kg`,
+      minExcl: lower,
+      maxIncl: upper,
+    });
   }
-  return cats;
+
+  if (openTop) {
+    const lower = boundaries[boundaries.length - 1] ?? null;
+    categories.push({
+      name: `+${lower}kg`,
+      minExcl: lower,
+      maxIncl: null,
+    });
+  }
+
+  return categories;
 }
 
-const SENIOR_MEN_WC = buildCategories([48, 52, 56, 60, 65, 70, 75, 80, 85, 90, null]);
-const SENIOR_WOMEN_WC = buildCategories([48, 52, 56, 60, 65, 70, 75, null]);
-const JUNIOR_BOYS_WC = buildCategories([42, 45, 48, 52, 56, 60, 65, 70, 75, null]);
-const JUNIOR_GIRLS_WC = buildCategories([40, 42, 45, 48, 52, 56, 60, null]);
-const CHILDREN_BOYS_WC = buildCategories([32, 36, 40, 44, 48, 52, null]);
-const CHILDREN_GIRLS_WC = buildCategories([30, 34, 38, 42, 46, null]);
-
-const AGE_GROUPS = [
+const AGE_GROUPS: AgeGroupSeed[] = [
   {
-    code: 'senior-men',
-    name: 'Senior Men',
-    sex: 'MALE' as const,
-    minAge: 18,
-    maxAge: null,
-    roundDurationSeconds: 120,
+    code: 'children-9-11',
+    name: 'Children',
+    minAge: 9,
+    maxAge: 11,
     sortOrder: 1,
-    weightCategories: SENIOR_MEN_WC,
+    roundDurationSeconds: 90,
+    weights: buildWeightCategories([26, 28, 30, 32, 34, 36, 39, 42, 45, 48]),
   },
   {
-    code: 'senior-women',
-    name: 'Senior Women',
-    sex: 'FEMALE' as const,
-    minAge: 18,
-    maxAge: null,
-    roundDurationSeconds: 120,
+    code: 'junior-12-14',
+    name: 'Junior',
+    minAge: 12,
+    maxAge: 14,
     sortOrder: 2,
-    weightCategories: SENIOR_WOMEN_WC,
+    roundDurationSeconds: 120,
+    weights: buildWeightCategories([39, 42, 45, 48, 52, 56, 60, 64, 68, 72]),
   },
   {
-    code: 'junior-boys',
-    name: 'Junior Boys',
-    sex: 'MALE' as const,
+    code: 'youth-15-17',
+    name: 'Youth',
     minAge: 15,
     maxAge: 17,
-    roundDurationSeconds: 120,
     sortOrder: 3,
-    weightCategories: JUNIOR_BOYS_WC,
-  },
-  {
-    code: 'junior-girls',
-    name: 'Junior Girls',
-    sex: 'FEMALE' as const,
-    minAge: 15,
-    maxAge: 17,
     roundDurationSeconds: 120,
+    weights: buildWeightCategories([48, 52, 56, 60, 65, 70, 75, 80, 85, 90]),
+  },
+  {
+    code: 'adult-18-40',
+    name: 'Adult',
+    minAge: 18,
+    maxAge: 40,
     sortOrder: 4,
-    weightCategories: JUNIOR_GIRLS_WC,
-  },
-  {
-    code: 'children-boys',
-    name: 'Children Boys',
-    sex: 'MALE' as const,
-    minAge: 12,
-    maxAge: 14,
-    roundDurationSeconds: 90,
-    sortOrder: 5,
-    weightCategories: CHILDREN_BOYS_WC,
-  },
-  {
-    code: 'children-girls',
-    name: 'Children Girls',
-    sex: 'FEMALE' as const,
-    minAge: 12,
-    maxAge: 14,
-    roundDurationSeconds: 90,
-    sortOrder: 6,
-    weightCategories: CHILDREN_GIRLS_WC,
+    roundDurationSeconds: 120,
+    weights: buildWeightCategories(
+      [48, 52, 56, 60, 65, 70, 75, 80, 85, 90, 100],
+      true,
+    ),
   },
 ];
 
 async function main() {
-  console.log('Seeding official Georgian Sanda ruleset...');
+  const rulesetName = 'IWUF 2024 Sanda (Default)';
 
-  // Upsert the ruleset header (system-level, no organisationId)
+  console.log(`Seeding ruleset: ${rulesetName}`);
+
   const existing = await prisma.ruleset.findFirst({
-    where: { organisationId: null, name: 'Official Georgian Sanda' },
+    where: { organisationId: null, name: rulesetName },
   });
 
   const ruleset = existing
     ? await prisma.ruleset.update({
         where: { id: existing.id },
-        data: { status: 'ACTIVE', updatedAt: new Date() },
+        data: {
+          status: 'ACTIVE',
+          definition: {
+            source: 'IWUF',
+            edition: '2024',
+            discipline: 'Sanda',
+            builtIn: true,
+          },
+        },
       })
     : await prisma.ruleset.create({
         data: {
           organisationId: null,
-          name: 'Official Georgian Sanda',
+          name: rulesetName,
           version: 1,
           status: 'ACTIVE',
-          definition: { sport: 'Sanda', country: 'GEO', year: 2026 },
+          definition: {
+            source: 'IWUF',
+            edition: '2024',
+            discipline: 'Sanda',
+            builtIn: true,
+          },
         },
       });
 
-  console.log(`Ruleset id: ${ruleset.id}`);
+  // Full replace for deterministic default template updates.
+  await prisma.rulesetWeightCategory.deleteMany({
+    where: { ageGroup: { rulesetId: ruleset.id } },
+  });
+  await prisma.rulesetAgeGroup.deleteMany({ where: { rulesetId: ruleset.id } });
 
-  for (const ag of AGE_GROUPS) {
-    const ageGroup = await prisma.rulesetAgeGroup.upsert({
-      where: { rulesetId_code: { rulesetId: ruleset.id, code: ag.code } },
-      create: {
+  for (const ageGroup of AGE_GROUPS) {
+    const createdAgeGroup = await prisma.rulesetAgeGroup.create({
+      data: {
         rulesetId: ruleset.id,
-        code: ag.code,
-        name: ag.name,
-        sex: ag.sex,
-        minAge: ag.minAge,
-        maxAge: ag.maxAge,
-        roundDurationSeconds: ag.roundDurationSeconds,
-        sortOrder: ag.sortOrder,
-      },
-      update: {
-        name: ag.name,
-        sex: ag.sex,
-        minAge: ag.minAge,
-        maxAge: ag.maxAge,
-        roundDurationSeconds: ag.roundDurationSeconds,
-        sortOrder: ag.sortOrder,
+        code: ageGroup.code,
+        name: ageGroup.name,
+        sex: null,
+        minAge: ageGroup.minAge,
+        maxAge: ageGroup.maxAge,
+        roundDurationSeconds: ageGroup.roundDurationSeconds,
+        sortOrder: ageGroup.sortOrder,
       },
     });
 
-    // Remove old weight categories (full replace)
-    await prisma.rulesetWeightCategory.deleteMany({ where: { ageGroupId: ageGroup.id } });
-
-    for (let i = 0; i < ag.weightCategories.length; i++) {
-      const wc = ag.weightCategories[i];
+    for (let i = 0; i < ageGroup.weights.length; i++) {
+      const weight = ageGroup.weights[i];
       await prisma.rulesetWeightCategory.create({
         data: {
-          ageGroupId: ageGroup.id,
-          name: wc.name,
-          minWeightKgExcl: wc.minExcl,
-          maxWeightKgIncl: wc.maxIncl,
+          ageGroupId: createdAgeGroup.id,
+          name: weight.name,
+          minWeightKgExcl: weight.minExcl,
+          maxWeightKgIncl: weight.maxIncl,
           sortOrder: i + 1,
         },
       });
     }
-
-    console.log(`  ${ag.name}: ${ag.weightCategories.length} categories`);
   }
 
-  const totalWC = AGE_GROUPS.reduce((s, ag) => s + ag.weightCategories.length, 0);
-  console.log(`Done. Seeded ${AGE_GROUPS.length} age groups, ${totalWC} weight categories.`);
+  const totalCategories = AGE_GROUPS.reduce(
+    (sum, ageGroup) => sum + ageGroup.weights.length,
+    0,
+  );
+  console.log(
+    `Done. Age groups: ${AGE_GROUPS.length}. Weight categories: ${totalCategories}.`,
+  );
 }
 
 main()
-  .catch((e) => { console.error(e); process.exit(1); })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  })
   .finally(() => prisma.$disconnect());

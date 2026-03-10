@@ -22,6 +22,7 @@ export type AuthContext =
       capabilities: [];
       clubId?: null;
       needsRefresh?: boolean;
+      blocked?: boolean;
     };
 
 export async function getAuthContext(): Promise<AuthContext> {
@@ -55,6 +56,9 @@ export async function getAuthContext(): Promise<AuthContext> {
   // 401 = expired access token → try refresh via redirect
   if (res.status === 401) {
     return { userId: null, organisationId: null, role: null, capabilities: [], needsRefresh: true };
+  }
+  if (res.status === 403) {
+    return { userId: null, organisationId: null, role: null, capabilities: [], blocked: true };
   }
 
   // Transient errors: retry once before treating as logout
@@ -104,6 +108,9 @@ export function getAuthRedirectUrl(
   if ('needsRefresh' in auth && auth.needsRefresh) {
     return `/${locale}/auth/refresh?next=${encodeURIComponent(nextPath)}`;
   }
+  if ('blocked' in auth && auth.blocked) {
+    return `/${locale}/no-access`;
+  }
   return `/${locale}/login?next=${encodeURIComponent(nextPath)}`;
 }
 
@@ -139,4 +146,3 @@ export async function requireCapability(
     organisationId: auth.organisationId,
   };
 }
-

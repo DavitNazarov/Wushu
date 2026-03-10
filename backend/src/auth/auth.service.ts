@@ -6,6 +6,8 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { getCapabilitiesForRole, type UserRole } from './capabilities';
+import { isUserDqActive } from '../users/users.state';
+import type { AuthGuardValidationResult } from '../users/users.types';
 
 export const JWT_COOKIE_NAME = 'gw_auth';
 export const REFRESH_COOKIE_NAME = 'gw_refresh';
@@ -132,6 +134,14 @@ export class AuthService {
       return null;
     }
 
+    const validated = await this.validateAuthenticatedUser(payload.sub);
+    if (!validated.ok) {
+      this.logger.warn(
+        `[auth] refresh rejected for user ${payload.sub}: ${validated.code}`,
+      );
+      return null;
+    }
+
     const tokenHash = this.hashToken(incomingToken);
     let stored: {
       id: string;
@@ -149,10 +159,10 @@ export class AuthService {
         this.logger.warn(
           '[auth] RefreshToken table unavailable on refresh; rotating tokens without DB-backed revocation.',
         );
-        const accessToken = this.signToken(payload);
-        const refreshToken = this.signRefreshToken(payload);
-        await this.storeRefreshToken(payload.sub, refreshToken);
-        return { accessToken, refreshToken, payload };
+        const accessToken = this.signToken(validated.payload);
+        const refreshToken = this.signRefreshToken(validated.payload);
+        await this.storeRefreshToken(validated.payload.sub, refreshToken);
+        return { accessToken, refreshToken, payload: validated.payload };
       }
       throw error;
     }
@@ -195,12 +205,42 @@ export class AuthService {
     }
 
     // Issue new tokens
-    const accessToken = this.signToken(payload);
-    const refreshToken = this.signRefreshToken(payload);
-    await this.storeRefreshToken(payload.sub, refreshToken);
+    const accessToken = this.signToken(validated.payload);
+    const refreshToken = this.signRefreshToken(validated.payload);
+    await this.storeRefreshToken(validated.payload.sub, refreshToken);
 
-    this.logger.log(`[auth] refresh rotated for user ${payload.sub}`);
-    return { accessToken, refreshToken, payload };
+    this.logger.log(`[auth] refresh rotated for user ${validated.payload.sub}`);
+    return { accessToken, refreshToken, payload: validated.payload };
+  }
+
+  async validateAuthenticatedUser(
+    userId: string,
+  ): Promise<AuthGuardValidationResult> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { capabilities: { include: { capability: true } } },
+    });
+
+    if (!user || user.deletedAt) return { ok: false, code: 'USER_ARCHIVED' };
+    if (!user.isActive) return { ok: false, code: 'USER_DISABLED' };
+    if (isUserDqActive(user)) return { ok: false, code: 'USER_SUSPENDED' };
+
+    const dbCapabilities = user.capabilities.map((uc) => uc.capability.code);
+    const roleCapabilities = getCapabilitiesForRole(user.role as UserRole);
+    const allCapabilities = [
+      ...new Set([...roleCapabilities, ...dbCapabilities]),
+    ];
+
+    return {
+      ok: true,
+      payload: {
+        sub: user.id,
+        organisationId: user.organisationId,
+        role: user.role as UserRole,
+        capabilities: allCapabilities,
+        clubId: user.clubId ?? null,
+      },
+    };
   }
 
   async getMePayload(userId: string): Promise<{
@@ -213,30 +253,19 @@ export class AuthService {
     clubName?: string | null;
     organisationName?: string | null;
   } | null> {
+    const validated = await this.validateAuthenticatedUser(userId);
+    if (!validated.ok) return null;
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
-        organisationId: true,
-        role: true,
         displayName: true,
         clubId: true,
         organisation: { select: { name: true } },
       },
     });
     if (!user) return null;
-
-    const dbCapabilities = await this.prisma.userCapability.findMany({
-      where: { userId: user.id },
-      include: { capability: true },
-    });
-    const roleCapabilities = getCapabilitiesForRole(user.role as UserRole);
-    const allCapabilities = [
-      ...new Set([
-        ...roleCapabilities,
-        ...dbCapabilities.map((uc) => uc.capability.code),
-      ]),
-    ];
 
     let clubName: string | null = null;
     if (user.clubId) {
@@ -248,11 +277,11 @@ export class AuthService {
     }
 
     return {
-      userId: user.id,
-      organisationId: user.organisationId,
-      role: user.role as UserRole,
-      capabilities: allCapabilities,
-      clubId: user.clubId ?? null,
+      userId: validated.payload.sub,
+      organisationId: validated.payload.organisationId,
+      role: validated.payload.role,
+      capabilities: validated.payload.capabilities,
+      clubId: validated.payload.clubId ?? null,
       displayName: user.displayName,
       clubName,
       organisationName: user.organisation?.name ?? null,
@@ -288,16 +317,24 @@ export class AuthService {
         token: string;
         refreshToken: string;
       }
-    | { ok: false; error: 'USER_DISABLED' | 'NO_ROLE' | 'INVALID_CREDENTIALS' }
+    | {
+        ok: false;
+        error:
+          | 'USER_DISABLED'
+          | 'USER_SUSPENDED'
+          | 'NO_ROLE'
+          | 'INVALID_CREDENTIALS';
+      }
   > {
     const user = await this.prisma.user.findFirst({
-      where: { email },
+      where: { email, deletedAt: null },
       include: { capabilities: { include: { capability: true } } },
       orderBy: { createdAt: 'asc' },
     });
 
     if (!user) return { ok: false, error: 'INVALID_CREDENTIALS' };
     if (!user.isActive) return { ok: false, error: 'USER_DISABLED' };
+    if (isUserDqActive(user)) return { ok: false, error: 'USER_SUSPENDED' };
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return { ok: false, error: 'INVALID_CREDENTIALS' };

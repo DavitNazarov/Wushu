@@ -8,6 +8,9 @@ const mockPrisma = {
     findMany: jest.fn(),
     updateMany: jest.fn(),
   },
+  registration: {
+    findMany: jest.fn(),
+  },
 };
 
 const mockAudit = {
@@ -20,6 +23,10 @@ function makeEvent(overrides: Record<string, unknown> = {}) {
     name: 'Test Event',
     timezone: 'Asia/Tbilisi',
     lifecycle: 'REG_OPEN',
+    registrationClosesAt: new Date('2026-03-04T00:00:00.000Z'),
+    registrationEndDate: new Date('2026-03-04T00:00:00.000Z'),
+    weighInStartDate: new Date('2026-03-05T00:00:00.000Z'),
+    autoAdvanceStage: true,
     organisationId: 'org-1',
     dates: {
       registrationDays: ['2026-03-05', '2026-03-06'],
@@ -34,6 +41,7 @@ describe('EventStageAutomationService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockPrisma.registration.findMany.mockReset();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -48,38 +56,35 @@ describe('EventStageAutomationService', () => {
     );
   });
 
-  describe('Case A: today == weighInStartDate, stage REG_OPEN, autoAdvanceStage true', () => {
-    it('advances stage to WEIGHIN and writes audit log', async () => {
+  describe('Case A: registration close passed, stage REG_OPEN, autoAdvanceStage true', () => {
+    it('advances stage to LOCKED and writes audit log', async () => {
       const event = makeEvent();
       mockPrisma.event.findMany.mockResolvedValue([event]);
       mockPrisma.event.updateMany.mockResolvedValue({ count: 1 });
-
-      // Patch getTodayInTimezone to return the earliest weigh-in day
-      jest.spyOn(service, 'getTodayInTimezone').mockReturnValue('2026-03-05');
 
       const count = await service.checkAndAdvanceStages();
 
       expect(count).toBe(1);
       expect(mockPrisma.event.updateMany).toHaveBeenCalledWith({
         where: { id: 'evt-1', lifecycle: 'REG_OPEN' },
-        data: { lifecycle: 'WEIGHIN' },
+        data: { lifecycle: 'LOCKED' },
       });
       expect(mockAudit.write).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'EVENT_STAGE_AUTO_ADVANCED',
           before: { lifecycle: 'REG_OPEN' },
-          after: { lifecycle: 'WEIGHIN' },
+          after: { lifecycle: 'LOCKED' },
         }),
       );
     });
   });
 
-  describe('Case B: today < weighInStartDate', () => {
+  describe('Case B: registration close not passed', () => {
     it('does not advance stage', async () => {
-      const event = makeEvent();
+      const event = makeEvent({
+        registrationClosesAt: new Date(Date.now() + 1000 * 60 * 60),
+      });
       mockPrisma.event.findMany.mockResolvedValue([event]);
-
-      jest.spyOn(service, 'getTodayInTimezone').mockReturnValue('2026-03-04');
 
       const count = await service.checkAndAdvanceStages();
 
@@ -89,10 +94,15 @@ describe('EventStageAutomationService', () => {
     });
   });
 
-  describe('Case C: stage already WEIGHIN (not returned by query)', () => {
+  describe('Case C: stage already WEIGHIN (returned by query, no completion yet)', () => {
     it('returns no candidates when lifecycle != REG_OPEN', async () => {
-      // The query filters lifecycle = REG_OPEN, so non-REG_OPEN events are never returned
-      mockPrisma.event.findMany.mockResolvedValue([]);
+      mockPrisma.event.findMany.mockResolvedValue([
+        makeEvent({ lifecycle: 'WEIGHIN' }),
+      ]);
+      mockPrisma.registration.findMany.mockResolvedValue([
+        { id: 'r1', weighInStatus: 'PASSED' },
+        { id: 'r2', weighInStatus: 'REWEIGH_ALLOWED' },
+      ]);
 
       const count = await service.checkAndAdvanceStages();
 
@@ -104,6 +114,8 @@ describe('EventStageAutomationService', () => {
   describe('Case D: weighInDays empty', () => {
     it('skips event and logs warning', async () => {
       const event = makeEvent({
+        lifecycle: 'LOCKED',
+        weighInStartDate: null,
         dates: { registrationDays: [], fightDays: ['2026-03-07'] },
       });
       mockPrisma.event.findMany.mockResolvedValue([event]);
@@ -138,7 +150,10 @@ describe('EventStageAutomationService', () => {
 
   describe('Missing dates object', () => {
     it('skips event when dates is null', async () => {
-      const event = makeEvent({ dates: null });
+      const event = makeEvent({
+        dates: null,
+        registrationClosesAt: new Date(Date.now() + 1000 * 60 * 60),
+      });
       mockPrisma.event.findMany.mockResolvedValue([event]);
 
       const count = await service.checkAndAdvanceStages();

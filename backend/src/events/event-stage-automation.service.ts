@@ -1,9 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { toZonedTime, format } from 'date-fns-tz';
-import type { Prisma } from '@prisma/client';
+import { formatInTimeZone, toZonedTime, format } from 'date-fns-tz';
+import type { EventLifecycle, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import {
+  isFinalWeighInStatus,
+  isWeighInComplete,
+} from './weighin-completion.helper';
 
 interface EventDates {
   registrationDays?: string[];
@@ -14,10 +18,13 @@ type EventCandidate = {
   id: string;
   name: string;
   timezone: string;
-  lifecycle: string;
+  lifecycle: EventLifecycle;
   autoAdvanceStage: boolean;
   organisationId: string;
   dates: unknown;
+  registrationClosesAt: Date | null;
+  registrationEndDate: Date;
+  weighInStartDate: Date | null;
 };
 
 @Injectable()
@@ -50,11 +57,13 @@ export class EventStageAutomationService {
         autoAdvanceStage: true,
         organisationId: true,
         dates: true,
+        registrationClosesAt: true,
+        registrationEndDate: true,
+        weighInStartDate: true,
       },
     });
 
     if (!event) return;
-    if (!event.autoAdvanceStage || event.lifecycle !== 'REG_OPEN') return;
 
     await this.tryAdvanceEventRecord(event);
   }
@@ -65,7 +74,19 @@ export class EventStageAutomationService {
    */
   async checkAndAdvanceStages(): Promise<number> {
     const candidates = await this.prisma.event.findMany({
-      where: { autoAdvanceStage: true, lifecycle: 'REG_OPEN' },
+      where: {
+        OR: [
+          {
+            autoAdvanceStage: true,
+            lifecycle: {
+              in: ['REG_OPEN', 'LOCKED', 'WEIGH_IN_COMPLETED'],
+            },
+          },
+          {
+            lifecycle: 'WEIGHIN',
+          },
+        ],
+      },
       select: {
         id: true,
         name: true,
@@ -74,6 +95,9 @@ export class EventStageAutomationService {
         autoAdvanceStage: true,
         organisationId: true,
         dates: true,
+        registrationClosesAt: true,
+        registrationEndDate: true,
+        weighInStartDate: true,
       },
     });
 
@@ -98,58 +122,157 @@ export class EventStageAutomationService {
    */
   private async tryAdvanceEventRecord(event: EventCandidate): Promise<boolean> {
     try {
-      const weighInDays = this.extractWeighInDays(event.dates);
-
-      if (!weighInDays || weighInDays.length === 0) {
-        this.logger.warn(
-          `Event "${event.name}" (${event.id}) has no weighInDays — skipping auto-advance`,
-        );
-        return false;
-      }
-
       const timezone = event.timezone || 'Asia/Tbilisi';
       const todayStr = this.getTodayInTimezone(timezone);
-      const weighInStartDate = [...weighInDays].sort()[0];
+      // Assumption: if online registration close is not configured, use
+      // registrationEndDate as deterministic fallback lock boundary.
+      const registrationCloseAt =
+        event.registrationClosesAt ?? event.registrationEndDate;
 
-      if (todayStr < weighInStartDate) {
-        return false;
+      if (
+        event.lifecycle === 'REG_OPEN' &&
+        event.autoAdvanceStage &&
+        registrationCloseAt &&
+        new Date() > registrationCloseAt
+      ) {
+        return this.advanceLifecycle({
+          event,
+          from: 'REG_OPEN',
+          to: 'LOCKED',
+          reason: `Auto-advance: registration close passed (${registrationCloseAt.toISOString()})`,
+        });
       }
 
-      // Conditional update — concurrency-safe: only proceeds if stage is still REG_OPEN
-      const result = await this.prisma.event.updateMany({
-        where: { id: event.id, lifecycle: 'REG_OPEN' },
-        data: { lifecycle: 'WEIGHIN' },
-      });
+      if (event.lifecycle === 'LOCKED' && event.autoAdvanceStage) {
+        const weighInStartDate = this.getWeighInStartDate(event, timezone);
+        if (!weighInStartDate) {
+          this.logger.warn(
+            `Event "${event.name}" (${event.id}) has no weighInStartDate — skipping LOCKED → WEIGHIN auto-advance`,
+          );
+          return false;
+        }
 
-      if (result.count === 0) {
-        // Another process already advanced it
-        return false;
+        if (todayStr < weighInStartDate) {
+          return false;
+        }
+
+        return this.advanceLifecycle({
+          event,
+          from: 'LOCKED',
+          to: 'WEIGHIN',
+          reason: `Auto-advance: today (${todayStr}) >= weighInStartDate (${weighInStartDate}) tz=${timezone}`,
+        });
       }
 
-      this.logger.log(
-        `Auto-advanced event "${event.name}" (${event.id}) ` +
-          `REG_OPEN → WEIGHIN | today=${todayStr} weighInStart=${weighInStartDate} tz=${timezone}`,
-      );
+      if (event.lifecycle === 'WEIGHIN') {
+        const completed = await this.hasCompletedWeighIn(event.id);
+        if (!completed) return false;
 
-      await this.audit.write({
-        organisationId: event.organisationId,
-        eventId: event.id,
-        actorUserId: null,
-        action: 'EVENT_STAGE_AUTO_ADVANCED',
-        entityType: 'event',
-        entityId: event.id,
-        before: { lifecycle: 'REG_OPEN' } as Prisma.JsonValue,
-        after: { lifecycle: 'WEIGHIN' } as Prisma.JsonValue,
-        reason: `Auto-advance: today (${todayStr}) >= weighInStartDate (${weighInStartDate}) tz=${timezone}`,
-      });
+        return this.advanceLifecycle({
+          event,
+          from: 'WEIGHIN',
+          to: 'WEIGH_IN_COMPLETED',
+          reason: 'Auto-advance: all athletes have final weigh-in statuses',
+        });
+      }
 
-      return true;
+      if (event.lifecycle === 'WEIGH_IN_COMPLETED') {
+        if (!event.autoAdvanceStage) return false;
+        return this.advanceLifecycle({
+          event,
+          from: 'WEIGH_IN_COMPLETED',
+          to: 'DRAWN',
+          reason: 'Auto-advance: weigh-in completed',
+        });
+      }
+
+      return false;
     } catch (err) {
       this.logger.error(
         `Error auto-advancing event "${event.name}" (${event.id}): ${String(err)}`,
       );
       return false;
     }
+  }
+
+  private async hasCompletedWeighIn(eventId: string): Promise<boolean> {
+    const registrations = await this.prisma.registration.findMany({
+      where: {
+        eventId,
+        status: { not: 'WITHDRAWN' },
+      },
+      select: {
+        id: true,
+        weighInStatus: true,
+      },
+    });
+
+    const complete = isWeighInComplete(
+      registrations.map((registration) => registration.weighInStatus),
+    );
+    if (!complete) {
+      const nonFinalRegistrations = registrations.filter(
+        (registration) => !isFinalWeighInStatus(registration.weighInStatus),
+      );
+      const nonFinalSample = nonFinalRegistrations
+        .slice(0, 10)
+        .map((registration) => ({
+          id: registration.id,
+          status: registration.weighInStatus,
+        }));
+
+      this.logger.debug(
+        `Weigh-in completion pending for event ${eventId}: ${JSON.stringify({
+          total: registrations.length,
+          nonFinalCount: nonFinalRegistrations.length,
+          sampleNonFinal: nonFinalSample,
+        })}`,
+      );
+    }
+
+    return complete;
+  }
+
+  private getWeighInStartDate(event: EventCandidate, timezone: string): string | null {
+    if (event.weighInStartDate) {
+      return formatInTimeZone(event.weighInStartDate, timezone, 'yyyy-MM-dd');
+    }
+
+    const weighInDays = this.extractWeighInDays(event.dates);
+    if (!weighInDays || weighInDays.length === 0) return null;
+    return [...weighInDays].sort()[0];
+  }
+
+  private async advanceLifecycle(input: {
+    event: EventCandidate;
+    from: EventLifecycle;
+    to: EventLifecycle;
+    reason: string;
+  }): Promise<boolean> {
+    const result = await this.prisma.event.updateMany({
+      where: { id: input.event.id, lifecycle: input.from },
+      data: { lifecycle: input.to },
+    });
+
+    if (result.count === 0) return false;
+
+    this.logger.log(
+      `Auto-advanced event "${input.event.name}" (${input.event.id}) ${input.from} → ${input.to}`,
+    );
+
+    await this.audit.write({
+      organisationId: input.event.organisationId,
+      eventId: input.event.id,
+      actorUserId: null,
+      action: 'EVENT_STAGE_AUTO_ADVANCED',
+      entityType: 'event',
+      entityId: input.event.id,
+      before: { lifecycle: input.from } as Prisma.JsonValue,
+      after: { lifecycle: input.to } as Prisma.JsonValue,
+      reason: input.reason,
+    });
+
+    return true;
   }
 
   private extractWeighInDays(dates: unknown): string[] | null {

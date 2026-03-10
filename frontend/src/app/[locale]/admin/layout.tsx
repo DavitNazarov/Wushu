@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { requireRole } from '@/components/layout/RoleGuard';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppShell } from '@/components/layout/AppShell';
+import { AdminRuntimeErrorBridge } from '@/components/admin/AdminRuntimeErrorBridge';
 
 type Props = {
   children: ReactNode;
@@ -13,6 +14,7 @@ export default async function AdminLayout({ children, params }: Props) {
   await requireRole('admin', locale);
   return (
     <ToastProvider>
+      <AdminRuntimeErrorBridge />
       <AppShell>{children}</AppShell>
     </ToastProvider>
   );

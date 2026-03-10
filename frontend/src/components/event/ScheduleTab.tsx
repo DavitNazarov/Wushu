@@ -8,21 +8,28 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { usePublicSchedule } from '@/hooks/usePublicApi';
 import type { ScheduleFight } from '@/lib/api/public';
 
-function athleteName(a: { firstName: string; lastName: string } | null | undefined): string {
-  if (!a) return 'BYE';
-  return `${a.firstName} ${a.lastName}`;
-}
-
 function formatTime(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
+function statusTone(status: ScheduleFight['liveStatus']) {
+  switch (status) {
+    case 'RUNNING':
+      return 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]';
+    case 'UPCOMING':
+      return 'bg-[var(--color-warning)]/20 text-[var(--color-warning)]';
+    case 'FINISHED':
+      return 'bg-[var(--color-success)]/20 text-[var(--color-success)]';
+    default:
+      return 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]';
+  }
+}
+
 export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
   const tPublic = useTranslations('public');
   const tCommon = useTranslations('common');
-  const tBrackets = useTranslations('brackets');
   const { data: fights, isLoading, error, refetch } = usePublicSchedule(eventSlug);
 
   if (error) {
@@ -58,8 +65,8 @@ export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
   }
 
   const byDate = fights.reduce<Record<string, ScheduleFight[]>>((acc, f) => {
-    const date = f.scheduledStartTime
-      ? new Date(f.scheduledStartTime).toLocaleDateString()
+    const date = f.scheduledAt
+      ? new Date(f.scheduledAt).toLocaleDateString()
       : 'Unscheduled';
     if (!acc[date]) acc[date] = [];
     acc[date].push(f);
@@ -78,18 +85,25 @@ export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
                 className="flex flex-wrap items-center gap-2 rounded border border-[var(--color-border)] bg-[var(--color-surface-alt)]/50 px-3 py-2 text-[13px]"
               >
                 <span className="font-medium text-[var(--color-text-muted)]">
-                  {formatTime(f.scheduledStartTime)}
+                  #{f.scheduleOrder ?? '-'} · {formatTime(f.scheduledAt)}
                 </span>
-                {f.mat?.name && (
+                <span
+                  className={`rounded-[var(--radius-pill)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusTone(
+                    f.liveStatus,
+                  )}`}
+                >
+                  {(f.liveStatus ?? 'PENDING').toLowerCase()}
+                </span>
+                {f.matName && (
                   <span className="text-[11px] text-[var(--color-text-muted)]">
-                    {f.mat.name}
+                    {f.matName}
                   </span>
                 )}
                 <span className="text-[var(--color-text)]">
-                  {athleteName(f.redAthlete)} {tBrackets('vs')} {athleteName(f.blueAthlete)}
+                  {f.redDisplayName} vs {f.blueDisplayName}
                 </span>
                 <span className="text-[11px] text-[var(--color-text-muted)]">
-                  {f.categoryCode}
+                  {f.bracketRoundLabel} {f.bracketFightNumber}
                 </span>
               </div>
             ))}

@@ -2,10 +2,9 @@
 
 import { useTranslations } from 'next-intl';
 import type { EventLifecycle } from '@/types/api';
+import { EVENT_LIFECYCLE_ORDER } from '@/domain/events/lifecycle';
 
-const STAGES: EventLifecycle[] = [
-  'REG_OPEN', 'WEIGHIN', 'LOCKED', 'DRAWN', 'PUBLISHED', 'LIVE', 'COMPLETED',
-];
+const STAGES: EventLifecycle[] = EVENT_LIFECYCLE_ORDER;
 
 interface Props { current: EventLifecycle }
 

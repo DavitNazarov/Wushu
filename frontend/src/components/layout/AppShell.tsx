@@ -1,9 +1,10 @@
 'use client';
 
-import { ReactNode, useState, useCallback } from 'react';
+import { ReactNode, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useTranslations, useLocale } from 'next-intl';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Calendar,
@@ -25,6 +26,9 @@ import {
   Menu,
   ChevronLeft,
 } from 'lucide-react';
+import { StatusChip } from '@/components/ui/StatusChip';
+import { apiGet } from '@/lib/api/client';
+import type { EventRow } from '@/types/api';
 import { TopbarToggles } from './TopbarToggles';
 import { LogoutButton } from './LogoutButton';
 import { MobileDrawer } from './MobileDrawer';
@@ -40,6 +44,15 @@ type NavSection = {
   labelKey: string;
   items: NavItem[];
 };
+
+const eventOpsShortcuts: Array<{ key: string; href: string }> = [
+  { key: 'registrations', href: '/admin/registrations' },
+  { key: 'weighin', href: '/admin/weighin' },
+  { key: 'integrity', href: '/admin/integrity' },
+  { key: 'draw', href: '/admin/draw' },
+  { key: 'schedule', href: '/admin/schedule' },
+  { key: 'live', href: '/admin/live' },
+];
 
 const navSections: NavSection[] = [
   {
@@ -88,12 +101,35 @@ type AppShellProps = {
 export function AppShell({ children }: AppShellProps) {
   const tApp = useTranslations('app');
   const tNav = useTranslations('nav');
+  const tTopbar = useTranslations('admin.topbar');
+  const tEvents = useTranslations('admin.events');
   const locale = useLocale();
   const pathname = usePathname() ?? '';
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const { data: events } = useQuery({
+    queryKey: ['events'],
+    queryFn: () => apiGet<EventRow[]>('/api/events'),
+  });
 
   const closeMobile = useCallback(() => setMobileOpen(false), []);
+  const currentEventId = searchParams.get('eventId') ?? '';
+  const selectedEvent = useMemo(
+    () =>
+      (events ?? []).find((ev) => ev.id === currentEventId) ??
+      (events?.length ? events[0] : null),
+    [events, currentEventId],
+  );
+
+  function setEventIdInUrl(nextEventId: string) {
+    const next = new URLSearchParams(searchParams.toString());
+    if (nextEventId) next.set('eventId', nextEventId);
+    else next.delete('eventId');
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
+  }
 
   function isActive(href: string) {
     return href === '/admin'
@@ -204,9 +240,9 @@ export function AppShell({ children }: AppShellProps) {
       </MobileDrawer>
 
       {/* Main content */}
-      <div className="flex min-h-screen flex-1 flex-col overflow-x-hidden">
+      <div className="flex min-h-screen flex-1 flex-col overflow-x-hidden lg:overflow-x-visible">
         <header className="sticky top-0 z-30 flex h-[var(--topbar-height)] items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 backdrop-blur-sm sm:px-6">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
@@ -214,7 +250,37 @@ export function AppShell({ children }: AppShellProps) {
             >
               <Menu className="h-5 w-5" strokeWidth={2} />
             </button>
-            <span className="text-[13px] font-semibold text-[var(--color-text)]">
+            <div className="hidden min-w-0 items-center gap-2 sm:flex">
+              <select
+                className="h-9 max-w-[260px] rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 text-[12px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                aria-label={tTopbar('eventSelectLabel')}
+                value={selectedEvent?.id ?? ''}
+                onChange={(e) => setEventIdInUrl(e.target.value)}
+              >
+                {!events?.length && (
+                  <option value="">{tTopbar('noEventSelected')}</option>
+                )}
+                {events?.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.name}
+                  </option>
+                ))}
+              </select>
+              {selectedEvent ? (
+                <StatusChip
+                  status={selectedEvent.lifecycle}
+                  label={tEvents(
+                    `lifecycle.${selectedEvent.lifecycle}` as Parameters<typeof tEvents>[0],
+                  )}
+                  domain="lifecycle"
+                />
+              ) : (
+                <span className="text-[12px] text-[var(--color-text-muted)]">
+                  {tTopbar('noEventSelected')}
+                </span>
+              )}
+            </div>
+            <span className="truncate text-[13px] font-semibold text-[var(--color-text)] sm:hidden">
               {tApp('title')}
             </span>
           </div>
@@ -225,7 +291,39 @@ export function AppShell({ children }: AppShellProps) {
         </header>
 
         <main className="flex-1 px-4 py-6 sm:px-6">
-          <div className="mx-auto max-w-[1200px]">{children}</div>
+          <div className="mx-auto max-w-[1200px] space-y-4">
+            <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4">
+              {!selectedEvent ? (
+                <p className="text-[13px] text-[var(--color-text-muted)]">
+                  {tTopbar('noEventSelected')}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-[14px] font-semibold text-[var(--color-text)]">
+                      {selectedEvent.name}
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
+                      {new Date(selectedEvent.competitionStartDate).toLocaleDateString()} -{' '}
+                      {new Date(selectedEvent.competitionEndDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {eventOpsShortcuts.map((shortcut) => (
+                      <Link
+                        key={shortcut.key}
+                        href={`/${locale}${shortcut.href}?eventId=${selectedEvent.id}`}
+                        className="rounded-[var(--radius-pill)] border border-[var(--color-border)] px-2.5 py-1 text-[12px] font-medium text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)]"
+                      >
+                        {tNav(shortcut.key as Parameters<typeof tNav>[0])}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+            <div>{children}</div>
+          </div>
         </main>
       </div>
     </div>

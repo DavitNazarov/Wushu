@@ -9,9 +9,11 @@ import { InlineAlert } from '@/components/ui/InlineAlert';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { ApiError, apiGet, apiPost } from '@/lib/api/client';
+import { getCompactErrorMessage } from '@/lib/api/error';
 import type { CategorySelection, EventCreateInput, EventRow, RulesetRow, ValidationIssue } from '@/types/api';
 import { DayPicker } from './DayPicker';
 import { CategorySelector } from './CategorySelector';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -48,7 +50,7 @@ export function CreateEventModal({ open, onClose }: Props) {
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null);
 
-  const { data: rulesets } = useQuery({
+  const { data: rulesets, error: rulesetsError, refetch: refetchRulesets } = useQuery({
     queryKey: ['rulesets'],
     queryFn: () => apiGet<RulesetRow[]>('/api/rulesets'),
     enabled: open,
@@ -116,9 +118,9 @@ export function CreateEventModal({ open, onClose }: Props) {
     onError: (err) => {
       if (err instanceof ApiError && err.status === 422 && err.code === 'VALIDATION_ERROR') {
         setIssues(Array.isArray(err.details) ? (err.details as ValidationIssue[]) : []);
-        toast(tCommon('error'), 'error'); return;
+        toast(getCompactErrorMessage(err, tCommon('error')), 'error'); return;
       }
-      toast(err instanceof ApiError ? err.message : tCommon('saveFailed'), 'error');
+      toast(getCompactErrorMessage(err, tCommon('saveFailed')), 'error');
     },
   });
 
@@ -241,6 +243,16 @@ export function CreateEventModal({ open, onClose }: Props) {
         {/* Competition rules */}
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-alt)]/40 p-4">
           <p className={sectionCls}>Competition Rules</p>
+          {rulesetsError && (
+            <div className="mb-3">
+              <AdminErrorAlert
+                error={rulesetsError}
+                fallbackMessage="Failed to load rulesets."
+                retryLabel={tCommon('retry')}
+                onRetry={() => refetchRulesets()}
+              />
+            </div>
+          )}
           {rulesets && rulesets.length > 0 ? (
             <CategorySelector
               rulesets={rulesets}

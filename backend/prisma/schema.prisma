@@ -8,8 +8,9 @@ datasource db {
 
 enum EventLifecycle {
   REG_OPEN
-  WEIGHIN
   LOCKED
+  WEIGHIN
+  WEIGH_IN_COMPLETED
   DRAWN
   PUBLISHED
   LIVE
@@ -44,9 +45,42 @@ enum RegistrationStatus {
 
 enum WeighInDecision {
   PASS
+  MOVED_UP
   REWEIGH
   FAIL
   ONE_HOUR
+  DISQUALIFIED
+}
+
+enum WeighInStatus {
+  NOT_WEIGHED
+  PASSED
+  MOVED_UP
+  FAILED
+  OVERRIDE_APPROVED
+  REWEIGH_ALLOWED
+  DISQUALIFIED
+}
+
+enum WeighInPolicyCode {
+  IWUF_STRICT_ONE_HOUR
+  MOVE_UP_AFTER_FAILED_REWEIGH
+  DIRECT_MOVE_UP
+  MANUAL_ADMIN_DECISION
+}
+
+enum BronzePolicyCode {
+  TWO_BRONZES
+}
+
+enum RestPolicyCode {
+  MIN_15_MINUTES
+}
+
+enum PublishTimingPolicyCode {
+  IMMEDIATE_AFTER_DRAW
+  MANUAL_PUBLISH_LATER
+  COMPETITION_DAY_ONLY
 }
 
 enum FightStatus {
@@ -70,6 +104,11 @@ enum WinMethod {
   KO
   DQ
   WO
+}
+
+enum FightSlot {
+  RED
+  BLUE
 }
 
 enum AthleteSex {
@@ -111,10 +150,16 @@ model User {
   role           UserRole @default(athlete)
   clubId         String?
   isActive       Boolean  @default(true)
+  deletedAt      DateTime?
+  dqReason       String?
+  dqStartAt      DateTime?
+  dqEndAt        DateTime?
+  dqNote         String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   organisation   Organisation     @relation(fields: [organisationId], references: [id])
+  club           Club?            @relation(fields: [clubId], references: [id])
   capabilities   UserCapability[]
   auditLogs      AuditLog[]       @relation("AuditActor")
   weighIns       WeighInAttempt[] @relation("WeighInOperator")
@@ -124,6 +169,7 @@ model User {
 
   @@unique([organisationId, email])
   @@index([email])
+  @@index([organisationId, deletedAt])
 }
 
 model RefreshToken {
@@ -170,6 +216,12 @@ model Event {
   lifecycle      EventLifecycle @default(REG_OPEN)
   published           Boolean        @default(false)
   autoAdvanceStage    Boolean        @default(false)
+  weighInPolicyCode   WeighInPolicyCode      @default(IWUF_STRICT_ONE_HOUR)
+  bronzePolicyCode    BronzePolicyCode       @default(TWO_BRONZES)
+  restPolicyCode      RestPolicyCode         @default(MIN_15_MINUTES)
+  minRestMinutes      Int                    @default(15)
+  publishTimingPolicyCode PublishTimingPolicyCode @default(IMMEDIATE_AFTER_DRAW)
+  reweighWindowMinutes Int                   @default(60)
 
   registrationStartDate DateTime
   registrationEndDate   DateTime
@@ -281,7 +333,8 @@ model EventWeightCategory {
 
   eventAgeGroup         EventAgeGroup         @relation(fields: [eventAgeGroupId], references: [id], onDelete: Cascade)
   rulesetWeightCategory RulesetWeightCategory @relation(fields: [rulesetWeightCategoryId], references: [id])
-  registrations         Registration[]
+  registrations         Registration[]        @relation("RegistrationFinalWeightCategory")
+  initialRegistrations  Registration[]        @relation("RegistrationInitialWeightCategory")
   fights                Fight[]
 
   @@unique([eventAgeGroupId, rulesetWeightCategoryId])
@@ -362,6 +415,7 @@ model Club {
   updatedAt      DateTime @updatedAt
 
   organisation  Organisation   @relation(fields: [organisationId], references: [id])
+  coaches       User[]
   athletes      Athlete[]
   registrations Registration[]
 }
@@ -399,6 +453,7 @@ model Athlete {
   redFights      Fight[]        @relation("FightRedAthlete")
   blueFights     Fight[]        @relation("FightBlueAthlete")
   wonFights      Fight[]        @relation("FightWinner")
+  lostFights     Fight[]        @relation("FightLoser")
   mergedFrom     AthleteMerge[] @relation("MergePrimary")
   mergedInto     AthleteMerge[] @relation("MergeSecondary")
 
@@ -428,7 +483,9 @@ model Registration {
   clubId                String?
   categoryCode          String
   eventWeightCategoryId String?
+  registeredEventWeightCategoryId String?
   status                RegistrationStatus @default(PENDING)
+  weighInStatus         WeighInStatus      @default(NOT_WEIGHED)
   notes                 String?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
@@ -437,13 +494,16 @@ model Registration {
   event               Event               @relation(fields: [eventId], references: [id])
   athlete             Athlete             @relation(fields: [athleteId], references: [id])
   club                Club?               @relation(fields: [clubId], references: [id])
-  eventWeightCategory EventWeightCategory? @relation(fields: [eventWeightCategoryId], references: [id])
+  eventWeightCategory EventWeightCategory? @relation("RegistrationFinalWeightCategory", fields: [eventWeightCategoryId], references: [id])
+  registeredEventWeightCategory EventWeightCategory? @relation("RegistrationInitialWeightCategory", fields: [registeredEventWeightCategoryId], references: [id])
   weighIns            WeighInAttempt[]
 
   @@unique([eventId, athleteId])
   @@index([organisationId, eventId])
   @@index([organisationId, eventId, status])
   @@index([eventWeightCategoryId])
+  @@index([registeredEventWeightCategoryId])
+  @@index([weighInStatus])
 }
 
 model WeighInAttempt {
@@ -454,6 +514,7 @@ model WeighInAttempt {
   attemptNo      Int
   weightKg       Float
   decision       WeighInDecision
+  policyCode     WeighInPolicyCode @default(IWUF_STRICT_ONE_HOUR)
   deadlineAt     DateTime?
   resolvedAt     DateTime?
   resolvedAction String?
@@ -469,6 +530,7 @@ model WeighInAttempt {
 
   @@index([organisationId, eventId])
   @@index([registrationId])
+  @@index([policyCode])
 }
 
 model Mat {
@@ -522,10 +584,13 @@ model Fight {
   scheduledStartTime DateTime?
 
   winnerAthleteId   String?
+  loserAthleteId    String?
   winMethod         WinMethod?
   notes             String?
   confirmedByUserId String?
   confirmedAt       DateTime?
+  nextFightId       String?
+  nextFightSlot     FightSlot?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -537,14 +602,18 @@ model Fight {
   redAthlete          Athlete?             @relation("FightRedAthlete", fields: [redAthleteId], references: [id])
   blueAthlete         Athlete?             @relation("FightBlueAthlete", fields: [blueAthleteId], references: [id])
   winnerAthlete       Athlete?             @relation("FightWinner", fields: [winnerAthleteId], references: [id])
+  loserAthlete        Athlete?             @relation("FightLoser", fields: [loserAthleteId], references: [id])
   confirmedBy         User?                @relation("FightConfirmedBy", fields: [confirmedByUserId], references: [id])
   eventWeightCategory EventWeightCategory? @relation(fields: [eventWeightCategoryId], references: [id])
+  nextFight           Fight?               @relation("FightProgression", fields: [nextFightId], references: [id])
+  sourceFights        Fight[]              @relation("FightProgression")
   timerState          TimerState?
 
   @@index([organisationId, eventId])
   @@index([organisationId, eventId, status])
   @@index([matId, orderInMat])
   @@index([eventWeightCategoryId])
+  @@index([nextFightId])
 }
 
 model TimerState {

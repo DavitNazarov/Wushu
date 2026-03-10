@@ -150,7 +150,11 @@ export class ExportsService {
     }
 
     return this.prisma.fight.findMany({
-      where: { organisationId, eventId, status: 'CONFIRMED' },
+      where: {
+        organisationId,
+        eventId,
+        status: { in: ['COMPLETE', 'CONFIRMED'] },
+      },
       include: {
         redAthlete: { select: { firstName: true, lastName: true } },
         blueAthlete: { select: { firstName: true, lastName: true } },

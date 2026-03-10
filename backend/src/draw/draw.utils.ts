@@ -24,8 +24,14 @@ export function buildSingleElimBracket(athleteIds: (string | null)[]): Array<{
   blueId: string | null;
 }> {
   const size = nextPowerOfTwo(athleteIds.length);
-  const padded: (string | null)[] = [...athleteIds];
-  while (padded.length < size) padded.push(null);
+  const seededParticipants: (string | null)[] = [...athleteIds];
+  while (seededParticipants.length < size) seededParticipants.push(null);
+
+  // Bracket leaf order by seed (1vN, 4v5, 2v7, 3v6...) spreads byes correctly.
+  const seedOrder = buildSeedOrder(size);
+  const firstRoundSlots = seedOrder.map(
+    (seedNo) => seededParticipants[seedNo - 1] ?? null,
+  );
 
   const bouts: Array<{
     round: number;
@@ -33,7 +39,7 @@ export function buildSingleElimBracket(athleteIds: (string | null)[]): Array<{
     redId: string | null;
     blueId: string | null;
   }> = [];
-  let roundAthletes = padded;
+  let roundAthletes = firstRoundSlots;
   let round = 1;
 
   while (roundAthletes.length > 1) {
@@ -49,6 +55,48 @@ export function buildSingleElimBracket(athleteIds: (string | null)[]): Array<{
     bouts.push(...roundBouts);
     roundAthletes = roundBouts.map(() => null);
     round++;
+  }
+
+  return bouts;
+}
+
+function buildSeedOrder(size: number): number[] {
+  if (size <= 1) return [1];
+  if (size === 2) return [1, 2];
+
+  const previous = buildSeedOrder(size / 2);
+  const current: number[] = [];
+  for (const seed of previous) {
+    current.push(seed);
+    current.push(size + 1 - seed);
+  }
+  return current;
+}
+
+export function buildRoundRobinBracket(athleteIds: string[]): Array<{
+  round: number;
+  boutNo: number;
+  redId: string;
+  blueId: string;
+}> {
+  const bouts: Array<{
+    round: number;
+    boutNo: number;
+    redId: string;
+    blueId: string;
+  }> = [];
+
+  let boutNo = 1;
+  for (let i = 0; i < athleteIds.length; i += 1) {
+    for (let j = i + 1; j < athleteIds.length; j += 1) {
+      bouts.push({
+        round: 1,
+        boutNo,
+        redId: athleteIds[i],
+        blueId: athleteIds[j],
+      });
+      boutNo += 1;
+    }
   }
 
   return bouts;

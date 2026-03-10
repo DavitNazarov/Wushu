@@ -21,6 +21,7 @@ import { UsersModule } from './users/users.module';
 import { ResultsModule } from './results/results.module';
 import { ExportsModule } from './exports/exports.module';
 import { RequestLoggerMiddleware } from './common/request-logger.middleware';
+import { EventPoliciesModule } from './event-policies/event-policies.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { RequestLoggerMiddleware } from './common/request-logger.middleware';
     UsersModule,
     ResultsModule,
     ExportsModule,
+    EventPoliciesModule,
   ],
 })
 export class AppModule implements NestModule {

@@ -34,6 +34,7 @@ function isLoginRoute(pathname: string): boolean {
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const locale = pathname.match(/^\/(en|ka)\b/)?.[1] ?? routing.defaultLocale;
+  const forceLogin = request.nextUrl.searchParams.get('force') === '1';
 
   // Cookie presence check only — middleware must NEVER call /api/auth/refresh
   const hasAccessToken = Boolean(request.cookies.get('gw_auth')?.value);
@@ -51,7 +52,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (isLoginRoute(pathname) && hasAnyToken) {
+  if (isLoginRoute(pathname) && hasAnyToken && !forceLogin) {
     // Logged-in user on login page: send them to dashboard.
     // Dashboard will call getAuthContext(), and if the access token is gone it will
     // redirect to /auth/refresh — one clean hop, no loop.

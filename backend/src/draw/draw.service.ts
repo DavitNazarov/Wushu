@@ -2,14 +2,72 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
-import { seededShuffle, buildSingleElimBracket } from './draw.utils';
+import {
+  buildRoundRobinBracket,
+  buildSingleElimBracket,
+  seededShuffle,
+} from './draw.utils';
+import { isEventReadOnly } from '../events/lifecycle-rules';
+import { DrawReadinessService } from './draw.readiness.service';
+import { resolveCompetitionFormat } from './competition-format';
+
+function toBracketCategoryCode(input: {
+  ageGroupCode: string;
+  sex: 'MALE' | 'FEMALE' | null;
+  weightName: string;
+  eventWeightCategoryId: string;
+}): string {
+  const age = input.ageGroupCode.trim().toUpperCase();
+  const division = input.sex === 'FEMALE' ? 'F' : input.sex === 'MALE' ? 'M' : 'X';
+  const weight = input.weightName.trim().replace(/\s+/g, '_').toUpperCase();
+
+  // Keep code readable but guarantee uniqueness per event category.
+  return `${age}_${division}_${weight}_${input.eventWeightCategoryId}`;
+}
 
 @Injectable()
 export class DrawService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly readiness: DrawReadinessService,
   ) {}
+
+  private async hasUnsafeCompetitionProgress(input: {
+    organisationId: string;
+    eventId: string;
+  }): Promise<boolean> {
+    const progressedFight = await this.prisma.fight.findFirst({
+      where: {
+        organisationId: input.organisationId,
+        eventId: input.eventId,
+        redAthleteId: { not: null },
+        blueAthleteId: { not: null },
+        OR: [
+          { status: { in: ['ON_DECK', 'IN_PROGRESS', 'PAUSED', 'COMPLETE', 'CONFIRMED'] } },
+          { winnerAthleteId: { not: null } },
+          { loserAthleteId: { not: null } },
+          { winMethod: { not: null } },
+          { confirmedAt: { not: null } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (progressedFight) {
+      return true;
+    }
+
+    const activeTimer = await this.prisma.timerState.findFirst({
+      where: {
+        organisationId: input.organisationId,
+        state: { in: ['RUNNING', 'PAUSED'] },
+        fight: { eventId: input.eventId },
+      },
+      select: { fightId: true },
+    });
+
+    return Boolean(activeTimer);
+  }
 
   async executeDraw(input: {
     organisationId: string;
@@ -25,17 +83,66 @@ export class DrawService {
     });
     if (!event) throw new Error('EVENT_NOT_FOUND');
 
-    if (event.lifecycle !== 'LOCKED' && !input.override) {
-      throw new Error('EVENT_NOT_LOCKED');
+    if (isEventReadOnly(event.lifecycle) && !input.override) {
+      throw new Error('EVENT_READ_ONLY');
     }
-    if (input.override && !input.reason)
+    if (input.override && !input.reason) {
       throw new Error('OVERRIDE_REASON_REQUIRED');
+    }
+
+    const existingBracketCount = await this.prisma.bracket.count({
+      where: { organisationId: input.organisationId, eventId: input.eventId },
+    });
+    if (existingBracketCount > 0 && !input.override) {
+      throw new Error('DRAW_ALREADY_EXISTS');
+    }
+    if (existingBracketCount > 0) {
+      const unsafeProgress = await this.hasUnsafeCompetitionProgress({
+        organisationId: input.organisationId,
+        eventId: input.eventId,
+      });
+      if (
+        unsafeProgress ||
+        event.published ||
+        event.lifecycle === 'LIVE' ||
+        event.lifecycle === 'COMPLETED'
+      ) {
+        throw new Error('DRAW_MUTATION_BLOCKED');
+      }
+    }
+
+    const readiness = await this.readiness.getOverview({
+      organisationId: input.organisationId,
+      eventId: input.eventId,
+    });
+    if (!input.override) {
+      const criticalCodes = new Set(
+        readiness.validation.critical.map((issue) => issue.code),
+      );
+      if (criticalCodes.has('EVENT_NOT_LOCKED')) {
+        throw new Error('EVENT_NOT_LOCKED');
+      }
+      if (criticalCodes.has('WEIGHIN_NOT_COMPLETED_FOR_DRAW')) {
+        throw new Error('WEIGHIN_NOT_COMPLETED_FOR_DRAW');
+      }
+      if (readiness.summary.blockedCategoriesCount > 0) {
+        throw new Error('DRAW_BLOCKED_CATEGORIES');
+      }
+      if (readiness.summary.readyCategoriesCount <= 0) {
+        throw new Error('NO_READY_CATEGORIES');
+      }
+      if (readiness.validation.critical.length > 0) {
+        throw new Error('DRAW_VALIDATION_FAILED');
+      }
+    }
 
     const registrations = await this.prisma.registration.findMany({
       where: {
         organisationId: input.organisationId,
         eventId: input.eventId,
         status: 'APPROVED',
+        weighInStatus: { in: ['PASSED', 'MOVED_UP', 'OVERRIDE_APPROVED'] },
+        eventWeightCategoryId: { not: null },
       },
       include: {
         athlete: { select: { id: true, clubId: true } },
@@ -44,7 +151,13 @@ export class DrawService {
             rulesetWeightCategory: { select: { name: true } },
             eventAgeGroup: {
               include: {
-                rulesetAgeGroup: { select: { roundDurationSeconds: true } },
+                rulesetAgeGroup: {
+                  select: {
+                    code: true,
+                    sex: true,
+                    roundDurationSeconds: true,
+                  },
+                },
               },
             },
           },
@@ -52,49 +165,74 @@ export class DrawService {
       },
     });
 
-    // Group by eventWeightCategoryId first, fall back to categoryCode for legacy rows
+    if (registrations.length === 0) {
+      throw new Error('NO_ELIGIBLE_REGISTRATIONS');
+    }
+
     type RegRow = (typeof registrations)[0];
     const byCat = new Map<
       string,
       {
-        key: string;
-        eventWeightCategoryId: string | null;
+        eventWeightCategoryId: string;
+        categoryCode: string;
         roundDurationSeconds: number;
         regs: RegRow[];
       }
     >();
+
     for (const r of registrations) {
-      const key = r.eventWeightCategoryId ?? r.categoryCode;
+      if (!r.eventWeightCategoryId || !r.eventWeightCategory) continue;
+      const key = r.eventWeightCategoryId;
       if (!byCat.has(key)) {
-        const roundDuration =
-          r.eventWeightCategory?.eventAgeGroup?.rulesetAgeGroup
-            ?.roundDurationSeconds ?? 120;
         byCat.set(key, {
-          key,
-          eventWeightCategoryId: r.eventWeightCategoryId,
-          roundDurationSeconds: roundDuration,
+          eventWeightCategoryId: key,
+          categoryCode: toBracketCategoryCode({
+            ageGroupCode: r.eventWeightCategory.eventAgeGroup.rulesetAgeGroup.code,
+            sex: r.eventWeightCategory.eventAgeGroup.rulesetAgeGroup.sex,
+            weightName: r.eventWeightCategory.rulesetWeightCategory.name,
+            eventWeightCategoryId: key,
+          }),
+          roundDurationSeconds:
+            r.eventWeightCategory.eventAgeGroup.rulesetAgeGroup
+              .roundDurationSeconds ?? 120,
           regs: [],
         });
       }
       byCat.get(key)!.regs.push(r);
     }
 
+    if (byCat.size === 0) {
+      throw new Error('NO_ELIGIBLE_REGISTRATIONS');
+    }
+
     const seed = input.seed ?? Date.now() % 2147483647;
 
     return this.prisma.$transaction(async (tx) => {
+      if (existingBracketCount > 0) {
+        await tx.timerState.deleteMany({
+          where: {
+            organisationId: input.organisationId,
+            fight: { eventId: input.eventId },
+          },
+        });
+        await tx.fight.deleteMany({
+          where: { organisationId: input.organisationId, eventId: input.eventId },
+        });
+        await tx.bracket.deleteMany({
+          where: { organisationId: input.organisationId, eventId: input.eventId },
+        });
+      }
+
       const brackets: Prisma.BracketGetPayload<{
         include: { fights: true };
       }>[] = [];
 
       for (const catGroup of byCat.values()) {
-        const { regs, eventWeightCategoryId, roundDurationSeconds } = catGroup;
-        const categoryCode =
-          regs[0].eventWeightCategory?.rulesetWeightCategory?.name ??
-          regs[0].categoryCode;
+        const { regs, eventWeightCategoryId, roundDurationSeconds, categoryCode } =
+          catGroup;
+        const uniqueAthleteIds = [...new Set(regs.map((r) => r.athlete.id))];
 
-        let athleteIds = regs.map((r) => r.athlete.id);
-        athleteIds = seededShuffle(athleteIds, seed);
-
+        let athleteIds = seededShuffle(uniqueAthleteIds, seed);
         if (input.sameClubSeparation) {
           athleteIds = this.separateSameClub(
             athleteIds,
@@ -111,8 +249,14 @@ export class DrawService {
           },
         });
 
-        const bouts = buildSingleElimBracket(athleteIds);
+        const competitionFormat = resolveCompetitionFormat({
+          eligibleAthletesCount: athleteIds.length,
+        });
 
+        const bouts =
+          competitionFormat === 'ROUND_ROBIN'
+            ? buildRoundRobinBracket(athleteIds)
+            : buildSingleElimBracket(athleteIds);
         for (const bout of bouts) {
           await tx.fight.create({
             data: {
@@ -131,7 +275,10 @@ export class DrawService {
           });
         }
 
-        await this.autoConfirmByes(tx, bracket.id);
+        if (competitionFormat !== 'ROUND_ROBIN') {
+          await this.linkFightDependencies(tx, bracket.id);
+          await this.autoConfirmByes(tx, bracket.id);
+        }
 
         const fullBracket = await tx.bracket.findUnique({
           where: { id: bracket.id },
@@ -142,20 +289,60 @@ export class DrawService {
 
       await tx.event.update({
         where: { id: input.eventId },
-        data: { lifecycle: 'DRAWN' },
+        data: {
+          lifecycle:
+            event.publishTimingPolicyCode === 'IMMEDIATE_AFTER_DRAW'
+              ? 'PUBLISHED'
+              : 'DRAWN',
+          published:
+            event.publishTimingPolicyCode === 'IMMEDIATE_AFTER_DRAW'
+              ? true
+              : undefined,
+        },
       });
+
+      if (event.publishTimingPolicyCode === 'IMMEDIATE_AFTER_DRAW') {
+        await this.audit.write(
+          {
+            organisationId: input.organisationId,
+            eventId: input.eventId,
+            actorUserId: input.actorUserId,
+            action: 'BRACKETS_PUBLISHED',
+            entityType: 'event',
+            entityId: input.eventId,
+            after: {
+              policy: event.publishTimingPolicyCode,
+              mode: 'AUTO_IMMEDIATE_AFTER_DRAW',
+            } as unknown as Prisma.JsonValue,
+            reason: input.reason ?? null,
+            override: input.override ?? false,
+          },
+          tx,
+        );
+      }
 
       await this.audit.write(
         {
           organisationId: input.organisationId,
           eventId: input.eventId,
           actorUserId: input.actorUserId,
-          action: 'DRAW_EXECUTED',
+          action:
+            existingBracketCount > 0 ? 'DRAW_REGENERATED' : 'DRAW_EXECUTED',
           entityType: 'event',
           entityId: input.eventId,
+          before:
+            existingBracketCount > 0
+              ? ({
+                  existingBracketCount,
+                } as unknown as Prisma.JsonValue)
+              : null,
           after: {
             seed,
-            categories: Array.from(byCat.values()).map((g) => g.key),
+            categories: Array.from(byCat.values()).map((group) => ({
+              eventWeightCategoryId: group.eventWeightCategoryId,
+              categoryCode: group.categoryCode,
+              athleteCount: group.regs.length,
+            })),
             totalAthletes: registrations.length,
             override: input.override ?? false,
           } as unknown as Prisma.JsonValue,
@@ -184,6 +371,19 @@ export class DrawService {
     });
     if (!event) throw new Error('EVENT_NOT_FOUND');
 
+    const unsafeProgress = await this.hasUnsafeCompetitionProgress({
+      organisationId: input.organisationId,
+      eventId: input.eventId,
+    });
+    if (
+      unsafeProgress ||
+      event.published ||
+      event.lifecycle === 'LIVE' ||
+      event.lifecycle === 'COMPLETED'
+    ) {
+      throw new Error('DRAW_MUTATION_BLOCKED');
+    }
+
     await this.prisma.$transaction(async (tx) => {
       await tx.timerState.deleteMany({
         where: {
@@ -200,7 +400,7 @@ export class DrawService {
 
       await tx.event.update({
         where: { id: input.eventId },
-        data: { lifecycle: 'LOCKED' },
+        data: { lifecycle: 'WEIGH_IN_COMPLETED' },
       });
 
       await this.audit.write(
@@ -270,8 +470,6 @@ export class DrawService {
     tx: Prisma.TransactionClient,
     bracketId: string,
   ): Promise<void> {
-    // Process one round at a time to avoid confirming future-round placeholders (null vs null).
-    // Only auto-confirm fights where EXACTLY ONE side is a real athlete and the other is null (bye).
     let moreToProcess = true;
     while (moreToProcess) {
       moreToProcess = false;
@@ -288,8 +486,23 @@ export class DrawService {
       });
 
       for (const byeFight of byeFights) {
+        const missingSlot = byeFight.redAthleteId == null ? 'RED' : 'BLUE';
+
+        // If the empty slot is fed by an upstream fight, this is not a real BYE.
+        // It is an unresolved dependency ("Winner of X") and must stay unresolved.
+        const hasDependencyForMissingSlot = await tx.fight.findFirst({
+          where: {
+            nextFightId: byeFight.id,
+            nextFightSlot: missingSlot,
+          },
+          select: { id: true },
+        });
+        if (hasDependencyForMissingSlot) {
+          continue;
+        }
+
         const winnerId = (byeFight.redAthleteId ?? byeFight.blueAthleteId)!;
-        await tx.fight.update({
+        const updatedByeFight = await tx.fight.update({
           where: { id: byeFight.id },
           data: {
             status: 'CONFIRMED',
@@ -298,22 +511,82 @@ export class DrawService {
           },
         });
 
-        const nextBoutNo = Math.ceil(byeFight.boutNo / 2);
-        const isRedSlot = byeFight.boutNo % 2 === 1;
-        const nextFight = await tx.fight.findFirst({
-          where: { bracketId, round: byeFight.round + 1, boutNo: nextBoutNo },
-        });
+        const nextFight = await this.propagateWinnerToNextFight(
+          tx,
+          updatedByeFight,
+        );
         if (nextFight && nextFight.status === 'QUEUED') {
-          await tx.fight.update({
-            where: { id: nextFight.id },
-            data: isRedSlot
-              ? { redAthleteId: winnerId }
-              : { blueAthleteId: winnerId },
-          });
           moreToProcess = true;
         }
       }
     }
+  }
+
+  private async linkFightDependencies(
+    tx: Prisma.TransactionClient,
+    bracketId: string,
+  ): Promise<void> {
+    const fights = await tx.fight.findMany({
+      where: { bracketId },
+      select: { id: true, round: true, boutNo: true },
+      orderBy: [{ round: 'asc' }, { boutNo: 'asc' }],
+    });
+    const byRoundBout = new Map(
+      fights.map((fight) => [`${fight.round}:${fight.boutNo}`, fight]),
+    );
+
+    for (const fight of fights) {
+      const nextFight = byRoundBout.get(
+        `${fight.round + 1}:${Math.ceil(fight.boutNo / 2)}`,
+      );
+
+      await tx.fight.update({
+        where: { id: fight.id },
+        data: {
+          nextFightId: nextFight?.id ?? null,
+          nextFightSlot:
+            nextFight == null
+              ? null
+              : fight.boutNo % 2 === 1
+                ? 'RED'
+                : 'BLUE',
+        },
+      });
+    }
+  }
+
+  private async propagateWinnerToNextFight(
+    tx: Prisma.TransactionClient,
+    fight: {
+      winnerAthleteId: string | null;
+      nextFightId: string | null;
+      nextFightSlot: 'RED' | 'BLUE' | null;
+    },
+  ) {
+    if (!fight.winnerAthleteId || !fight.nextFightId || !fight.nextFightSlot) {
+      return null;
+    }
+
+    const nextFight = await tx.fight.findUnique({
+      where: { id: fight.nextFightId },
+    });
+    if (!nextFight) return null;
+
+    const isRedSlot = fight.nextFightSlot === 'RED';
+    const targetField = isRedSlot ? 'redAthleteId' : 'blueAthleteId';
+    const existingAthleteId = isRedSlot
+      ? nextFight.redAthleteId
+      : nextFight.blueAthleteId;
+    if (existingAthleteId === fight.winnerAthleteId) {
+      return nextFight;
+    }
+
+    return tx.fight.update({
+      where: { id: nextFight.id },
+      data: {
+        [targetField]: fight.winnerAthleteId,
+      },
+    });
   }
 
   private separateSameClub(

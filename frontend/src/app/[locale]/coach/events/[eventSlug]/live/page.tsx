@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
-import { apiGet } from '@/lib/api/client';
+import { ApiError, apiGet } from '@/lib/api/client';
 import type { EventRow } from '@/types/api';
 
 type MatFeed = {
@@ -34,10 +34,18 @@ export default function CoachLivePage({ params }: Props) {
 
   const { data: feed, isLoading, error, refetch } = useQuery({
     queryKey: ['public', 'mat', eventSlug, matName],
-    queryFn: () =>
-      apiGet<MatFeed>(
-        `/api/public/mat?eventSlug=${encodeURIComponent(eventSlug)}&mat=${encodeURIComponent(matName)}`,
-      ),
+    queryFn: async () => {
+      try {
+        return await apiGet<MatFeed>(
+          `/api/public/mat?eventSlug=${encodeURIComponent(eventSlug)}&mat=${encodeURIComponent(matName)}`,
+        );
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          return null;
+        }
+        throw error;
+      }
+    },
     enabled: !!eventSlug && !!matName,
     refetchInterval: 8000,
   });

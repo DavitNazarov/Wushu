@@ -4,8 +4,9 @@ type ChipVariant = 'default' | 'success' | 'warning' | 'danger' | 'info';
 
 const lifecycleVariants: Record<EventLifecycle, ChipVariant> = {
   REG_OPEN: 'info',
-  WEIGHIN: 'warning',
   LOCKED: 'warning',
+  WEIGHIN: 'warning',
+  WEIGH_IN_COMPLETED: 'info',
   DRAWN: 'default',
   PUBLISHED: 'info',
   LIVE: 'success',

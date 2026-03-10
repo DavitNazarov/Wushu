@@ -7,13 +7,14 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { StatusChip } from '@/components/ui/StatusChip';
-import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost } from '@/lib/api/client';
+import { getCompactErrorMessage } from '@/lib/api/error';
 import type { RulesetRow } from '@/types/api';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 const INPUT_CLASS =
   'h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
@@ -40,7 +41,8 @@ export default function RulesetsPage() {
       setCreateOpen(false);
       setName('');
     },
-    onError: () => toast(tCommon('saveFailed'), 'error'),
+    onError: (error) =>
+      toast(getCompactErrorMessage(error, tCommon('saveFailed')), 'error'),
   });
 
   const activateMutation = useMutation({
@@ -49,7 +51,8 @@ export default function RulesetsPage() {
       queryClient.invalidateQueries({ queryKey: ['rulesets'] });
       toast(tCommon('saveSuccess'));
     },
-    onError: () => toast(tCommon('saveFailed'), 'error'),
+    onError: (error) =>
+      toast(getCompactErrorMessage(error, tCommon('saveFailed')), 'error'),
   });
 
   function openCreate() {
@@ -71,16 +74,12 @@ export default function RulesetsPage() {
       />
 
       {error && (
-        <InlineAlert
-          variant="error"
-          actions={
-            <button onClick={() => refetch()} className="text-[13px] font-medium underline">
-              {tCommon('retry')}
-            </button>
-          }
-        >
-          {tCommon('loadError')}
-        </InlineAlert>
+        <AdminErrorAlert
+          error={error}
+          fallbackMessage={tCommon('loadError')}
+          retryLabel={tCommon('retry')}
+          onRetry={() => refetch()}
+        />
       )}
 
       {isLoading ? (

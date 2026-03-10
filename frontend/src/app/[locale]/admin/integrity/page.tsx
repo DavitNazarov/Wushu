@@ -13,7 +13,9 @@ import { Modal } from '@/components/ui/Modal';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost, ApiError } from '@/lib/api/client';
+import { getCompactErrorMessage } from '@/lib/api/error';
 import type { EventRow } from '@/types/api';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 type IntegrityIssue = {
   code: string;
@@ -67,6 +69,7 @@ export default function IntegrityPage() {
     onError: (err) => {
       let msg = t('lockError');
       if (err instanceof ApiError) msg = err.message;
+      else msg = getCompactErrorMessage(err, t('lockError'));
       toast(msg, 'error');
     },
   });
@@ -102,16 +105,12 @@ export default function IntegrityPage() {
       />
 
       {error && (
-        <InlineAlert
-          variant="error"
-          actions={
-            <button onClick={() => refetch()} className="text-[13px] font-medium underline">
-              {tCommon('retry')}
-            </button>
-          }
-        >
-          {tCommon('loadError')}
-        </InlineAlert>
+        <AdminErrorAlert
+          error={error}
+          fallbackMessage={tCommon('loadError')}
+          retryLabel={tCommon('retry')}
+          onRetry={() => refetch()}
+        />
       )}
 
       {!eid ? (

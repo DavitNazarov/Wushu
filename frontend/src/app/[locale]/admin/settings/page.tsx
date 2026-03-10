@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { apiGet } from '@/lib/api/client';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 interface MeResponse {
   userId: string;
@@ -41,7 +42,7 @@ export default function SettingsPage() {
   const t = useTranslations('admin.settings');
   const locale = useLocale();
 
-  const { data: me } = useQuery({
+  const { data: me, error, refetch } = useQuery({
     queryKey: ['me'],
     queryFn: () => apiGet<MeResponse>('/api/auth/me'),
   });
@@ -54,6 +55,15 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title={t('title')} />
+
+      {error && (
+        <AdminErrorAlert
+          error={error}
+          fallbackMessage="Failed to load account settings."
+          retryLabel="Retry"
+          onRetry={() => refetch()}
+        />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <SectionCard title={t('sectionOrganisation')}>

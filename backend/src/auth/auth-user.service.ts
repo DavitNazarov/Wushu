@@ -20,11 +20,32 @@ export class AuthUserService {
     password: string;
     displayName: string;
     role: UserRole;
+    clubId?: string | null;
   }): Promise<{ id: string }> {
-    const { organisationId, actorUserId, email, password, displayName, role } =
-      params;
+    const {
+      organisationId,
+      actorUserId,
+      email,
+      password,
+      displayName,
+      role,
+      clubId,
+    } = params;
 
-    if (role === 'admin') throw new Error('CANNOT_CREATE_ADMIN_VIA_API');
+    if (role === 'coach' && !clubId) throw new Error('COACH_CLUB_REQUIRED');
+    if (role === 'admin' && clubId) throw new Error('ADMIN_CLUB_FORBIDDEN');
+    if (role !== 'coach' && role !== 'admin' && clubId) {
+      throw new Error('USER_ROLE_CLUB_INVALID');
+    }
+
+    if (clubId) {
+      const club = await this.prisma.club.findFirst({
+        where: { id: clubId, organisationId },
+        select: { id: true },
+      });
+
+      if (!club) throw new Error('INVALID_CLUB');
+    }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
@@ -32,10 +53,11 @@ export class AuthUserService {
       const user = await this.prisma.user.create({
         data: {
           organisationId,
-          email,
+          email: email.trim(),
           passwordHash,
-          displayName,
+          displayName: displayName.trim(),
           role: role as DbUserRole,
+          clubId: clubId ?? null,
           isActive: true,
         },
       });
@@ -51,6 +73,7 @@ export class AuthUserService {
           email: user.email,
           displayName: user.displayName,
           role: user.role,
+          clubId: user.clubId,
         },
         reason: null,
         ipAddress: null,

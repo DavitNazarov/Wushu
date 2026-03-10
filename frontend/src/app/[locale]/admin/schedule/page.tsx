@@ -1,26 +1,37 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { io } from 'socket.io-client';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
-import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost } from '@/lib/api/client';
-import type { EventRow, MatRow, FightRow } from '@/types/api';
+import { getCompactErrorMessage } from '@/lib/api/error';
+import type { EventRow, MatRow, ScheduleFightRow } from '@/types/api';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 const SEL =
   'h-10 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
 const INPUT =
   'h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
 
-function athleteName(a?: { firstName: string; lastName: string } | null) {
-  return a ? `${a.firstName} ${a.lastName}` : 'BYE';
+function statusTone(status: ScheduleFightRow['liveStatus']) {
+  switch (status) {
+    case 'RUNNING':
+      return 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]';
+    case 'FINISHED':
+      return 'bg-[var(--color-success)]/20 text-[var(--color-success)]';
+    case 'UPCOMING':
+      return 'bg-[var(--color-warning)]/20 text-[var(--color-warning)]';
+    default:
+      return 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]';
+  }
 }
 
 export default function SchedulePage() {
@@ -55,9 +66,37 @@ export default function SchedulePage() {
 
   const { data: fights, isLoading, error, refetch } = useQuery({
     queryKey: ['schedule', eid],
-    queryFn: () => apiGet<FightRow[]>(`/api/schedule?eventId=${eid}`),
+    queryFn: () => apiGet<ScheduleFightRow[]>(`/api/schedule?eventId=${eid}`),
     enabled: !!eid,
   });
+
+  useEffect(() => {
+    if (!eid) return;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? window.location.origin;
+    const socket = io(baseUrl, {
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+    });
+
+    const onConnect = () => {
+      socket.emit('join-event', { eventId: eid });
+    };
+
+    const onUpdate = () => {
+      void qc.invalidateQueries({ queryKey: ['schedule', eid] });
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('schedule:update', onUpdate);
+    socket.on('fight:update', onUpdate);
+
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('schedule:update', onUpdate);
+      socket.off('fight:update', onUpdate);
+      socket.close();
+    };
+  }, [eid, qc]);
 
   const addMatMut = useMutation({
     mutationFn: () =>
@@ -68,7 +107,8 @@ export default function SchedulePage() {
       setAddMatOpen(false);
       setMatName('');
     },
-    onError: () => toast(t('errorGeneric'), 'error'),
+    onError: (error) =>
+      toast(getCompactErrorMessage(error, t('errorGeneric')), 'error'),
   });
 
   const autoMut = useMutation({
@@ -78,22 +118,20 @@ export default function SchedulePage() {
       toast(t('scheduleUpdated'));
       setAutoOpen(false);
     },
-    onError: () => toast(t('errorGeneric'), 'error'),
+    onError: (error) =>
+      toast(getCompactErrorMessage(error, t('errorGeneric')), 'error'),
   });
 
-  const fightsByMat = useMemo(
+  const scheduleFlow = useMemo(
     () =>
-      (mats ?? []).map((mat) => ({
-        mat,
-        fights: (fights ?? [])
-          .filter((f) => f.matId === mat.id)
-          .sort((a, b) => (a.orderInMat ?? 0) - (b.orderInMat ?? 0)),
-      })),
-    [mats, fights],
+      [...(fights ?? [])].sort(
+        (a, b) => (a.scheduleOrder ?? Number.MAX_SAFE_INTEGER) - (b.scheduleOrder ?? Number.MAX_SAFE_INTEGER),
+      ),
+    [fights],
   );
 
   const unscheduledCount = useMemo(
-    () => (fights ?? []).filter((f) => !f.matId).length,
+    () => (fights ?? []).filter((f) => f.isPlayable && !f.matId).length,
     [fights],
   );
 
@@ -119,16 +157,12 @@ export default function SchedulePage() {
       />
 
       {error && (
-        <InlineAlert
-          variant="error"
-          actions={
-            <button onClick={() => refetch()} className="text-[13px] font-medium underline">
-              {tCommon('retry')}
-            </button>
-          }
-        >
-          {tCommon('loadError')}
-        </InlineAlert>
+        <AdminErrorAlert
+          error={error}
+          fallbackMessage={tCommon('loadError')}
+          retryLabel={tCommon('retry')}
+          onRetry={() => refetch()}
+        />
       )}
 
       {mats && mats.length > 0 && (
@@ -152,36 +186,47 @@ export default function SchedulePage() {
 
       {isLoading ? (
         <SkeletonRows rows={4} cols={3} />
-      ) : !fights?.length ? (
+      ) : !scheduleFlow.length ? (
         <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {fightsByMat.map(({ mat, fights: matFights }) => (
-            <div key={mat.id} className="w-56 shrink-0">
-              <div className="mb-2 rounded-[var(--radius-pill)] bg-[var(--color-surface-alt)] px-3 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text)]">
-                {mat.name}
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {scheduleFlow.map((f) => (
+            <div
+              key={f.id}
+              className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[11px] text-[var(--color-text-muted)]">
+                  #{f.scheduleOrder ?? '-'}
+                </div>
+                <span
+                  className={`rounded-[var(--radius-pill)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusTone(
+                    f.liveStatus,
+                  )}`}
+                >
+                  {(f.liveStatus ?? 'PENDING').toLowerCase()}
+                </span>
               </div>
-              <div className="flex flex-col gap-2">
-                {matFights.map((f) => (
-                  <div
-                    key={f.id}
-                    className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-                  >
-                    <div className="text-[11px] text-[var(--color-text-muted)]">
-                      #{f.orderInMat}
-                    </div>
-                    <div className="mt-1 text-[13px] font-medium text-red-400">{athleteName(f.redAthlete)}</div>
-                    <div className="text-[11px] text-[var(--color-text-muted)]">vs</div>
-                    <div className="text-[13px] font-medium text-blue-400">{athleteName(f.blueAthlete)}</div>
-                    {f.scheduledStartTime && (
-                      <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
-                        {new Date(f.scheduledStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {matFights.length === 0 && (
-                  <p className="py-6 text-center text-[12px] text-[var(--color-text-muted)]">—</p>
+
+              <div className="mt-2 text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">
+                {f.bracketRoundLabel} • {f.bracketFightNumber}
+              </div>
+
+              <div className="mt-2 text-[13px] font-medium text-red-400">{f.redDisplayName}</div>
+              <div className="text-[11px] text-[var(--color-text-muted)]">vs</div>
+              <div className="text-[13px] font-medium text-blue-400">{f.blueDisplayName}</div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-text-muted)]">
+                <span>{f.isPlayable ? 'ready' : 'waiting'}</span>
+                {f.matName && <span>• {f.matName}</span>}
+                {f.scheduledAt && (
+                  <span>
+                    •{' '}
+                    {new Date(f.scheduledAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
                 )}
               </div>
             </div>

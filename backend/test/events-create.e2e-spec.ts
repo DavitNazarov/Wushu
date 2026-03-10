@@ -121,4 +121,24 @@ describe('POST /api/events (e2e)', () => {
       ),
     ).toBe(true);
   });
+
+  it('returns 422 for invalid timezone', async () => {
+    if (!dbReady) return;
+    const invalidPayload = {
+      ...validPayload('invalid-timezone'),
+      timezone: 'Tbilisi',
+    };
+
+    const res = await request(app.getHttpServer())
+      .post('/api/events')
+      .send(invalidPayload);
+
+    expect(res.status).toBe(422);
+    expect(res.body).toHaveProperty('code', 'VALIDATION_ERROR');
+    expect(res.body).toHaveProperty('message', 'Invalid event payload');
+    expect(Array.isArray(res.body.issues)).toBe(true);
+    expect(
+      res.body.issues.some((i: { path: string }) => i.path === 'timezone'),
+    ).toBe(true);
+  });
 });

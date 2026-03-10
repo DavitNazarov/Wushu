@@ -7,12 +7,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
-import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost, ApiError } from '@/lib/api/client';
+import { getCompactErrorMessage } from '@/lib/api/error';
 import type { NewsPostRow } from '@/types/api';
 import type { PublicEvent } from '@/lib/api/public';
 import { Field } from '@/components/form/Field';
@@ -20,6 +20,7 @@ import { TextInput } from '@/components/form/TextInput';
 import { Textarea } from '@/components/form/Textarea';
 import { Select } from '@/components/form/Select';
 import { Checkbox } from '@/components/form/Checkbox';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 function slugify(title: string) {
   return title
@@ -67,7 +68,9 @@ export default function NewsPage() {
       closeModal();
     },
     onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : tCommon('saveFailed');
+      const msg = err instanceof ApiError
+        ? err.message
+        : getCompactErrorMessage(err, tCommon('saveFailed'));
       toast(msg, 'error');
     },
   });
@@ -121,16 +124,12 @@ export default function NewsPage() {
       />
 
       {error && (
-        <InlineAlert
-          variant="error"
-          actions={
-            <button onClick={() => refetch()} className="text-[13px] font-medium underline">
-              {tCommon('retry')}
-            </button>
-          }
-        >
-          {tCommon('loadError')}
-        </InlineAlert>
+        <AdminErrorAlert
+          error={error}
+          fallbackMessage={tCommon('loadError')}
+          retryLabel={tCommon('retry')}
+          onRetry={() => refetch()}
+        />
       )}
 
       {isLoading ? (

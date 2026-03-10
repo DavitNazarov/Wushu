@@ -74,6 +74,22 @@ export class EventCategoriesService {
     });
     if (!event) throw new Error('EVENT_NOT_FOUND');
 
+    const [registrationCount, weighInCount, bracketCount, fightCount] =
+      await Promise.all([
+        this.prisma.registration.count({ where: { eventId, organisationId } }),
+        this.prisma.weighInAttempt.count({ where: { eventId, organisationId } }),
+        this.prisma.bracket.count({ where: { eventId, organisationId } }),
+        this.prisma.fight.count({ where: { eventId, organisationId } }),
+      ]);
+    if (
+      registrationCount > 0 ||
+      weighInCount > 0 ||
+      bracketCount > 0 ||
+      fightCount > 0
+    ) {
+      throw new Error('EVENT_CATEGORIES_LOCKED_AFTER_ACTIVITY');
+    }
+
     const totalCats = selection.ageGroups.reduce(
       (s, ag) => s + ag.weightCategoryIds.length,
       0,

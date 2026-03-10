@@ -149,6 +149,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           },
         };
       }
+      case 'P2021':
+      case 'P2022': {
+        return {
+          status: HttpStatus.SERVICE_UNAVAILABLE,
+          body: {
+            code: 'DATABASE_SCHEMA_OUT_OF_DATE',
+            message:
+              'Database schema is out of date. Run Prisma migrations (e.g. `npx prisma migrate deploy`).',
+          },
+        };
+      }
       case 'P2025': {
         return {
           status: HttpStatus.NOT_FOUND,

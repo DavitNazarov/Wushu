@@ -78,13 +78,43 @@ export class IntegrityService {
     }
 
     const failWeighins = registrations.filter(
-      (r) => r.weighIns[0]?.decision === 'FAIL',
+      (r) =>
+        r.weighInStatus === 'FAILED' ||
+        r.weighInStatus === 'DISQUALIFIED' ||
+        r.weighIns[0]?.decision === 'FAIL',
     );
     if (failWeighins.length > 0) {
       issues.push({
         code: 'UNRESOLVED_FAIL_WEIGHIN',
         count: failWeighins.length,
         sampleIds: failWeighins.slice(0, 5).map((r) => r.id),
+      });
+    }
+
+    const pendingWeighIn = registrations.filter((r) => {
+      if (r.status === 'REJECTED' || r.status === 'WITHDRAWN') return false;
+      return (
+        r.weighInStatus === 'NOT_WEIGHED' ||
+        r.weighInStatus === 'REWEIGH_ALLOWED'
+      );
+    });
+    if (pendingWeighIn.length > 0) {
+      issues.push({
+        code: 'WEIGHIN_NOT_FINALIZED',
+        count: pendingWeighIn.length,
+        sampleIds: pendingWeighIn.slice(0, 5).map((r) => r.id),
+      });
+    }
+
+    const unresolvedOneHour = registrations.filter(
+      (r) =>
+        r.weighIns[0]?.decision === 'ONE_HOUR' && !r.weighIns[0]?.resolvedAt,
+    );
+    if (unresolvedOneHour.length > 0) {
+      issues.push({
+        code: 'ONE_HOUR_UNRESOLVED',
+        count: unresolvedOneHour.length,
+        sampleIds: unresolvedOneHour.slice(0, 5).map((r) => r.id),
       });
     }
 

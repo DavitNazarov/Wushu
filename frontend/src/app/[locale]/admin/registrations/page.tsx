@@ -11,9 +11,11 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost } from '@/lib/api/client';
+import { getCompactErrorMessage } from '@/lib/api/error';
 import type { EventRow, RegistrationRow, ClubRow } from '@/types/api';
 import { RegistrationTable } from './RegistrationTable';
 import { RegistrationConfirmModal, type ConfirmModalState } from './RegistrationConfirmModal';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 const SEL =
   'h-10 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
@@ -86,8 +88,8 @@ export default function RegistrationsPage() {
       else toast(t('withdrawSuccess'));
       setConfirmModal(null);
     },
-    onError: (e: { message?: string }) => {
-      toast(t('updateFailed') + (e?.message ? `: ${e.message}` : ''), 'error');
+    onError: (error) => {
+      toast(getCompactErrorMessage(error, t('updateFailed')), 'error');
     },
   });
 
@@ -168,10 +170,12 @@ export default function RegistrationsPage() {
       {eventId && isLocked && <InlineAlert variant="warning">{t('registrationsLocked')}</InlineAlert>}
 
       {error && (
-        <InlineAlert variant="error"
-          actions={<button onClick={() => refetch()} className="text-[13px] font-medium underline">{tC('retry')}</button>}>
-          {tC('loadError')}
-        </InlineAlert>
+        <AdminErrorAlert
+          error={error}
+          fallbackMessage={tC('loadError')}
+          retryLabel={tC('retry')}
+          onRetry={() => refetch()}
+        />
       )}
 
       {eventId && isLoading ? (

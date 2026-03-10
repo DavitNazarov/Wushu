@@ -43,6 +43,36 @@ export class FightsController {
     });
   }
 
+  @Get('live/category-board')
+  async getLiveCategoryBoard(
+    @Req() req: AuthenticatedRequest,
+    @Query('eventId') eventId?: string,
+    @Query('eventWeightCategoryId') eventWeightCategoryId?: string,
+    @Query('matId') matId?: string,
+  ) {
+    if (!eventId) {
+      throw new HttpException('eventId_REQUIRED', HttpStatus.BAD_REQUEST);
+    }
+    const auth = req.auth!;
+    try {
+      return await this.fights.getLiveCategoryBoard({
+        organisationId: auth.organisationId,
+        eventId,
+        eventWeightCategoryId,
+        matId,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'EVENT_NOT_FOUND') {
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Get(':id')
   async getById(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     const auth = req.auth!;
@@ -69,12 +99,20 @@ export class FightsController {
         reason: body.reason ?? null,
       });
       this.gateway.emitFightUpdate(updated.eventId, updated.matId, updated);
+      this.gateway.emitScheduleUpdate(updated.eventId, {
+        type: 'LIVE_STATE_CHANGED',
+        fightId: updated.id,
+      });
       if (advanced) {
         this.gateway.emitFightUpdate(
           advanced.eventId,
           advanced.matId,
           advanced,
         );
+        this.gateway.emitScheduleUpdate(advanced.eventId, {
+          type: 'LIVE_ADVANCED_FIGHT_UPDATED',
+          fightId: advanced.id,
+        });
       }
       return updated;
     } catch (e) {
@@ -83,7 +121,110 @@ export class FightsController {
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
       if (
         msg === 'INVALID_STATE_TRANSITION' ||
-        msg === 'OVERRIDE_REASON_REQUIRED'
+        msg === 'OVERRIDE_REASON_REQUIRED' ||
+        msg === 'EVENT_NOT_LIVE' ||
+        msg === 'MAT_ALREADY_IN_PROGRESS' ||
+        msg === 'WINNER_REQUIRED_FOR_COMPLETE'
+      ) {
+        throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      }
+      throw new HttpException(
+        'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':id/start')
+  async startFight(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const auth = req.auth!;
+    try {
+      const updated = await this.fights.startFight({
+        organisationId: auth.organisationId,
+        fightId: id,
+        actorUserId: auth.sub,
+      });
+      this.gateway.emitFightUpdate(updated.eventId, updated.matId, updated);
+      this.gateway.emitScheduleUpdate(updated.eventId, {
+        type: 'LIVE_FIGHT_STARTED',
+        fightId: updated.id,
+      });
+      return updated;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'FIGHT_NOT_FOUND')
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      if (
+        msg === 'INVALID_STATE_TRANSITION' ||
+        msg === 'OVERRIDE_REASON_REQUIRED' ||
+        msg === 'EVENT_NOT_LIVE' ||
+        msg === 'MAT_ALREADY_IN_PROGRESS'
+      ) {
+        throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      }
+      throw new HttpException(
+        'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':id/finish')
+  async finishFight(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+    @Body()
+    body: {
+      winner: 'RED' | 'BLUE';
+      method: string;
+      notes?: string;
+      override?: boolean;
+      reason?: string;
+    },
+  ) {
+    const auth = req.auth!;
+    try {
+      const { fight: updated, advanced } = await this.fights.finishFight({
+        organisationId: auth.organisationId,
+        fightId: id,
+        actorUserId: auth.sub,
+        winner: body.winner,
+        method: body.method as WinMethod,
+        notes: body.notes ?? null,
+        override: body.override ?? false,
+        reason: body.reason ?? null,
+      });
+      this.gateway.emitFightUpdate(updated.eventId, updated.matId, updated);
+      this.gateway.emitScheduleUpdate(updated.eventId, {
+        type: 'LIVE_FIGHT_FINISHED',
+        fightId: updated.id,
+      });
+      if (advanced) {
+        this.gateway.emitFightUpdate(
+          advanced.eventId,
+          advanced.matId,
+          advanced,
+        );
+        this.gateway.emitScheduleUpdate(advanced.eventId, {
+          type: 'LIVE_RESULT_PROPAGATED',
+          fightId: advanced.id,
+        });
+      }
+      return updated;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'FIGHT_NOT_FOUND')
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      if (
+        msg === 'RESULT_ALREADY_RECORDED' ||
+        msg === 'OVERRIDE_REASON_REQUIRED' ||
+        msg === 'EVENT_NOT_LIVE' ||
+        msg === 'INVALID_RESULT_STATE' ||
+        msg === 'RESULT_CORRECTION_BLOCKED' ||
+        msg === 'WINNER_NOT_PRESENT'
       ) {
         throw new HttpException(msg, HttpStatus.BAD_REQUEST);
       }
@@ -127,7 +268,9 @@ export class FightsController {
       if (
         msg === 'TIMER_NOT_RUNNING' ||
         msg === 'TIMER_NOT_PAUSED' ||
-        msg === 'TIMER_STALE_UPDATE'
+        msg === 'TIMER_STALE_UPDATE' ||
+        msg === 'EVENT_NOT_LIVE' ||
+        msg === 'INVALID_FIGHT_STATE_FOR_TIMER'
       ) {
         throw new HttpException(msg, HttpStatus.BAD_REQUEST);
       }
@@ -153,7 +296,7 @@ export class FightsController {
   ) {
     const auth = req.auth!;
     try {
-      const updated = await this.fights.setResult({
+      const { fight: updated, advanced } = await this.fights.setResult({
         organisationId: auth.organisationId,
         fightId: id,
         actorUserId: auth.sub,
@@ -164,14 +307,33 @@ export class FightsController {
         reason: body.reason ?? null,
       });
       this.gateway.emitFightUpdate(updated.eventId, updated.matId, updated);
+      this.gateway.emitScheduleUpdate(updated.eventId, {
+        type: 'LIVE_RESULT_SAVED',
+        fightId: updated.id,
+      });
+      if (advanced) {
+        this.gateway.emitFightUpdate(
+          advanced.eventId,
+          advanced.matId,
+          advanced,
+        );
+        this.gateway.emitScheduleUpdate(advanced.eventId, {
+          type: 'LIVE_RESULT_PROPAGATED',
+          fightId: advanced.id,
+        });
+      }
       return updated;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'FIGHT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
       if (
-        msg === 'FIGHT_ALREADY_CONFIRMED' ||
-        msg === 'OVERRIDE_REASON_REQUIRED'
+        msg === 'RESULT_ALREADY_RECORDED' ||
+        msg === 'OVERRIDE_REASON_REQUIRED' ||
+        msg === 'EVENT_NOT_LIVE' ||
+        msg === 'INVALID_RESULT_STATE' ||
+        msg === 'RESULT_CORRECTION_BLOCKED' ||
+        msg === 'WINNER_NOT_PRESENT'
       ) {
         throw new HttpException(msg, HttpStatus.BAD_REQUEST);
       }

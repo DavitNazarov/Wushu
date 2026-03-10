@@ -14,9 +14,9 @@ export class CapabilityGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const required = this.reflector.get<string>(
+    const required = this.reflector.getAllAndOverride<string>(
       REQUIRE_CAPABILITY,
-      context.getHandler(),
+      [context.getHandler(), context.getClass()],
     );
     if (!required) return true;
 

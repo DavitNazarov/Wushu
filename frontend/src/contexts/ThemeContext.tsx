@@ -29,12 +29,20 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => getStoredTheme());
+  // Keep SSR and first client render identical to avoid hydration mismatches.
+  const [theme, setThemeState] = useState<Theme>('dark');
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    setThemeState(getStoredTheme());
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem(STORAGE_KEY, theme);
-  }, [theme]);
+  }, [hydrated, theme]);
 
   const setTheme = useCallback((t: Theme) => setThemeState(t), []);
   const toggleTheme = useCallback(

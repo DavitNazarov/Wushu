@@ -6,27 +6,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MapPin, Globe, Hash } from 'lucide-react';
 import { KpiCard } from '@/components/ui/KpiCard';
 import { StatusChip } from '@/components/ui/StatusChip';
-import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { useToast } from '@/components/ui/Toast';
 import { ApiError, apiGet, apiPost } from '@/lib/api/client';
+import { getCompactErrorMessage } from '@/lib/api/error';
 import type { EventRow, EventLifecycle } from '@/types/api';
 import { EditEventModal } from '../EditEventModal';
 import { EventStageStepper, STEPPER_STAGES } from '@/components/event/EventStageStepper';
 import { DatesCard } from './DatesCard';
 import { EventAdvanceModal } from './EventAdvanceModal';
 import { useState } from 'react';
-
-const LIFECYCLE_ORDER: EventLifecycle[] = [
-  'REG_OPEN', 'WEIGHIN', 'LOCKED', 'DRAWN', 'PUBLISHED', 'LIVE', 'COMPLETED',
-];
-
-function nextLifecycle(current: EventLifecycle): EventLifecycle | null {
-  const idx = LIFECYCLE_ORDER.indexOf(current);
-  return idx >= 0 && idx < LIFECYCLE_ORDER.length - 1 ? LIFECYCLE_ORDER[idx + 1] : null;
-}
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
+import { nextEventLifecycle } from '@/domain/events/lifecycle';
 
 interface EventSummaryResponse {
   event: EventRow;
@@ -50,6 +43,7 @@ export default function EventDetailPage() {
   const [advanceOpen, setAdvanceOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [reason, setReason] = useState('');
+  const [override, setOverride] = useState(false);
 
   const runAutomationMutation = useMutation({
     // Per-event endpoint: checks, advances if needed, returns fresh event+summary.
@@ -58,10 +52,11 @@ export default function EventDetailPage() {
       // Populate cache directly so UI updates instantly (no extra round-trip).
       queryClient.setQueryData(['event-detail', id], fresh);
       queryClient.invalidateQueries({ queryKey: ['events'] });
-      const advanced = fresh.event.lifecycle === 'WEIGHIN' && event?.lifecycle === 'REG_OPEN';
+      const advanced = Boolean(event && fresh.event.lifecycle !== event.lifecycle);
       toast(advanced ? tEvents('autoAdvanceStage.advanced') : tEvents('autoAdvanceStage.noChange'));
     },
-    onError: () => toast(tCommon('saveFailed'), 'error'),
+    onError: (error) =>
+      toast(getCompactErrorMessage(error, tCommon('saveFailed')), 'error'),
   });
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -72,17 +67,22 @@ export default function EventDetailPage() {
 
   const event = data?.event;
   const summary = data?.summary;
-  const next = event ? nextLifecycle(event.lifecycle) : null;
+  const next = event ? nextEventLifecycle(event.lifecycle) : null;
 
   const advanceMutation = useMutation({
     mutationFn: () =>
-      apiPost<EventRow>(`/api/events/${id}/lifecycle`, { targetState: next, reason: reason.trim() || null, override: false }),
+      apiPost<EventRow>(`/api/events/${id}/lifecycle`, {
+        targetState: next,
+        reason: reason.trim() || null,
+        override,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['event-detail', id] });
       queryClient.invalidateQueries({ queryKey: ['events'] });
       toast(tAdvance('success'));
       setAdvanceOpen(false);
       setReason('');
+      setOverride(false);
     },
     onError: (err) => {
       let msg = tAdvance('errorGeneric');
@@ -90,6 +90,7 @@ export default function EventDetailPage() {
         if (err.code === 'INVALID_EVENT_TRANSITION') msg = tAdvance('errorInvalidTransition');
         else if (err.code === 'REGISTRATION_STILL_OPEN') msg = tAdvance('errorRegistrationOpen');
         else if (err.code === 'COMPETITION_NOT_STARTED') msg = tAdvance('errorCompetitionNotStarted');
+        else if (err.code === 'OVERRIDE_REASON_REQUIRED') msg = tAdvance('errorOverrideReasonRequired');
       }
       toast(msg, 'error');
     },
@@ -102,18 +103,20 @@ export default function EventDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       toast(tCommon('saveSuccess'));
     },
-    onError: () => toast(tCommon('saveFailed'), 'error'),
+    onError: (error) =>
+      toast(getCompactErrorMessage(error, tCommon('saveFailed')), 'error'),
   });
 
   if (isLoading) return <div className="space-y-6"><SkeletonRows rows={4} cols={3} /></div>;
 
   if (error || !event) {
     return (
-      <InlineAlert variant="error" actions={
-        <button onClick={() => refetch()} className="text-[13px] font-medium underline">{tCommon('retry')}</button>
-      }>
-        {tCommon('loadError')}
-      </InlineAlert>
+      <AdminErrorAlert
+        error={error ?? new Error('EVENT_NOT_FOUND')}
+        fallbackMessage={tCommon('loadError')}
+        retryLabel={tCommon('retry')}
+        onRetry={() => refetch()}
+      />
     );
   }
 
@@ -175,7 +178,13 @@ export default function EventDetailPage() {
               </SecondaryButton>
             )}
             {next && (
-              <PrimaryButton onClick={() => { setReason(''); setAdvanceOpen(true); }}>
+              <PrimaryButton
+                onClick={() => {
+                  setReason('');
+                  setOverride(false);
+                  setAdvanceOpen(true);
+                }}
+              >
                 {tAdvance('button')}
               </PrimaryButton>
             )}
@@ -284,6 +293,8 @@ export default function EventDetailPage() {
         nextLifecycle={next}
         reason={reason}
         onReasonChange={setReason}
+        override={override}
+        onOverrideChange={setOverride}
         isPending={advanceMutation.isPending}
         onConfirm={() => advanceMutation.mutate()}
         tAdvance={(key) => tAdvance(key as Parameters<typeof tAdvance>[0])}

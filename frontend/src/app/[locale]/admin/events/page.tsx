@@ -8,13 +8,14 @@ import { Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { StatusChip } from '@/components/ui/StatusChip';
-import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Modal } from '@/components/ui/Modal';
 import { apiGet, apiDelete } from '@/lib/api/client';
+import { getCompactErrorMessage } from '@/lib/api/error';
 import type { EventRow } from '@/types/api';
 import { CreateEventModal } from './CreateEventModal';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 export default function EventsPage() {
   const tEvents = useTranslations('admin.events');
@@ -36,8 +37,8 @@ export default function EventsPage() {
       await apiDelete(`/api/events/${pendingDelete.id}`);
       setPendingDelete(null);
       await refetch();
-    } catch {
-      setDeleteError(tCommon('error'));
+    } catch (error) {
+      setDeleteError(getCompactErrorMessage(error, tCommon('error')));
     } finally {
       setDeleting(false);
     }
@@ -76,16 +77,12 @@ export default function EventsPage() {
       />
 
       {error && (
-        <InlineAlert
-          variant="error"
-          actions={
-            <button onClick={() => refetch()} className="text-[13px] font-medium underline">
-              {tCommon('retry')}
-            </button>
-          }
-        >
-          {tCommon('loadError')}
-        </InlineAlert>
+        <AdminErrorAlert
+          error={error}
+          fallbackMessage={tCommon('loadError')}
+          retryLabel={tCommon('retry')}
+          onRetry={() => refetch()}
+        />
       )}
 
       <div>

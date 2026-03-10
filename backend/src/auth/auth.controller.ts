@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Post,
   Get,
@@ -209,7 +210,7 @@ export class AuthController {
 
   @Post('signup')
   @UseGuards(AuthGuard, CapabilityGuard)
-  @RequireCapability(CAPABILITIES.ATHLETES_MANAGE)
+  @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
   async signup(
     @Req() req: AuthenticatedRequest,
     @Body()
@@ -217,7 +218,8 @@ export class AuthController {
       email: string;
       password: string;
       displayName: string;
-      role: 'coach' | 'athlete' | 'judge' | 'timekeeper';
+      role: 'admin' | 'coach';
+      clubId?: string | null;
     },
   ) {
     const auth = req.auth;
@@ -232,14 +234,37 @@ export class AuthController {
         password: body.password,
         displayName: body.displayName,
         role: body.role,
+        clubId: body.clubId ?? null,
       });
       return { ok: true, id: result.id };
     } catch (e: any) {
       const message = e instanceof Error ? e.message : '';
       if (message === 'EMAIL_ALREADY_IN_USE')
         throw new HttpException('EMAIL_ALREADY_IN_USE', HttpStatus.CONFLICT);
-      if (message === 'CANNOT_CREATE_ADMIN_VIA_API')
-        throw new HttpException('FORBIDDEN', HttpStatus.FORBIDDEN);
+      if (message === 'COACH_CLUB_REQUIRED') {
+        throw new BadRequestException({
+          code: 'COACH_CLUB_REQUIRED',
+          message: 'Coach must belong to a club',
+        });
+      }
+      if (message === 'ADMIN_CLUB_FORBIDDEN') {
+        throw new BadRequestException({
+          code: 'ADMIN_CLUB_FORBIDDEN',
+          message: 'Admin cannot belong to a club',
+        });
+      }
+      if (message === 'USER_ROLE_CLUB_INVALID') {
+        throw new BadRequestException({
+          code: 'USER_ROLE_CLUB_INVALID',
+          message: 'Only coaches can belong to a club',
+        });
+      }
+      if (message === 'INVALID_CLUB') {
+        throw new BadRequestException({
+          code: 'INVALID_CLUB',
+          message: 'Club not found',
+        });
+      }
       throw new HttpException(
         'Internal Server Error',
         HttpStatus.INTERNAL_SERVER_ERROR,

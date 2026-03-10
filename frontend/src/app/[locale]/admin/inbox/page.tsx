@@ -7,13 +7,14 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { StatusChip } from '@/components/ui/StatusChip';
-import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost } from '@/lib/api/client';
+import { getCompactErrorMessage } from '@/lib/api/error';
 import type { ContactSubmissionRow } from '@/types/api';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 export default function InboxPage() {
   const t = useTranslations('inbox');
@@ -36,8 +37,8 @@ export default function InboxPage() {
       toast(t('markHandled'));
       setSelected(null);
     },
-    onError: () => {
-      toast(tCommon('error'), 'error');
+    onError: (error) => {
+      toast(getCompactErrorMessage(error, tCommon('error')), 'error');
     },
   });
 
@@ -56,16 +57,12 @@ export default function InboxPage() {
       <PageHeader title={t('title')} />
 
       {error && (
-        <InlineAlert
-          variant="error"
-          actions={
-            <button onClick={() => refetch()} className="text-[13px] font-medium underline">
-              {tCommon('retry')}
-            </button>
-          }
-        >
-          {tCommon('loadError')}
-        </InlineAlert>
+        <AdminErrorAlert
+          error={error}
+          fallbackMessage={tCommon('loadError')}
+          retryLabel={tCommon('retry')}
+          onRetry={() => refetch()}
+        />
       )}
 
       {isLoading ? (

@@ -1,0 +1,271 @@
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+
+const DRAW_AUDIT_ACTIONS = [
+  'DRAW_EXECUTED',
+  'DRAW_REGENERATED',
+  'DRAW_RESET',
+  'BRACKETS_PUBLISHED',
+] as const;
+
+export type DrawReadinessContext = {
+  event: {
+    id: string;
+    name: string;
+    lifecycle:
+      | 'REG_OPEN'
+      | 'LOCKED'
+      | 'WEIGHIN'
+      | 'WEIGH_IN_COMPLETED'
+      | 'DRAWN'
+      | 'PUBLISHED'
+      | 'LIVE'
+      | 'COMPLETED';
+    registrationOpensAt: Date | null;
+    registrationClosesAt: Date | null;
+    published: boolean;
+    publishTimingPolicyCode:
+      | 'IMMEDIATE_AFTER_DRAW'
+      | 'MANUAL_PUBLISH_LATER'
+      | 'COMPETITION_DAY_ONLY';
+  };
+  categories: Array<{
+    id: string;
+    rulesetWeightCategory: {
+      name: string;
+      sortOrder: number;
+    };
+    eventAgeGroup: {
+      rulesetAgeGroup: {
+        code: string;
+        name: string;
+        sex: 'MALE' | 'FEMALE' | null;
+      };
+    };
+  }>;
+  bracketCount: number;
+  drawnCategoryIds: Set<string>;
+  registrations: Array<{
+    id: string;
+    athleteId: string;
+    status: 'PENDING' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN';
+    weighInStatus:
+      | 'NOT_WEIGHED'
+      | 'PASSED'
+      | 'MOVED_UP'
+      | 'FAILED'
+      | 'OVERRIDE_APPROVED'
+      | 'REWEIGH_ALLOWED'
+      | 'DISQUALIFIED';
+    eventWeightCategoryId: string | null;
+    registeredEventWeightCategoryId: string | null;
+    athlete: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      documentId: string | null;
+    };
+    club: {
+      name: string;
+    } | null;
+    eventWeightCategory: {
+      rulesetWeightCategory: {
+        name: string;
+      };
+    } | null;
+    registeredEventWeightCategory: {
+      rulesetWeightCategory: {
+        name: string;
+      };
+    } | null;
+    weighIns: Array<{
+      id: string;
+      override: boolean;
+    }>;
+  }>;
+  recentAudit: Array<{
+    id: string;
+    action: string;
+    createdAt: Date;
+    actorUserId: string | null;
+    reason: string | null;
+    override: boolean;
+    actor: {
+      displayName: string;
+    } | null;
+  }>;
+  lastGeneration: {
+    action: string;
+    createdAt: Date;
+    actorUserId: string | null;
+    actor: {
+      displayName: string;
+    } | null;
+  } | null;
+};
+
+@Injectable()
+export class DrawReadinessQueryService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async loadContext(input: {
+    organisationId: string;
+    eventId: string;
+  }): Promise<DrawReadinessContext> {
+    const event = await this.prisma.event.findFirst({
+      where: { id: input.eventId, organisationId: input.organisationId },
+      select: {
+        id: true,
+        name: true,
+        lifecycle: true,
+        registrationOpensAt: true,
+        registrationClosesAt: true,
+        published: true,
+        publishTimingPolicyCode: true,
+      },
+    });
+    if (!event) throw new Error('EVENT_NOT_FOUND');
+
+    const [categories, bracketCount, drawnCategoryRows, registrations, recentAudit, lastGeneration] =
+      await Promise.all([
+        this.prisma.eventWeightCategory.findMany({
+          where: { eventAgeGroup: { eventId: input.eventId } },
+          select: {
+            id: true,
+            rulesetWeightCategory: {
+              select: { name: true, sortOrder: true },
+            },
+            eventAgeGroup: {
+              select: {
+                rulesetAgeGroup: {
+                  select: {
+                    code: true,
+                    name: true,
+                    sex: true,
+                    sortOrder: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: [
+            { eventAgeGroup: { rulesetAgeGroup: { sortOrder: 'asc' } } },
+            { rulesetWeightCategory: { sortOrder: 'asc' } },
+          ],
+        }),
+        this.prisma.bracket.count({
+          where: { organisationId: input.organisationId, eventId: input.eventId },
+        }),
+        this.prisma.fight.findMany({
+          where: {
+            organisationId: input.organisationId,
+            eventId: input.eventId,
+            eventWeightCategoryId: { not: null },
+          },
+          select: { eventWeightCategoryId: true },
+          distinct: ['eventWeightCategoryId'],
+        }),
+        this.prisma.registration.findMany({
+          where: {
+            organisationId: input.organisationId,
+            eventId: input.eventId,
+          },
+          select: {
+            id: true,
+            athleteId: true,
+            status: true,
+            weighInStatus: true,
+            eventWeightCategoryId: true,
+            registeredEventWeightCategoryId: true,
+            athlete: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                documentId: true,
+              },
+            },
+            club: {
+              select: {
+                name: true,
+              },
+            },
+            eventWeightCategory: {
+              select: {
+                rulesetWeightCategory: {
+                  select: { name: true },
+                },
+              },
+            },
+            registeredEventWeightCategory: {
+              select: {
+                rulesetWeightCategory: {
+                  select: { name: true },
+                },
+              },
+            },
+            weighIns: {
+              select: {
+                id: true,
+                override: true,
+              },
+              orderBy: { attemptNo: 'desc' },
+              take: 1,
+            },
+          },
+        }),
+        this.prisma.auditLog.findMany({
+          where: {
+            organisationId: input.organisationId,
+            eventId: input.eventId,
+            action: { in: [...DRAW_AUDIT_ACTIONS] },
+          },
+          select: {
+            id: true,
+            action: true,
+            createdAt: true,
+            actorUserId: true,
+            reason: true,
+            override: true,
+            actor: {
+              select: {
+                displayName: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 8,
+        }),
+        this.prisma.auditLog.findFirst({
+          where: {
+            organisationId: input.organisationId,
+            eventId: input.eventId,
+            action: { in: ['DRAW_EXECUTED', 'DRAW_REGENERATED'] },
+          },
+          select: {
+            action: true,
+            createdAt: true,
+            actorUserId: true,
+            actor: { select: { displayName: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+      ]);
+
+    const drawnCategoryIds = new Set(
+      drawnCategoryRows
+        .map((row) => row.eventWeightCategoryId)
+        .filter((value): value is string => Boolean(value)),
+    );
+
+    return {
+      event,
+      categories,
+      bracketCount,
+      drawnCategoryIds,
+      registrations,
+      recentAudit,
+      lastGeneration,
+    };
+  }
+}

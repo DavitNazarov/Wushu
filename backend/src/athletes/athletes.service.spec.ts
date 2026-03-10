@@ -12,6 +12,16 @@ const createPrismaMock = () => {
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
+    },
+    registration: {
+      updateMany: jest.fn(),
+    },
+    fight: {
+      updateMany: jest.fn(),
+    },
+    athleteMerge: {
+      create: jest.fn(),
     },
     $transaction: jest.fn(async (fn: (tx: any) => Promise<unknown>) =>
       fn(prisma),
@@ -103,5 +113,33 @@ describe('AthletesService', () => {
     });
 
     expect(result.athlete.id).toBe('athlete_1');
+  });
+
+  it('blocks coach merge when either athlete is outside the coach club', async () => {
+    const prisma = createPrismaMock();
+    prisma.athlete.findFirst
+      .mockResolvedValueOnce({
+        id: 'athlete_primary',
+        organisationId,
+        clubId: 'club_1',
+      })
+      .mockResolvedValueOnce({
+        id: 'athlete_secondary',
+        organisationId,
+        clubId: 'club_2',
+      });
+
+    const service = new AthletesService(prisma, createAuditMock() as any);
+
+    await expect(
+      service.merge({
+        organisationId,
+        actorUserId,
+        actorClubId: 'club_1',
+        primaryId: 'athlete_primary',
+        secondaryId: 'athlete_secondary',
+        reason: 'cleanup',
+      }),
+    ).rejects.toThrow('ATHLETE_NOT_IN_COACH_CLUB');
   });
 });

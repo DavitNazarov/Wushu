@@ -1,29 +1,34 @@
 'use client';
 
-import { useState, useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { io } from 'socket.io-client';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { StatusChip } from '@/components/ui/StatusChip';
-import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost } from '@/lib/api/client';
-import type { EventRow, MatRow, FightRow, TimerState } from '@/types/api';
+import { getCompactErrorMessage } from '@/lib/api/error';
+import type {
+  EventRow,
+  LiveBoardFightRow,
+  LiveCategoryBoardResponse,
+  MatRow,
+  TimerState,
+} from '@/types/api';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
-type LiveFight = FightRow & { timerState?: TimerState | null; categoryLabel?: string };
-
-const SEL = 'h-10 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
-const INPUT = 'h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
-const BTN = 'h-11 rounded-[var(--radius-input)] px-5 text-sm font-semibold transition disabled:opacity-60';
-
-function athleteName(a?: { firstName: string; lastName: string } | null) {
-  return a ? `${a.firstName} ${a.lastName}` : 'BYE';
-}
+const SEL =
+  'h-10 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
+const INPUT =
+  'h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
+const BTN =
+  'h-11 rounded-[var(--radius-input)] px-5 text-sm font-semibold transition disabled:opacity-60';
 
 function formatMs(ms: number) {
   const sec = Math.max(0, Math.floor(ms / 1000));
@@ -39,7 +44,10 @@ function useTimer(ts: TimerState | null | undefined) {
     (cb: () => void) => {
       if (!running) return () => {};
       let raf: number;
-      const loop = () => { cb(); raf = requestAnimationFrame(loop); };
+      const loop = () => {
+        cb();
+        raf = requestAnimationFrame(loop);
+      };
       raf = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(raf);
     },
@@ -54,55 +62,122 @@ function useTimer(ts: TimerState | null | undefined) {
   return useSyncExternalStore(sub, snap, () => formatMs(elapsed));
 }
 
+function fightParticipantName(fight: LiveBoardFightRow, side: 'red' | 'blue') {
+  return side === 'red' ? fight.red.name : fight.blue.name;
+}
+
 export default function LivePage() {
   const t = useTranslations('live');
   const tFight = useTranslations('common.fightStatus');
   const tCommon = useTranslations('common');
+  const tBrackets = useTranslations('brackets');
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const [eventId, setEventId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [matId, setMatId] = useState('');
   const [resultOpen, setResultOpen] = useState(false);
   const [winner, setWinner] = useState<'RED' | 'BLUE'>('RED');
   const [method, setMethod] = useState('POINTS');
   const [notes, setNotes] = useState('');
 
-  const { data: events } = useQuery({ queryKey: ['events'], queryFn: () => apiGet<EventRow[]>('/api/events') });
+  const { data: events } = useQuery({
+    queryKey: ['events'],
+    queryFn: () => apiGet<EventRow[]>('/api/events'),
+  });
   const eid = eventId || events?.[0]?.id || '';
-  const { data: mats } = useQuery({ queryKey: ['mats', eid], queryFn: () => apiGet<MatRow[]>(`/api/mats?eventId=${eid}`), enabled: !!eid });
-  const mid = matId || mats?.[0]?.id || '';
 
-  const { data: fights, isLoading, error, refetch } = useQuery({
-    queryKey: ['fights', eid, mid],
-    queryFn: () => apiGet<LiveFight[]>(`/api/fights?eventId=${eid}&matId=${mid}`),
-    enabled: !!eid && !!mid,
-    refetchInterval: 5000,
+  const { data: mats } = useQuery({
+    queryKey: ['mats', eid],
+    queryFn: () => apiGet<MatRow[]>(`/api/mats?eventId=${eid}`),
+    enabled: !!eid,
   });
 
-  const current = fights?.find((f) => f.status === 'IN_PROGRESS' || f.status === 'PAUSED');
-  const onDeck = fights?.find((f) => f.status === 'ON_DECK');
-  const nextUp = fights?.filter((f) => f.status === 'QUEUED').slice(0, 3) ?? [];
-  const timerDisplay = useTimer(current?.timerState);
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['live-category-board', eid, categoryId, matId],
+    queryFn: () =>
+      apiGet<LiveCategoryBoardResponse>(
+        `/api/fights/live/category-board?eventId=${eid}${
+          categoryId ? `&eventWeightCategoryId=${encodeURIComponent(categoryId)}` : ''
+        }${matId ? `&matId=${encodeURIComponent(matId)}` : ''}`,
+      ),
+    enabled: !!eid,
+  });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['fights', eid, mid] });
-  const onErr = () => toast(t('errorGeneric'), 'error');
+  useEffect(() => {
+    if (!eid) return;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? window.location.origin;
+    const socket = io(baseUrl, {
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+    });
+
+    const onConnect = () => socket.emit('join-event', { eventId: eid });
+    const onUpdate = () =>
+      void qc.invalidateQueries({
+        queryKey: ['live-category-board', eid, categoryId, matId],
+      });
+
+    socket.on('connect', onConnect);
+    socket.on('fight:update', onUpdate);
+    socket.on('schedule:update', onUpdate);
+    socket.on('timer:update', onUpdate);
+
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('fight:update', onUpdate);
+      socket.off('schedule:update', onUpdate);
+      socket.off('timer:update', onUpdate);
+      socket.close();
+    };
+  }, [eid, categoryId, matId, qc]);
+
+  const selectedCategoryId = categoryId || data?.selectedCategoryId || '';
+  const board = data?.board ?? null;
+  const currentFight = board?.currentFight ?? null;
+  const onDeckFight = board?.onDeck ?? null;
+  const timerDisplay = useTimer(currentFight?.timerState);
+
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: ['live-category-board', eid, categoryId, matId] });
+
+  const onErr = (e: unknown) =>
+    toast(getCompactErrorMessage(e, t('errorGeneric')), 'error');
 
   const timerMut = useMutation({
-    mutationFn: (p: { id: string; action: string; expectedUpdatedAt?: string | null }) =>
-      apiPost(`/api/fights/${p.id}/timer`, {
-        action: p.action,
-        expectedUpdatedAt: p.expectedUpdatedAt ?? undefined,
+    mutationFn: (payload: {
+      id: string;
+      action: 'START' | 'PAUSE' | 'RESUME' | 'RESET';
+      expectedUpdatedAt?: string | null;
+    }) =>
+      apiPost(`/api/fights/${payload.id}/timer`, {
+        action: payload.action,
+        expectedUpdatedAt: payload.expectedUpdatedAt ?? undefined,
       }),
-    onSuccess: invalidate, onError: onErr,
+    onSuccess: invalidate,
+    onError: onErr,
   });
+
   const stateMut = useMutation({
-    mutationFn: (p: { id: string; to: string }) => apiPost(`/api/fights/${p.id}/state`, { to: p.to }),
-    onSuccess: invalidate, onError: onErr,
+    mutationFn: (payload: { id: string; to: string }) =>
+      apiPost(`/api/fights/${payload.id}/state`, { to: payload.to }),
+    onSuccess: invalidate,
+    onError: onErr,
   });
+
   const resultMut = useMutation({
-    mutationFn: (fightId: string) => apiPost(`/api/fights/${fightId}/result`, { winner, method, notes: notes || null }),
-    onSuccess: () => { invalidate(); toast(t('resultSuccess')); setResultOpen(false); },
+    mutationFn: (fightId: string) =>
+      apiPost(`/api/fights/${fightId}/result`, {
+        winner,
+        method,
+        notes: notes || null,
+      }),
+    onSuccess: () => {
+      invalidate();
+      toast(t('resultSuccess'));
+      setResultOpen(false);
+    },
     onError: onErr,
   });
 
@@ -111,128 +186,302 @@ export default function LivePage() {
       <PageHeader
         title={t('title')}
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <select className={SEL} value={eid} onChange={(e) => setEventId(e.target.value)}>
-              {events?.map((ev) => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+              {events?.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.name}
+                </option>
+              ))}
             </select>
-            <select className={SEL} value={mid} onChange={(e) => setMatId(e.target.value)}>
-              {mats?.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            <select
+              className={SEL}
+              value={selectedCategoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+            >
+              {(data?.categories ?? []).map((category) => (
+                <option key={category.eventWeightCategoryId} value={category.eventWeightCategoryId}>
+                  {category.categoryName}
+                </option>
+              ))}
+            </select>
+            <select className={SEL} value={matId} onChange={(e) => setMatId(e.target.value)}>
+              <option value="">{t('selectMat')}</option>
+              {(mats ?? []).map((mat) => (
+                <option key={mat.id} value={mat.id}>
+                  {mat.name}
+                </option>
+              ))}
             </select>
           </div>
         }
       />
 
       {error && (
-        <InlineAlert variant="error" actions={<button onClick={() => refetch()} className="text-[13px] font-medium underline">{tCommon('retry')}</button>}>
-          {tCommon('loadError')}
-        </InlineAlert>
+        <AdminErrorAlert
+          error={error}
+          fallbackMessage={tCommon('loadError')}
+          retryLabel={tCommon('retry')}
+          onRetry={() => refetch()}
+        />
       )}
 
       {isLoading ? (
-        <SkeletonRows rows={3} cols={3} />
-      ) : !current ? (
-        <div className="space-y-4">
-          <EmptyState title={t('noFights')} />
-          {onDeck && (
-            <div className="mx-auto max-w-sm rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-center">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-warning)]">{t('onDeck')}</span>
-              <p className="mt-2 text-base font-semibold text-[var(--color-text)]">
-                {athleteName(onDeck.redAthlete)} <span className="text-[var(--color-text-muted)]">vs</span> {athleteName(onDeck.blueAthlete)}
-              </p>
-              <PrimaryButton className="mt-4" onClick={() => stateMut.mutate({ id: onDeck.id, to: 'IN_PROGRESS' })}>{t('startFight')}</PrimaryButton>
-            </div>
-          )}
-          {!onDeck && nextUp.length > 0 && (
-            <div className="text-center">
-              <SecondaryButton onClick={() => stateMut.mutate({ id: nextUp[0].id, to: 'ON_DECK' })}>{t('setOnDeck')}</SecondaryButton>
-            </div>
-          )}
-        </div>
+        <SkeletonRows rows={4} cols={3} />
+      ) : !board ? (
+        <EmptyState title={t('noFights')} />
       ) : (
         <>
-          <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-            <div className="mb-1 flex items-center gap-2">
-              <StatusChip status={current.status} label={tFight(current.status)} domain="fight" />
-              {current.categoryLabel && <span className="text-[12px] text-[var(--color-text-muted)]">{current.categoryLabel}</span>}
+          <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[18px] font-semibold text-[var(--color-text)]">{board.categoryName}</p>
+                <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+                  {board.ageGroupName ?? '—'}
+                </p>
+              </div>
+              <span className="rounded-[var(--radius-pill)] border border-[var(--color-border)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-text)]">
+                {tBrackets(`format.${board.competitionFormat}`)}
+              </span>
             </div>
-            {/* Round duration badge — sourced from fight.roundDurationSeconds */}
-            {current.roundDurationSeconds && (
-              <p className="mb-1 text-center text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-                Round {current.roundDurationSeconds / 60}min
-              </p>
+            <div className="mt-3 grid gap-2 text-[12px] sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-[var(--radius-input)] bg-[var(--color-surface-alt)] px-3 py-2">
+                {t('athletes')}: {board.athleteCount}
+              </div>
+              <div className="rounded-[var(--radius-input)] bg-[var(--color-surface-alt)] px-3 py-2">
+                {t('progress')}: {board.completedFights}/{board.totalFights}
+              </div>
+              <div className="rounded-[var(--radius-input)] bg-[var(--color-surface-alt)] px-3 py-2">
+                {t('currentStatus')}: {t(`completionState.${board.completionState}`)}
+              </div>
+              <div className="rounded-[var(--radius-input)] bg-[var(--color-surface-alt)] px-3 py-2">
+                {t('needsReview')}: {board.needsReview ? t('needsReviewYes') : t('needsReviewNo')}
+              </div>
+            </div>
+            {board.needsReview && board.issues.length > 0 && (
+              <div className="mt-3 rounded-[var(--radius-input)] border border-red-500/30 bg-red-500/10 p-3 text-[12px] text-red-200">
+                <p className="font-semibold">{t('issues')}</p>
+                <p className="mt-1">{board.issues.map((issue) => issue.code).join(', ')}</p>
+              </div>
             )}
-            <div className="my-4 flex flex-col items-center gap-2 sm:flex-row sm:justify-between sm:gap-4">
-              <p className="text-xl font-bold text-red-400 sm:text-2xl">{athleteName(current.redAthlete)}</p>
-              <div className="text-center">
-                <p className="font-mono text-4xl font-bold text-[var(--color-text)] sm:text-5xl">{timerDisplay}</p>
-                {current.roundDurationSeconds && (
-                  <p className="mt-0.5 font-mono text-[13px] text-[var(--color-text-muted)]">
-                    / {String(Math.floor(current.roundDurationSeconds / 60)).padStart(2, '0')}:{String(current.roundDurationSeconds % 60).padStart(2, '0')}
+          </section>
+
+          <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              {t('currentFight')}
+            </p>
+            {!currentFight ? (
+              <p className="mt-2 text-[14px] text-[var(--color-text-muted)]">{t('noFights')}</p>
+            ) : (
+              <>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <StatusChip
+                    status={currentFight.status}
+                    label={tFight(currentFight.status)}
+                    domain="fight"
+                  />
+                  <span className="text-[12px] text-[var(--color-text-muted)]">
+                    #{currentFight.scheduleOrder ?? currentFight.boutNo} ·{' '}
+                    {currentFight.bracketRoundLabel ?? currentFight.stageLabel}
+                  </span>
+                </div>
+                <div className="my-4 flex flex-col items-center gap-2 sm:flex-row sm:justify-between sm:gap-4">
+                  <p className="text-xl font-bold text-red-400 sm:text-2xl">
+                    {fightParticipantName(currentFight, 'red')}
                   </p>
-                )}
-              </div>
-              <p className="text-xl font-bold text-blue-400 sm:text-2xl">{athleteName(current.blueAthlete)}</p>
-            </div>
-            <div className="flex flex-wrap justify-center gap-2">
-              {current.status === 'IN_PROGRESS' ? (
-                <button
-                  className={`${BTN} bg-amber-600 text-white hover:bg-amber-700`}
-                  onClick={() => timerMut.mutate({ id: current.id, action: 'PAUSE', expectedUpdatedAt: current.timerState?.updatedAt ?? null })}
-                >
-                  {t('pause')}
-                </button>
-              ) : (
-                <button
-                  className={`${BTN} bg-emerald-600 text-white hover:bg-emerald-700`}
-                  onClick={() =>
-                    timerMut.mutate({
-                      id: current.id,
-                      action: current.timerState?.state === 'PAUSED' ? 'RESUME' : 'START',
-                      expectedUpdatedAt: current.timerState?.updatedAt ?? null,
-                    })
-                  }
-                >
-                  {current.timerState?.state === 'PAUSED' ? t('resume') : t('start')}
-                </button>
-              )}
-              <SecondaryButton
-                onClick={() => timerMut.mutate({ id: current.id, action: 'RESET', expectedUpdatedAt: current.timerState?.updatedAt ?? null })}
-              >
-                {t('reset')}
-              </SecondaryButton>
-              <PrimaryButton onClick={() => { setWinner('RED'); setMethod('POINTS'); setNotes(''); setResultOpen(true); }}>{t('setResult')}</PrimaryButton>
-              <SecondaryButton onClick={() => stateMut.mutate({ id: current.id, to: 'COMPLETE' })}>{t('complete')}</SecondaryButton>
-            </div>
-          </div>
-          {onDeck && (
-            <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-warning)]">{t('onDeck')}</span>
-              <p className="mt-1 text-[13px] text-[var(--color-text)]">{athleteName(onDeck.redAthlete)} vs {athleteName(onDeck.blueAthlete)}</p>
-            </div>
-          )}
-          {nextUp.length > 0 && (
-            <div>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">{t('next')}</p>
-              <div className="space-y-2">
-                {nextUp.map((f) => (
-                  <div key={f.id} className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-[13px] text-[var(--color-text)]">
-                    {athleteName(f.redAthlete)} vs {athleteName(f.blueAthlete)}
+                  <div className="text-center">
+                    <p className="font-mono text-4xl font-bold text-[var(--color-text)] sm:text-5xl">
+                      {timerDisplay}
+                    </p>
                   </div>
-                ))}
+                  <p className="text-xl font-bold text-blue-400 sm:text-2xl">
+                    {fightParticipantName(currentFight, 'blue')}
+                  </p>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {currentFight.status === 'QUEUED' && (
+                    <SecondaryButton
+                      onClick={() => stateMut.mutate({ id: currentFight.id, to: 'ON_DECK' })}
+                    >
+                      {t('setOnDeck')}
+                    </SecondaryButton>
+                  )}
+                  {currentFight.status === 'ON_DECK' && (
+                    <PrimaryButton
+                      onClick={() => stateMut.mutate({ id: currentFight.id, to: 'IN_PROGRESS' })}
+                    >
+                      {t('startFight')}
+                    </PrimaryButton>
+                  )}
+                  {currentFight.status === 'IN_PROGRESS' && (
+                    <>
+                      {currentFight.timerState?.state === 'RUNNING' ? (
+                        <button
+                          className={`${BTN} bg-amber-600 text-white hover:bg-amber-700`}
+                          onClick={() =>
+                            timerMut.mutate({
+                              id: currentFight.id,
+                              action: 'PAUSE',
+                              expectedUpdatedAt: currentFight.timerState?.updatedAt ?? null,
+                            })
+                          }
+                        >
+                          {t('pause')}
+                        </button>
+                      ) : (
+                        <button
+                          className={`${BTN} bg-emerald-600 text-white hover:bg-emerald-700`}
+                          onClick={() =>
+                            timerMut.mutate({
+                              id: currentFight.id,
+                              action: 'START',
+                              expectedUpdatedAt: currentFight.timerState?.updatedAt ?? null,
+                            })
+                          }
+                        >
+                          {t('start')}
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {currentFight.status === 'PAUSED' && (
+                    <button
+                      className={`${BTN} bg-emerald-600 text-white hover:bg-emerald-700`}
+                      onClick={() =>
+                        timerMut.mutate({
+                          id: currentFight.id,
+                          action: 'RESUME',
+                          expectedUpdatedAt: currentFight.timerState?.updatedAt ?? null,
+                        })
+                      }
+                    >
+                      {t('resume')}
+                    </button>
+                  )}
+                  {(currentFight.status === 'IN_PROGRESS' || currentFight.status === 'PAUSED') && (
+                    <SecondaryButton
+                      onClick={() =>
+                        timerMut.mutate({
+                          id: currentFight.id,
+                          action: 'RESET',
+                          expectedUpdatedAt: currentFight.timerState?.updatedAt ?? null,
+                        })
+                      }
+                    >
+                      {t('reset')}
+                    </SecondaryButton>
+                  )}
+                  <PrimaryButton
+                    disabled={!currentFight.isPlayable}
+                    onClick={() => {
+                      setWinner('RED');
+                      setMethod('POINTS');
+                      setNotes('');
+                      setResultOpen(true);
+                    }}
+                  >
+                    {t('setResult')}
+                  </PrimaryButton>
+                </div>
+              </>
+            )}
+          </section>
+
+          <section className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              {t('onDeck')}
+            </p>
+            {!onDeckFight ? (
+              <p className="text-[13px] text-[var(--color-text-muted)]">{t('noUpcoming')}</p>
+            ) : (
+              <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusChip status={onDeckFight.status} label={tFight(onDeckFight.status)} domain="fight" />
+                  <span className="text-[12px] text-[var(--color-text-muted)]">
+                    #{onDeckFight.scheduleOrder ?? onDeckFight.boutNo} ·{' '}
+                    {onDeckFight.bracketRoundLabel ?? onDeckFight.stageLabel}
+                  </span>
+                </div>
+                <p className="mt-1 text-[13px] text-[var(--color-text)]">
+                  {onDeckFight.red.name} vs {onDeckFight.blue.name}
+                </p>
               </div>
+            )}
+          </section>
+
+          <section className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              {t('next')}
+            </p>
+            <div className="space-y-2">
+              {board.queue.map((fight) => (
+                <div
+                  key={fight.id}
+                  className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusChip status={fight.status} label={tFight(fight.status)} domain="fight" />
+                    <span className="text-[12px] text-[var(--color-text-muted)]">
+                      #{fight.scheduleOrder ?? fight.boutNo} ·{' '}
+                      {fight.bracketRoundLabel ?? fight.stageLabel}
+                    </span>
+                    {!fight.isPlayable && (
+                      <span className="rounded-[var(--radius-pill)] bg-[var(--color-surface-alt)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                        waiting
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[13px] text-[var(--color-text)]">
+                    {fight.red.name} vs {fight.blue.name}
+                  </p>
+                </div>
+              ))}
+              {board.queue.length === 0 && (
+                <p className="text-[13px] text-[var(--color-text-muted)]">{t('noUpcoming')}</p>
+              )}
             </div>
-          )}
+          </section>
+
+          <section className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              {t('completedHistory')}
+            </p>
+            <div className="space-y-2">
+              {board.completed.map((fight) => (
+                <div
+                  key={fight.id}
+                  className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+                >
+                  <p className="text-[12px] text-[var(--color-text-muted)]">
+                    #{fight.scheduleOrder ?? fight.boutNo} ·{' '}
+                    {fight.bracketRoundLabel ?? fight.stageLabel}
+                  </p>
+                  <p className="text-[13px] text-[var(--color-text)]">
+                    {fight.red.name} vs {fight.blue.name}
+                  </p>
+                </div>
+              ))}
+              {board.completed.length === 0 && (
+                <p className="text-[13px] text-[var(--color-text-muted)]">{t('noCompleted')}</p>
+              )}
+            </div>
+          </section>
         </>
       )}
 
       <Modal
-        open={resultOpen && !!current}
+        open={resultOpen && !!currentFight}
         onClose={() => setResultOpen(false)}
         title={t('setResult')}
         footer={
           <>
-            <SecondaryButton onClick={() => setResultOpen(false)}>{tCommon('cancel')}</SecondaryButton>
-            <PrimaryButton disabled={resultMut.isPending} onClick={() => current && resultMut.mutate(current.id)}>
+            <SecondaryButton onClick={() => setResultOpen(false)}>
+              {tCommon('cancel')}
+            </SecondaryButton>
+            <PrimaryButton
+              disabled={resultMut.isPending}
+              onClick={() => currentFight && resultMut.mutate(currentFight.id)}
+            >
               {resultMut.isPending ? tCommon('loading') : t('confirm')}
             </PrimaryButton>
           </>
@@ -240,30 +489,48 @@ export default function LivePage() {
       >
         <div className="space-y-4">
           <div>
-            <label className="mb-2 block text-[13px] text-[var(--color-text-muted)]">{t('winner')}</label>
+            <label className="mb-2 block text-[13px] text-[var(--color-text-muted)]">
+              {t('winner')}
+            </label>
             <div className="flex gap-2">
               {(['RED', 'BLUE'] as const).map((side) => (
                 <button
                   key={side}
                   type="button"
                   onClick={() => setWinner(side)}
-                  className={`flex-1 rounded-[var(--radius-input)] border py-2.5 text-sm font-semibold transition ${winner === side ? `${side === 'RED' ? 'border-red-500 bg-red-600' : 'border-blue-500 bg-blue-600'} text-white` : 'border-[var(--color-border)] text-[var(--color-text)]'}`}
+                  className={`flex-1 rounded-[var(--radius-input)] border py-2.5 text-sm font-semibold transition ${
+                    winner === side
+                      ? `${
+                          side === 'RED'
+                            ? 'border-red-500 bg-red-600'
+                            : 'border-blue-500 bg-blue-600'
+                        } text-white`
+                      : 'border-[var(--color-border)] text-[var(--color-text)]'
+                  }`}
                 >
-                  {t(side === 'RED' ? 'red' : 'blue')}
+                  {side === 'RED'
+                    ? currentFight?.red.name ?? t('red')
+                    : currentFight?.blue.name ?? t('blue')}
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">{t('method')}</label>
+            <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">
+              {t('method')}
+            </label>
             <select className={`${SEL} w-full`} value={method} onChange={(e) => setMethod(e.target.value)}>
               {(['POINTS', 'KO', 'DQ', 'WO'] as const).map((m) => (
-                <option key={m} value={m}>{t(`methods.${m}`)}</option>
+                <option key={m} value={m}>
+                  {t(`methods.${m}`)}
+                </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">{t('notes')}</label>
+            <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">
+              {t('notes')}
+            </label>
             <input className={INPUT} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>

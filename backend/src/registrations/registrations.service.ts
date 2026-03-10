@@ -1,8 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma, Registration, RegistrationStatus } from '@prisma/client';
+import type {
+  Athlete,
+  Event,
+  Prisma,
+  Registration,
+  RegistrationStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { isRegistrationOpen } from '../events/event-dates.helper';
+import {
+  isEventReadOnly,
+  isRegistrationMutableLifecycle,
+} from '../events/lifecycle-rules';
 
 const ALLOWED_STATUS_TRANSITIONS: Record<
   RegistrationStatus,
@@ -21,6 +31,121 @@ export class RegistrationsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  private assertEventAllowsRegistrationChanges(
+    event: Event,
+    input: {
+      actorClubId?: string | null;
+      override?: boolean;
+      reason?: string | null;
+    },
+  ): void {
+    const isCoach = input.actorClubId != null;
+    const override = input.override ?? false;
+    const reason = input.reason ?? null;
+
+    if (isCoach) {
+      if (event.lifecycle !== 'REG_OPEN' || !isRegistrationOpen(event)) {
+        throw new Error('REGISTRATION_CLOSED');
+      }
+      return;
+    }
+
+    const mutable = isRegistrationMutableLifecycle(event.lifecycle);
+    const readOnly = isEventReadOnly(event.lifecycle);
+
+    if ((readOnly || !mutable) && !override) {
+      throw new Error(readOnly ? 'EVENT_READ_ONLY' : 'REGISTRATION_LOCKED');
+    }
+
+    if ((readOnly || !mutable || override) && !reason) {
+      throw new Error('OVERRIDE_REASON_REQUIRED');
+    }
+  }
+
+  private computeAgeOnDate(dateOfBirth: Date, onDate: Date): number {
+    let age = onDate.getUTCFullYear() - dateOfBirth.getUTCFullYear();
+    const monthDiff = onDate.getUTCMonth() - dateOfBirth.getUTCMonth();
+    const dayDiff = onDate.getUTCDate() - dateOfBirth.getUTCDate();
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+      age--;
+    }
+    return age;
+  }
+
+  private assertAthleteEligibleForCategory(
+    athlete: Athlete,
+    event: Event,
+    category: {
+      eventAgeGroup: {
+        rulesetAgeGroup: {
+          minAge: number | null;
+          maxAge: number | null;
+          sex: Athlete['sex'];
+        };
+      };
+    },
+  ): void {
+    const ageGroup = category.eventAgeGroup.rulesetAgeGroup;
+    const athleteAge = this.computeAgeOnDate(
+      athlete.dateOfBirth,
+      event.competitionStartDate,
+    );
+
+    if (ageGroup.minAge != null && athleteAge < ageGroup.minAge) {
+      throw new Error('ATHLETE_OUT_OF_AGE_GROUP');
+    }
+    if (ageGroup.maxAge != null && athleteAge > ageGroup.maxAge) {
+      throw new Error('ATHLETE_OUT_OF_AGE_GROUP');
+    }
+
+    if (ageGroup.sex && athlete.sex && ageGroup.sex !== athlete.sex) {
+      throw new Error('ATHLETE_SEX_MISMATCH_FOR_CATEGORY');
+    }
+  }
+
+  private async resolveEventCategoryForRegistration(input: {
+    organisationId: string;
+    eventId: string;
+    eventWeightCategoryId?: string | null;
+    athlete: Athlete;
+    event: Event;
+  }): Promise<{ eventWeightCategoryId: string | null; categoryCode: string }> {
+    const hasConfiguredCategories = await this.prisma.eventWeightCategory.count({
+      where: {
+        eventAgeGroup: { eventId: input.eventId },
+      },
+    });
+
+    if (hasConfiguredCategories === 0) {
+      throw new Error('EVENT_CATEGORIES_NOT_CONFIGURED');
+    }
+
+    const eventWeightCategoryId = input.eventWeightCategoryId ?? null;
+    if (eventWeightCategoryId) {
+      const category = await this.prisma.eventWeightCategory.findFirst({
+        where: {
+          id: eventWeightCategoryId,
+          eventAgeGroup: { eventId: input.eventId },
+        },
+        include: {
+          rulesetWeightCategory: true,
+          eventAgeGroup: {
+            include: { rulesetAgeGroup: true },
+          },
+        },
+      });
+      if (!category) throw new Error('INVALID_CATEGORY_FOR_EVENT');
+
+      this.assertAthleteEligibleForCategory(input.athlete, input.event, category);
+      return {
+        eventWeightCategoryId: category.id,
+        categoryCode: category.rulesetWeightCategory.name,
+      };
+    }
+
+    throw new Error('EVENT_WEIGHT_CATEGORY_REQUIRED');
+  }
 
   async list(params: {
     organisationId: string;
@@ -65,6 +190,27 @@ export class RegistrationsService {
           },
         },
         club: { select: { id: true, name: true } },
+        eventWeightCategory: {
+          include: {
+            rulesetWeightCategory: {
+              select: { name: true, minWeightKgExcl: true, maxWeightKgIncl: true },
+            },
+            eventAgeGroup: {
+              include: {
+                rulesetAgeGroup: {
+                  select: { id: true, name: true, minAge: true, maxAge: true, sex: true },
+                },
+              },
+            },
+          },
+        },
+        registeredEventWeightCategory: {
+          include: {
+            rulesetWeightCategory: {
+              select: { name: true, minWeightKgExcl: true, maxWeightKgIncl: true },
+            },
+          },
+        },
       },
       orderBy: [{ categoryCode: 'asc' }, { createdAt: 'asc' }],
     });
@@ -75,10 +221,11 @@ export class RegistrationsService {
     actorUserId: string;
     eventId: string;
     athleteId: string;
-    categoryCode?: string;
     eventWeightCategoryId?: string | null;
     notes?: string | null;
     actorClubId?: string | null;
+    override?: boolean;
+    reason?: string | null;
   }): Promise<Registration> {
     const athlete = await this.prisma.athlete.findFirst({
       where: { id: input.athleteId, organisationId: input.organisationId },
@@ -93,51 +240,41 @@ export class RegistrationsService {
       where: { id: input.eventId, organisationId: input.organisationId },
     });
     if (!event) throw new Error('EVENT_NOT_FOUND');
+    this.assertEventAllowsRegistrationChanges(event, {
+      actorClubId: input.actorClubId,
+      override: input.override,
+      reason: input.reason ?? null,
+    });
 
-    // Coaches are subject to the online registration window. Admins (actorClubId == null/undefined) bypass.
-    if (input.actorClubId != null && !isRegistrationOpen(event)) {
-      throw new Error('REGISTRATION_CLOSED');
-    }
-
-    // Validate eventWeightCategoryId and derive categoryCode from it
-    let categoryCode = input.categoryCode ?? '';
-    const eventWeightCategoryId = input.eventWeightCategoryId ?? null;
-
-    if (eventWeightCategoryId) {
-      const ewc = await this.prisma.eventWeightCategory.findFirst({
-        where: {
-          id: eventWeightCategoryId,
-          eventAgeGroup: { eventId: input.eventId },
-        },
-        include: { rulesetWeightCategory: true },
-      });
-      if (!ewc) throw new Error('INVALID_CATEGORY_FOR_EVENT');
-      categoryCode = ewc.rulesetWeightCategory.name;
-    } else if (!categoryCode) {
-      throw new Error('CATEGORY_REQUIRED');
-    }
-
-    const registration = await this.prisma.registration.upsert({
+    const existing = await this.prisma.registration.findFirst({
       where: {
-        eventId_athleteId: {
-          eventId: input.eventId,
-          athleteId: input.athleteId,
-        },
+        organisationId: input.organisationId,
+        eventId: input.eventId,
+        athleteId: input.athleteId,
       },
-      create: {
+    });
+    if (existing) throw new Error('REGISTRATION_ALREADY_EXISTS');
+
+    const resolvedCategory = await this.resolveEventCategoryForRegistration({
+      organisationId: input.organisationId,
+      eventId: input.eventId,
+      eventWeightCategoryId: input.eventWeightCategoryId ?? null,
+      athlete,
+      event,
+    });
+
+    const registration = await this.prisma.registration.create({
+      data: {
         organisationId: input.organisationId,
         eventId: input.eventId,
         athleteId: input.athleteId,
         clubId: athlete.clubId,
-        categoryCode,
-        eventWeightCategoryId,
+        categoryCode: resolvedCategory.categoryCode,
+        eventWeightCategoryId: resolvedCategory.eventWeightCategoryId,
+        registeredEventWeightCategoryId: resolvedCategory.eventWeightCategoryId,
         notes: input.notes ?? null,
         status: 'PENDING',
-      },
-      update: {
-        categoryCode,
-        eventWeightCategoryId,
-        notes: input.notes ?? null,
+        weighInStatus: 'NOT_WEIGHED',
       },
     });
 
@@ -145,10 +282,13 @@ export class RegistrationsService {
       organisationId: input.organisationId,
       eventId: input.eventId,
       actorUserId: input.actorUserId,
-      action: 'REGISTRATION_UPSERTED',
+      action: 'REGISTRATION_CREATED',
       entityType: 'registration',
       entityId: registration.id,
+      before: null,
       after: registration as unknown as Prisma.JsonValue,
+      reason: input.reason ?? null,
+      override: input.override ?? false,
     });
 
     return registration;
@@ -165,6 +305,7 @@ export class RegistrationsService {
   }): Promise<Registration> {
     const existing = await this.prisma.registration.findFirst({
       where: { id: input.registrationId, organisationId: input.organisationId },
+      include: { event: true },
     });
     if (!existing) throw new Error('REGISTRATION_NOT_FOUND');
 
@@ -182,14 +323,35 @@ export class RegistrationsService {
       throw new Error('COACH_CANNOT_SET_STATUS');
     }
 
+    if (input.actorClubId && !isRegistrationMutableLifecycle(existing.event.lifecycle)) {
+      throw new Error('REGISTRATION_LOCKED');
+    }
+    if (isEventReadOnly(existing.event.lifecycle) && !input.override) {
+      throw new Error('EVENT_READ_ONLY');
+    }
+    if (!isRegistrationMutableLifecycle(existing.event.lifecycle) && !input.override) {
+      throw new Error('REGISTRATION_LOCKED');
+    }
+
     const allowed = ALLOWED_STATUS_TRANSITIONS[existing.status] ?? [];
     const isDirect = allowed.includes(input.newStatus);
+
+    if (!isRegistrationMutableLifecycle(existing.event.lifecycle) && input.actorClubId) {
+      throw new Error('COACH_CANNOT_OVERRIDE');
+    }
 
     if (!isDirect) {
       if (!input.override) throw new Error('INVALID_STATUS_TRANSITION');
       if (!input.reason) throw new Error('OVERRIDE_REASON_REQUIRED');
       // Coach cannot override
       if (input.actorClubId) throw new Error('COACH_CANNOT_OVERRIDE');
+    }
+
+    if (
+      !isRegistrationMutableLifecycle(existing.event.lifecycle) &&
+      !input.reason
+    ) {
+      throw new Error('OVERRIDE_REASON_REQUIRED');
     }
 
     const updated = await this.prisma.registration.update({
@@ -199,15 +361,100 @@ export class RegistrationsService {
 
     await this.audit.write({
       organisationId: input.organisationId,
-      eventId: existing.eventId,
+      eventId: existing.event.id,
       actorUserId: input.actorUserId,
       action: 'REGISTRATION_STATUS_CHANGED',
       entityType: 'registration',
       entityId: input.registrationId,
+      before: {
+        id: existing.id,
+        status: existing.status,
+      } as unknown as Prisma.JsonValue,
+      after: updated as unknown as Prisma.JsonValue,
+      reason: input.reason ?? null,
+      override:
+        !isDirect || !isRegistrationMutableLifecycle(existing.event.lifecycle),
+    });
+
+    return updated;
+  }
+
+  async setCategory(input: {
+    organisationId: string;
+    registrationId: string;
+    eventWeightCategoryId: string;
+    actorUserId: string;
+    actorClubId?: string | null;
+    override?: boolean;
+    reason?: string | null;
+  }): Promise<Registration> {
+    const existing = await this.prisma.registration.findFirst({
+      where: {
+        id: input.registrationId,
+        organisationId: input.organisationId,
+      },
+      include: {
+        event: true,
+        athlete: true,
+      },
+    });
+    if (!existing) throw new Error('REGISTRATION_NOT_FOUND');
+
+    if (input.actorClubId && existing.clubId !== input.actorClubId) {
+      throw new Error('REGISTRATION_NOT_IN_COACH_CLUB');
+    }
+    if (input.actorClubId) {
+      throw new Error('COACH_CANNOT_SET_CATEGORY');
+    }
+
+    const lifecycleMutable = isRegistrationMutableLifecycle(
+      existing.event.lifecycle,
+    );
+    const requiresOverride = !lifecycleMutable || isEventReadOnly(existing.event.lifecycle);
+    if (requiresOverride && !input.override) {
+      throw new Error(
+        isEventReadOnly(existing.event.lifecycle)
+          ? 'EVENT_READ_ONLY'
+          : 'REGISTRATION_LOCKED',
+      );
+    }
+    if ((requiresOverride || input.override) && !input.reason) {
+      throw new Error('OVERRIDE_REASON_REQUIRED');
+    }
+
+    const resolvedCategory = await this.resolveEventCategoryForRegistration({
+      organisationId: input.organisationId,
+      eventId: existing.eventId,
+      eventWeightCategoryId: input.eventWeightCategoryId,
+      athlete: existing.athlete,
+      event: existing.event,
+    });
+
+    const updated = await this.prisma.registration.update({
+      where: { id: existing.id },
+      data: {
+        categoryCode: resolvedCategory.categoryCode,
+        eventWeightCategoryId: resolvedCategory.eventWeightCategoryId,
+        registeredEventWeightCategoryId: requiresOverride
+          ? existing.registeredEventWeightCategoryId ?? existing.eventWeightCategoryId
+          : resolvedCategory.eventWeightCategoryId,
+        weighInStatus: lifecycleMutable ? 'NOT_WEIGHED' : existing.weighInStatus,
+      },
+    });
+
+    await this.audit.write({
+      organisationId: input.organisationId,
+      eventId: existing.eventId,
+      actorUserId: input.actorUserId,
+      action: requiresOverride
+        ? 'REGISTRATION_CATEGORY_OVERRIDE'
+        : 'REGISTRATION_CATEGORY_UPDATED',
+      entityType: 'registration',
+      entityId: existing.id,
       before: existing as unknown as Prisma.JsonValue,
       after: updated as unknown as Prisma.JsonValue,
       reason: input.reason ?? null,
-      override: !isDirect,
+      override: requiresOverride || (input.override ?? false),
     });
 
     return updated;

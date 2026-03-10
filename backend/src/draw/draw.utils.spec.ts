@@ -78,6 +78,15 @@ describe('buildSingleElimBracket', () => {
     );
   });
 
+  it('distributes byes in 5-athlete bracket so round 1 has no double-bye fight', () => {
+    const bouts = buildSingleElimBracket(['a1', 'a2', 'a3', 'a4', 'a5']);
+    const round1 = bouts.filter((b) => b.round === 1);
+    expect(round1).toHaveLength(4);
+    expect(round1.some((b) => b.redId === null && b.blueId === null)).toBe(
+      false,
+    );
+  });
+
   it('assigns correct boutNo within each round', () => {
     const bouts = buildSingleElimBracket(['a1', 'a2', 'a3', 'a4']);
     const round1 = bouts

@@ -1,271 +1,190 @@
 'use client';
 
-import { useState } from 'react';
-import { useTranslations, useLocale } from 'next-intl';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { type ReactNode, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { useQuery } from '@tanstack/react-query';
+import { ChevronRight } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
-import { SecondaryButton } from '@/components/ui/SecondaryButton';
-import { Modal } from '@/components/ui/Modal';
-import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { useToast } from '@/components/ui/Toast';
-import { ApiError, apiGet, apiPost } from '@/lib/api/client';
-import type { UserRow } from '@/types/api';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
+import { UserStatusBadge } from '@/components/admin/users/UserStatusBadge';
+import { UserDetailsDrawer } from '@/components/admin/users/UserDetailsDrawer';
+import { apiGet } from '@/lib/api/client';
+import { useAdminUsers } from '@/hooks/useAdminUsers';
+import { CreateUserModal } from './CreateUserModal';
 
-type UserRole = 'coach' | 'athlete';
-
-const INPUT_CLASS =
-  'h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
+type AuthMe = {
+  userId: string | null;
+};
 
 export default function UsersPage() {
   const t = useTranslations('admin.users');
   const tCommon = useTranslations('common');
   const locale = useLocale();
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
   const [createOpen, setCreateOpen] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [role, setRole] = useState<UserRole>('coach');
-  const [isPending, setIsPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
-  const { data: users, isLoading, error: loadError, refetch } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => apiGet<UserRow[]>('/api/users'),
+  const usersQuery = useAdminUsers();
+  const meQuery = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: () => apiGet<AuthMe>('/api/auth/me'),
   });
-
-  const createMutation = useMutation({
-    mutationFn: () =>
-      apiPost<{ ok: boolean; id: string }>('/api/auth/signup', {
-        email: email.trim(),
-        password,
-        displayName: displayName.trim(),
-        role,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      toast(tCommon('saveSuccess'));
-      setCreateOpen(false);
-      setEmail('');
-      setPassword('');
-      setDisplayName('');
-      setRole('coach');
-      setError(null);
-    },
-    onError: (e) => {
-      if (e instanceof ApiError) {
-        if (e.code === 'EMAIL_ALREADY_IN_USE') {
-          setError(t('errorEmailInUse'));
-          return;
-        }
-        if (e.status === 403) {
-          toast(t('errorForbidden'), 'error');
-          return;
-        }
-      }
-      toast(tCommon('saveFailed'), 'error');
-    },
-  });
-
-  async function handleCreate() {
-    setError(null);
-    createMutation.mutate();
-  }
-
-  const isValid = email.trim().length > 0 && password.length >= 6 && displayName.trim().length > 0;
-  const list = users ?? [];
+  const list = usersQuery.data ?? [];
 
   function formatDate(value: string) {
-    try {
-      const d = new Date(value);
-      return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString(locale);
-    } catch {
-      return '—';
-    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString(locale);
   }
 
-  function roleLabel(r: string) {
-    if (r === 'admin') return t('roleAdmin');
-    if (r === 'coach') return t('roleCoach');
-    if (r === 'athlete') return t('roleAthlete');
-    return r;
+  function roleLabel(role: string) {
+    return role === 'admin' ? t('roleAdmin') : t('roleCoach');
+  }
+
+  function statusLabel(status: 'ACTIVE' | 'DQ' | 'ARCHIVED' | 'INACTIVE') {
+    if (status === 'DQ') return t('details.statusDq');
+    if (status === 'ARCHIVED') return t('details.statusArchived');
+    if (status === 'INACTIVE') return t('details.statusInactive');
+    return t('details.statusActive');
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={t('title')}
-        actions={
-          <PrimaryButton onClick={() => setCreateOpen(true)}>
-            {t('new')}
-          </PrimaryButton>
-        }
+        actions={<PrimaryButton onClick={() => setCreateOpen(true)}>{t('new')}</PrimaryButton>}
       />
 
-      {loadError && (
-        <InlineAlert
-          variant="error"
-          actions={
-            <button onClick={() => refetch()} className="text-[13px] font-medium underline">
-              {tCommon('retry')}
-            </button>
-          }
-        >
-          {tCommon('loadError')}
-        </InlineAlert>
+      {usersQuery.error && (
+        <AdminErrorAlert
+          error={usersQuery.error}
+          fallbackMessage={tCommon('loadError')}
+          retryLabel={tCommon('retry')}
+          onRetry={() => usersQuery.refetch()}
+        />
       )}
 
-      {isLoading ? (
-        <SkeletonRows rows={5} cols={5} />
+      {usersQuery.isLoading ? (
+        <SkeletonRows rows={5} cols={6} />
       ) : list.length === 0 ? (
-        <EmptyState
-          title={t('emptyTitle')}
-          description={t('emptyDescription')}
-        />
+        <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
       ) : (
         <>
           <div className="hidden overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] sm:block">
             <table className="min-w-full text-[13px]">
               <thead>
                 <tr className="bg-[var(--color-surface-alt)]">
-                  <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">
-                    {t('columns.displayName')}
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">
-                    {t('columns.email')}
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">
-                    {t('columns.role')}
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">
-                    {t('columns.status')}
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">
-                    {t('columns.createdAt')}
-                  </th>
+                  <HeaderCell>{t('columns.displayName')}</HeaderCell>
+                  <HeaderCell>{t('columns.email')}</HeaderCell>
+                  <HeaderCell>{t('columns.role')}</HeaderCell>
+                  <HeaderCell>{t('columns.club')}</HeaderCell>
+                  <HeaderCell>{t('columns.status')}</HeaderCell>
+                  <HeaderCell>{t('columns.createdAt')}</HeaderCell>
+                  <HeaderCell />
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
-                {list.map((u) => (
-                  <tr key={u.id} className="bg-[var(--color-surface)]">
-                    <td className="px-4 py-3 font-medium text-[var(--color-text)]">
-                      {u.displayName || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--color-text-muted)]">{u.email}</td>
-                    <td className="px-4 py-3 text-[var(--color-text-muted)]">
-                      {roleLabel(u.role)}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--color-text-muted)]">
-                      {u.isActive ? t('statusActive') : t('statusInactive')}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--color-text-muted)]">
-                      {formatDate(u.createdAt)}
-                    </td>
+                {list.map((user) => (
+                  <tr
+                    key={user.id}
+                    tabIndex={0}
+                    className="cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40"
+                    onClick={() => setSelectedUserId(user.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelectedUserId(user.id);
+                      }
+                    }}
+                  >
+                    <Cell strong>{user.displayName || '—'}</Cell>
+                    <Cell>{user.email}</Cell>
+                    <Cell>{roleLabel(user.role)}</Cell>
+                    <Cell>{user.club?.name ?? '—'}</Cell>
+                    <Cell>
+                      <UserStatusBadge
+                        status={user.status}
+                        label={statusLabel(user.status)}
+                      />
+                    </Cell>
+                    <Cell>{formatDate(user.createdAt)}</Cell>
+                    <Cell align="right">
+                      <ChevronRight className="ml-auto h-4 w-4 text-[var(--color-text-muted)]" />
+                    </Cell>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <div className="sm:hidden space-y-2">
-            {list.map((u) => (
-              <div
-                key={u.id}
-                className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+          <div className="space-y-2 sm:hidden">
+            {list.map((user) => (
+              <button
+                key={user.id}
+                type="button"
+                className="w-full rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition hover:bg-[var(--color-surface-alt)]"
+                onClick={() => setSelectedUserId(user.id)}
               >
-                <p className="font-medium text-[var(--color-text)]">{u.displayName || '—'}</p>
-                <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{u.email}</p>
-                <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-                  {roleLabel(u.role)} · {u.isActive ? t('statusActive') : t('statusInactive')}
-                </p>
-              </div>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-[var(--color-text)]">
+                      {user.displayName || '—'}
+                    </p>
+                    <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+                      {user.email}
+                    </p>
+                    <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+                      {roleLabel(user.role)} · {user.club?.name ?? '—'}
+                    </p>
+                  </div>
+                  <UserStatusBadge
+                    status={user.status}
+                    label={statusLabel(user.status)}
+                  />
+                </div>
+              </button>
             ))}
           </div>
         </>
       )}
 
-      <Modal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        title={t('new')}
-        description={t('createDescription')}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setCreateOpen(false)}>
-              {tCommon('cancel')}
-            </SecondaryButton>
-            <PrimaryButton
-              disabled={createMutation.isPending || !isValid}
-              onClick={handleCreate}
-            >
-              {createMutation.isPending ? tCommon('loading') : tCommon('save')}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          {error && (
-            <InlineAlert variant="error">{error}</InlineAlert>
-          )}
-          <div>
-            <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">
-              {t('fieldEmail')}
-            </label>
-            <input
-              type="email"
-              className={INPUT_CLASS}
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(null); }}
-              placeholder="coach@club.ge"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">
-              {t('fieldPassword')}
-            </label>
-            <input
-              type="password"
-              className={INPUT_CLASS}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-            />
-            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-              {t('passwordHint')}
-            </p>
-          </div>
-          <div>
-            <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">
-              {t('fieldDisplayName')}
-            </label>
-            <input
-              type="text"
-              className={INPUT_CLASS}
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder={t('displayNamePlaceholder')}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">
-              {t('fieldRole')}
-            </label>
-            <select
-              className={INPUT_CLASS}
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
-            >
-              <option value="coach">{t('roleCoach')}</option>
-              <option value="athlete">{t('roleAthlete')}</option>
-            </select>
-          </div>
-        </div>
-      </Modal>
+      <CreateUserModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <UserDetailsDrawer
+        key={selectedUserId ?? 'none'}
+        userId={selectedUserId}
+        currentUserId={meQuery.data?.userId ?? null}
+        open={selectedUserId !== null}
+        onClose={() => setSelectedUserId(null)}
+      />
     </div>
+  );
+}
+
+function HeaderCell({ children }: { children?: ReactNode }) {
+  return (
+    <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">
+      {children}
+    </th>
+  );
+}
+
+function Cell({
+  children,
+  strong = false,
+  align = 'left',
+}: {
+  children: ReactNode;
+  strong?: boolean;
+  align?: 'left' | 'right';
+}) {
+  return (
+    <td
+      className={`px-4 py-3 ${
+        strong ? 'font-medium text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'
+      } ${align === 'right' ? 'text-right' : 'text-left'}`}
+    >
+      {children}
+    </td>
   );
 }

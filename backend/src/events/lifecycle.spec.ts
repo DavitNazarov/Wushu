@@ -54,9 +54,9 @@ describe('EventOpsService – transitionLifecycle', () => {
     service = module.get<EventOpsService>(EventOpsService);
   });
 
-  it('transitions REG_OPEN → WEIGHIN directly', async () => {
+  it('transitions REG_OPEN → LOCKED directly', async () => {
     const event = makeEvent({ lifecycle: 'REG_OPEN' });
-    const updated = { ...event, lifecycle: 'WEIGHIN' };
+    const updated = { ...event, lifecycle: 'LOCKED' };
     mockPrisma.event.findFirst.mockResolvedValue(event);
     mockPrisma.event.update.mockResolvedValue(updated);
 
@@ -64,10 +64,10 @@ describe('EventOpsService – transitionLifecycle', () => {
       eventId: 'evt-1',
       organisationId: 'org-1',
       actorUserId: 'user-1',
-      targetState: 'WEIGHIN',
+      targetState: 'LOCKED',
     });
 
-    expect(result.lifecycle).toBe('WEIGHIN');
+    expect(result.lifecycle).toBe('LOCKED');
     expect(mockAudit.write).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'EVENT_LIFECYCLE_TRANSITION',
@@ -161,9 +161,10 @@ describe('EventOpsService – transitionLifecycle', () => {
 
   it('all valid sequential transitions pass without override', async () => {
     const transitions: [string, string][] = [
-      ['REG_OPEN', 'WEIGHIN'],
-      ['WEIGHIN', 'LOCKED'],
-      ['LOCKED', 'DRAWN'],
+      ['REG_OPEN', 'LOCKED'],
+      ['LOCKED', 'WEIGHIN'],
+      ['WEIGHIN', 'WEIGH_IN_COMPLETED'],
+      ['WEIGH_IN_COMPLETED', 'DRAWN'],
       ['DRAWN', 'PUBLISHED'],
       ['PUBLISHED', 'LIVE'],
       ['LIVE', 'COMPLETED'],
@@ -190,5 +191,57 @@ describe('EventOpsService – transitionLifecycle', () => {
 
       expect(result.lifecycle).toBe(to);
     }
+  });
+});
+
+describe('EventOpsService – setPublished', () => {
+  let service: EventOpsService;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        EventOpsService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: AuditService, useValue: mockAudit },
+      ],
+    }).compile();
+
+    service = module.get<EventOpsService>(EventOpsService);
+  });
+
+  it('unpublishing from PUBLISHED moves lifecycle back to DRAWN', async () => {
+    const existing = makeEvent({ lifecycle: 'PUBLISHED', published: true });
+    const updated = { ...existing, lifecycle: 'DRAWN', published: false };
+    mockPrisma.event.findFirst.mockResolvedValue(existing);
+    mockPrisma.event.update.mockResolvedValue(updated);
+
+    const result = await service.setPublished('evt-1', 'org-1', false, 'user-1');
+    expect(result?.published).toBe(false);
+    expect(result?.lifecycle).toBe('DRAWN');
+    expect(mockPrisma.event.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'evt-1' },
+        data: { published: false, lifecycle: 'DRAWN' },
+      }),
+    );
+  });
+
+  it('publishing from DRAWN moves lifecycle to PUBLISHED', async () => {
+    const existing = makeEvent({ lifecycle: 'DRAWN', published: false });
+    const updated = { ...existing, lifecycle: 'PUBLISHED', published: true };
+    mockPrisma.event.findFirst.mockResolvedValue(existing);
+    mockPrisma.event.update.mockResolvedValue(updated);
+
+    const result = await service.setPublished('evt-1', 'org-1', true, 'user-1');
+    expect(result?.published).toBe(true);
+    expect(result?.lifecycle).toBe('PUBLISHED');
+    expect(mockPrisma.event.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'evt-1' },
+        data: { published: true, lifecycle: 'PUBLISHED' },
+      }),
+    );
   });
 });

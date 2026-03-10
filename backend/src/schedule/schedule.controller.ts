@@ -94,7 +94,7 @@ export class ScheduleController {
       startTimeIso: string;
       avgBoutSeconds: number;
       bufferSeconds: number;
-      restMinutes: number;
+      restMinutes?: number;
       seed?: number;
       override?: boolean;
       reason?: string;
@@ -109,7 +109,7 @@ export class ScheduleController {
         startTimeIso: body.startTimeIso,
         avgBoutSeconds: body.avgBoutSeconds ?? 180,
         bufferSeconds: body.bufferSeconds ?? 60,
-        restMinutes: body.restMinutes ?? 30,
+        restMinutes: body.restMinutes,
         seed: body.seed,
         override: body.override ?? false,
         reason: body.reason ?? null,
@@ -121,7 +121,18 @@ export class ScheduleController {
       return updates;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
-      const known = ['NO_MATS', 'NO_FIGHTS', 'INVALID_START_TIME'];
+      if (msg === 'EVENT_NOT_FOUND')
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      const known = [
+        'NO_MATS',
+        'NO_FIGHTS',
+        'NO_SCHEDULABLE_FIGHTS',
+        'INVALID_START_TIME',
+        'EVENT_NOT_READY_FOR_SCHEDULE',
+        'EVENT_READ_ONLY',
+        'OVERRIDE_REASON_REQUIRED',
+        'REST_CONSTRAINT_VIOLATION',
+      ];
       if (known.includes(msg))
         throw new HttpException(msg, HttpStatus.BAD_REQUEST);
       throw e;
@@ -162,8 +173,16 @@ export class ScheduleController {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'FIGHT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
-      if (msg === 'OVERRIDE_REASON_REQUIRED')
+      if (
+        msg === 'FIGHT_NOT_SCHEDULABLE' ||
+        msg === 'OVERRIDE_REASON_REQUIRED' ||
+        msg === 'EVENT_NOT_READY_FOR_SCHEDULE' ||
+        msg === 'EVENT_READ_ONLY' ||
+        msg === 'REST_CONSTRAINT_VIOLATION'
+      )
         throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      if (msg === 'MAT_NOT_FOUND')
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
       throw new HttpException(
         'Internal Server Error',
         HttpStatus.INTERNAL_SERVER_ERROR,

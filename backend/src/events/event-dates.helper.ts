@@ -15,7 +15,7 @@ type EventLike = {
  * Compute registration window status for the given event at the given instant.
  *
  * Fallback for legacy events (registrationOpensAt is NULL):
- *   – lifecycle REG_OPEN or WEIGHIN → OPEN
+ *   – lifecycle REG_OPEN → OPEN
  *   – anything else → CLOSED
  */
 export function getRegistrationStatus(
@@ -23,9 +23,7 @@ export function getRegistrationStatus(
   now: Date = new Date(),
 ): RegistrationWindowStatus {
   if (!event.registrationOpensAt) {
-    return ['REG_OPEN', 'WEIGHIN'].includes(event.lifecycle)
-      ? 'OPEN'
-      : 'CLOSED';
+    return event.lifecycle === 'REG_OPEN' ? 'OPEN' : 'CLOSED';
   }
 
   if (now < event.registrationOpensAt) return 'UPCOMING';

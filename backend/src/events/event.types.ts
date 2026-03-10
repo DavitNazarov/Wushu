@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { eachDayOfInterval, format, isValid, parse } from 'date-fns';
+import { EventPolicyInputSchema } from '../event-policies/event-policy.schemas';
 
 const KEBAB_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -13,6 +14,15 @@ function parseDateOnly(value: string): Date | null {
 function parseDateTime(value: string): Date | null {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function isIanaTimeZone(value: string): boolean {
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function listDaysInclusive(
@@ -68,8 +78,17 @@ export const CreateEventSchema = z
         'slug must be lowercase kebab-case (e.g. geo-wushu-open-2026)',
       ),
     location: z.string().min(1, 'location is required'),
-    timezone: z.string().default('Asia/Tbilisi'),
+    timezone: z
+      .string()
+      .trim()
+      .min(1, 'timezone is required')
+      .refine(
+        (value) => isIanaTimeZone(value),
+        'Invalid timezone; expected IANA format (e.g. Asia/Tbilisi)',
+      )
+      .default('Asia/Tbilisi'),
     autoAdvanceStage: z.boolean().optional().default(false),
+    rulesetId: z.string().min(1).optional(),
     dates: z.union([LegacyDatesSchema, CanonicalDatesSchema]),
     registrationWindow: z
       .object({
@@ -77,6 +96,7 @@ export const CreateEventSchema = z
         closesAt: DateOnlyString.optional(),
       })
       .optional(),
+    policies: EventPolicyInputSchema.optional(),
   })
   .superRefine((val, ctx) => {
     if ('range' in val.dates) {

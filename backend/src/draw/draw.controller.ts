@@ -12,6 +12,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { DrawService } from './draw.service';
+import { DrawReadinessService } from './draw.readiness.service';
+import { BracketsService } from './brackets.service';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CapabilityGuard } from '../auth/capability.guard';
 import { RequireCapability } from '../auth/capability.decorator';
@@ -21,7 +23,11 @@ import { CAPABILITIES } from '../auth/capabilities';
 @UseGuards(AuthGuard, CapabilityGuard)
 export class DrawController {
   private readonly logger = new Logger(DrawController.name);
-  constructor(private readonly draw: DrawService) {}
+  constructor(
+    private readonly draw: DrawService,
+    private readonly readiness: DrawReadinessService,
+    private readonly brackets: BracketsService,
+  ) {}
 
   @Post('draw')
   @RequireCapability(CAPABILITIES.DRAW_RUN)
@@ -58,7 +64,18 @@ export class DrawController {
       );
       if (msg === 'EVENT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
-      if (msg === 'EVENT_NOT_LOCKED' || msg === 'OVERRIDE_REASON_REQUIRED') {
+      if (
+        msg === 'EVENT_NOT_LOCKED' ||
+        msg === 'WEIGHIN_NOT_COMPLETED_FOR_DRAW' ||
+        msg === 'OVERRIDE_REASON_REQUIRED' ||
+        msg === 'NO_ELIGIBLE_REGISTRATIONS' ||
+        msg === 'NO_READY_CATEGORIES' ||
+        msg === 'DRAW_BLOCKED_CATEGORIES' ||
+        msg === 'DRAW_VALIDATION_FAILED' ||
+        msg === 'DRAW_ALREADY_EXISTS' ||
+        msg === 'DRAW_MUTATION_BLOCKED' ||
+        msg === 'EVENT_READ_ONLY'
+      ) {
         throw new HttpException(msg, HttpStatus.BAD_REQUEST);
       }
       throw new HttpException(
@@ -87,11 +104,76 @@ export class DrawController {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'EVENT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
-      if (msg === 'OVERRIDE_REQUIRED' || msg === 'REASON_REQUIRED') {
+      if (
+        msg === 'OVERRIDE_REQUIRED' ||
+        msg === 'REASON_REQUIRED' ||
+        msg === 'DRAW_MUTATION_BLOCKED'
+      ) {
         throw new HttpException(msg, HttpStatus.BAD_REQUEST);
       }
       throw new HttpException(
         'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('draw/overview')
+  @RequireCapability(CAPABILITIES.DRAW_RUN)
+  async drawOverview(
+    @Req() req: AuthenticatedRequest,
+    @Query('eventId') eventId: string,
+  ) {
+    const auth = req.auth!;
+    if (!eventId) {
+      throw new HttpException('eventId_REQUIRED', HttpStatus.BAD_REQUEST);
+    }
+
+    try {
+      return await this.readiness.getOverview({
+        organisationId: auth.organisationId,
+        eventId,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'EVENT_NOT_FOUND') {
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        msg || 'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('draw/category')
+  @RequireCapability(CAPABILITIES.DRAW_RUN)
+  async drawCategoryDetails(
+    @Req() req: AuthenticatedRequest,
+    @Query('eventId') eventId: string,
+    @Query('eventWeightCategoryId') eventWeightCategoryId: string,
+  ) {
+    const auth = req.auth!;
+    if (!eventId || !eventWeightCategoryId) {
+      throw new HttpException(
+        'eventId_and_eventWeightCategoryId_REQUIRED',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    try {
+      return await this.readiness.getCategoryDetails({
+        organisationId: auth.organisationId,
+        eventId,
+        eventWeightCategoryId,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'EVENT_NOT_FOUND' || msg === 'CATEGORY_NOT_FOUND') {
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        msg || 'Internal Server Error',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -107,6 +189,67 @@ export class DrawController {
     if (!eventId)
       throw new HttpException('eventId_REQUIRED', HttpStatus.BAD_REQUEST);
     return this.draw.listBrackets(auth.organisationId, eventId);
+  }
+
+  @Get('brackets/overview')
+  @RequireCapability(CAPABILITIES.DRAW_RUN)
+  async bracketsOverview(
+    @Req() req: AuthenticatedRequest,
+    @Query('eventId') eventId: string,
+  ) {
+    const auth = req.auth!;
+    if (!eventId) {
+      throw new HttpException('eventId_REQUIRED', HttpStatus.BAD_REQUEST);
+    }
+
+    try {
+      return await this.brackets.getOverview({
+        organisationId: auth.organisationId,
+        eventId,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'EVENT_NOT_FOUND') {
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        msg || 'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('brackets/category')
+  @RequireCapability(CAPABILITIES.DRAW_RUN)
+  async bracketCategoryDetails(
+    @Req() req: AuthenticatedRequest,
+    @Query('eventId') eventId: string,
+    @Query('eventWeightCategoryId') eventWeightCategoryId: string,
+  ) {
+    const auth = req.auth!;
+    if (!eventId || !eventWeightCategoryId) {
+      throw new HttpException(
+        'eventId_and_eventWeightCategoryId_REQUIRED',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    try {
+      return await this.brackets.getCategoryDetails({
+        organisationId: auth.organisationId,
+        eventId,
+        eventWeightCategoryId,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'EVENT_NOT_FOUND' || msg === 'CATEGORY_NOT_FOUND') {
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        msg || 'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('brackets/:id')

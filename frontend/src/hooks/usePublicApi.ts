@@ -9,6 +9,7 @@ import {
   fetchPublicBrackets,
   fetchPublicSchedule,
   fetchPublicMat,
+  fetchPublicLive,
 } from '@/lib/api/public';
 
 export function usePublicEvents() {
@@ -63,5 +64,14 @@ export function usePublicMat(eventSlug: string | null, matName: string | null) {
     queryFn: () => fetchPublicMat(eventSlug!, matName!),
     enabled: !!eventSlug && !!matName,
     refetchInterval: 5000,
+  });
+}
+
+export function usePublicLive(eventSlug: string | null, matName: string | null) {
+  return useQuery({
+    queryKey: ['public', 'live', eventSlug, matName],
+    queryFn: () => fetchPublicLive(eventSlug!, matName),
+    enabled: !!eventSlug,
+    refetchInterval: 4000,
   });
 }

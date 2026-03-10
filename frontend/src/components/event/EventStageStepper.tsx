@@ -1,16 +1,9 @@
 'use client';
 
 import type { EventLifecycle } from '@/types/api';
+import { EVENT_LIFECYCLE_ORDER } from '@/domain/events/lifecycle';
 
-export const STEPPER_STAGES: EventLifecycle[] = [
-  'REG_OPEN',
-  'WEIGHIN',
-  'LOCKED',
-  'DRAWN',
-  'PUBLISHED',
-  'LIVE',
-  'COMPLETED',
-];
+export const STEPPER_STAGES: EventLifecycle[] = EVENT_LIFECYCLE_ORDER;
 
 interface Props {
   /** Current stage from the API — single source of truth. */
@@ -22,7 +15,7 @@ interface Props {
 }
 
 export function EventStageStepper({ stage, labels, compact = false }: Props) {
-  const n = STEPPER_STAGES.length; // 7
+  const n = STEPPER_STAGES.length;
   const activeIndex = Math.max(0, STEPPER_STAGES.indexOf(stage));
 
   // The rail runs from the center of the first dot to the center of the last dot.

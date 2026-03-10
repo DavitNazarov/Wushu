@@ -1,167 +1,341 @@
+Yep — `.mdc`, not `.md`. Here is the full rule file in **one copyable `.mdc` block**:
+
+````mdc
 ---
 alwaysApply: true
 ---
-# Geo Wushu Competition System — Project Rules (for Cursor + AI)
 
-These rules are **non-negotiable**. The goal is to ship a stable MVP that runs a real tournament: **no Excel**, **no “which fight now?”**, fewer mistakes, faster operations.
+# Geo Wushu Competition System — Engineering & Product Rules
+
+These rules are mandatory.  
+The goal is to ship a stable MVP that can run a real tournament.
+
+Success means:
+- spectators stop asking “which fight is now?”
+- admins do not use Excel
+- judges run fights without confusion
+- results are correct and auditable
 
 Cursor must strictly follow task files and update them when work is completed.
 
 ---
 
-# 0) Core Operating Principles
+# 1. Core Principles
 
-1. **Truth > comfort.** If an idea is wrong/risky, say it directly and why.
-2. **Business-first.** Every feature must justify itself by:
-   - saving time
-   - reducing mistakes
-   - improving event quality
-   - enabling revenue
-3. **Ship bias.** Build the smallest version that works in a real tournament.
-4. **No sugar-coating.** If something will take too long or cause adoption resistance, say so.
-5. **Assumptions must be stated.** If a rule is not confirmed, label it as an assumption and add a verification task.
-6. **Two-step thinking.**
-   - (a) propose plan
-   - (b) try to break it with edge cases
-7. **Decision discipline.** Avoid endless branching; pick the best path and move.
+1. **Truth over comfort**
+   - If an idea is risky, wrong, unstable, or too expensive for MVP, say so clearly.
+   - Do not pretend weak ideas are good.
 
----
+2. **Business-first development**
+   - Every feature must justify itself by at least one of:
+     - saving time
+     - reducing mistakes
+     - improving event quality
+     - enabling revenue
 
-# 1) Scope Control (MVP rules)
+3. **Ship the smallest real solution**
+   - Build the smallest version that works in a real tournament.
+   - Do not overengineer.
+   - Do not build future-phase systems during MVP.
 
-8. **MVP means MVP.** Anything not required for the first tournament is Phase 2+.
-9. **Avoid roles explosion.** Prefer permissions/capabilities over new roles.
-10. **Manual override always exists.** Every automation must have an admin override path.
-11. **Brackets and scheduling are separate.**
-    - Bracket = who can meet who
-    - Schedule = when they fight (with rest constraints)
+4. **State assumptions explicitly**
+   - If a rule, standard, or workflow is not confirmed:
+     - label it as `ASSUMPTION`
+     - avoid hardcoding it as fact
+     - add a verification task if needed
 
----
+5. **Two-step reasoning**
+   - First: propose the solution
+   - Second: try to break it with edge cases before implementing
 
-# 2) Product Requirements (non-negotiable)
-
-## 2.1 Event lifecycle (explicit)
-
-Registration open → Weigh-in → Registration locked → Draw executed → Brackets published → Competition live → Completed
-
-## 2.2 Public must solve the core pain
-
-- **Current fight** (big)
-- **Next fights**
-- **Finished fights + winners**
-- Realtime updates, reliable on refresh
-
-## 2.3 Coach + Athlete accounts
-
-- Coach can sign in
-- Coach registers athletes into events
-- Public coach profiles show:
-  - coach info
-  - coach athletes
-  - `experienceYears = currentYear - coachStartYear` (computed dynamically)
-- Athlete sign-in is optional:
-  - If coach provides athlete email, athlete gets invite
-  - Athlete can edit limited profile fields
-  - Coach must approve changes
-  - Fight records are never editable
-
-## 2.4 Weigh-in logic (with 1-hour rule)
-
-- If athlete overweight:
-  - status = `ONE_HOUR`
-  - deadline_at = now + 1 hour
-- After deadline:
-  - move up if possible
-  - else DQ
-- All actions logged
-- Admin override always available
-
-## 2.5 Bracket logic
-
-- MVP: single-elimination only
-- Random draw after registration lock
-- Byes auto-generated
-- Winner propagation automatic
-- Manual admin override logged
-
-## 2.6 Scheduling logic
-
-- Enforce minimum rest constraint
-- Scheduler avoids back-to-back fights
-- If impossible → conflict warning
-- Admin can override
-
-## 2.7 Timer reliability
-
-- Timer state stored in DB
-- Frontend derives time from timestamps
-- Refresh-safe and multi-device safe
+6. **Prefer decisions over endless options**
+   - Pick the best path and move.
+   - Avoid vague branching and speculative complexity.
 
 ---
 
-# 3) Engineering Rules
+# 2. MVP Scope Rules
 
-## 3.1 File limits
+1. **MVP means MVP**
+   - Anything not required for the first real tournament is Phase 2+.
+   - Do not expand scope without task instruction.
 
-- No file > 250–300 lines
-- No 1000-line files ever
-- Split into components/hooks/services/domain
+2. **Avoid role explosion**
+   - Prefer permissions and capabilities over creating more roles.
 
-## 3.2 Separation of concerns
+3. **Manual override must always exist**
+   - Every automation must allow admin override.
 
-- UI has zero business logic
-- All DB calls in `/services`
-- All domain logic in `/domain`
-- Reusable logic → `/hooks`
+4. **Bracket and schedule are separate systems**
+   - **Bracket** = who can meet who
+   - **Schedule** = when they fight
 
-## 3.3 Strong typing
+5. **No hidden complexity**
+   - If a feature introduces heavy admin burden, fragile logic, or confusion, simplify it.
 
-- Types for:
-  - DB rows
-  - API responses
-  - domain objects
-- No `any` unless justified
+---
 
-## 3.4 Realtime safety
+# 3. Product Requirements
 
-Must handle:
-- refresh
+## 3.1 Event Lifecycle
+
+Use an explicit lifecycle with traceable transitions:
+
+`Registration Open -> Weigh-in -> Registration Locked -> Draw Executed -> Brackets Published -> Competition Live -> Completed`
+
+Rules:
+- lifecycle states must be explicit
+- transitions must be logged where important
+- no silent status jumps without business justification
+
+---
+
+## 3.2 Public Interface Must Solve the Core Problem
+
+Public pages must show:
+- **current fight** as the main focus
+- **next fights**
+- **finished fights with winners**
+
+Requirements:
+- realtime updates
+- refresh-safe state
+- reliable on multiple devices
+- spectators should immediately understand what is happening now
+
+---
+
+## 3.3 Coach and Athlete Accounts
+
+### Coach
+Coach can:
+- sign in
+- register athletes into events
+- manage own athletes
+
+Public coach profile shows:
+- coach information
+- coach athletes
+- dynamic experience
+
+Formula:
+`experienceYears = currentYear - coachStartYear`
+
+### Athlete
+Athlete account is optional:
+- invite only if coach provides athlete email
+- athlete can edit limited profile fields
+- coach approval required for athlete-submitted changes
+- fight records are never editable by athlete
+
+---
+
+## 3.4 Weigh-In Logic
+
+If athlete is overweight:
+
+`status = ONE_HOUR`  
+`deadline_at = now + 1 hour`
+
+After deadline:
+- move athlete up if valid next category exists
+- otherwise disqualify
+
+Requirements:
+- all actions logged
+- admin override always available
+- move-up and DQ logic must be traceable
+
+---
+
+## 3.5 Bracket Logic
+
+MVP bracket format:
+- single elimination only
+
+Requirements:
+- random draw only after registration lock
+- automatic BYE generation
+- automatic winner propagation
+- admin manual override allowed
+- all manual bracket changes logged
+
+Do not build:
+- double elimination
+- advanced seeding engines
+- non-MVP bracket formats unless task explicitly requires them
+
+---
+
+## 3.6 Scheduling Logic
+
+Scheduler must:
+- enforce minimum rest constraints
+- avoid back-to-back fights for the same athlete where possible
+- detect impossible schedules
+- show conflict warnings when constraints cannot be satisfied
+
+Rules:
+- schedule is not bracket
+- schedule order has its own numbering and logic
+- admin override allowed, but conflicts must still be visible
+
+---
+
+## 3.7 Fight Timer Logic
+
+Timer must be database-driven.
+
+Frontend must derive display state from persisted data such as:
+- start timestamp
+- pause/resume state
+- round duration
+- elapsed offsets if needed
+
+Requirements:
+- safe on refresh
+- safe on reconnect
+- safe across multiple devices
+- frontend must not be the source of truth
+
+---
+
+# 4. Engineering Rules
+
+## 4.1 File Size Limits
+
+Hard limit:
+
+`max_file_lines = 300`
+
+Rules:
+- if file exceeds limit, split it immediately
+- no 1000-line files ever
+- use smaller focused modules
+
+Preferred split:
+- components
+- hooks
+- services
+- domain logic
+- types
+- utils
+
+---
+
+## 4.2 Separation of Concerns
+
+Rules:
+- UI components must stay presentation-focused
+- business logic must not live inside UI
+- database access belongs in `/services`
+- domain rules belong in `/domain`
+- reusable client logic belongs in `/hooks`
+
+Bad:
+- DB queries inside UI component
+- bracket logic inside page JSX
+- timer calculations mixed with visual rendering
+
+Good:
+- UI reads prepared state
+- services fetch and persist
+- domain computes rules
+
+---
+
+## 4.3 Strong Typing
+
+Required for:
+- DB models
+- API responses
+- domain objects
+- critical state transitions
+
+Rules:
+- avoid `any`
+- use explicit types for event lifecycle, fight state, weigh-in state, bracket state, schedule state
+- if `any` is used, it must be justified
+
+---
+
+## 4.4 Realtime Stability
+
+Realtime systems must survive:
+- page refresh
+- tab reopen
 - reconnection
-- multiple devices
+- multiple devices open at once
 
-## 3.5 Audit logging (mandatory)
+Rules:
+- DB is source of truth
+- client reconstructs state from persisted values
+- realtime must degrade safely, not corrupt state
 
-Log:
+---
+
+## 4.5 Audit Logging
+
+Audit logging is mandatory for critical actions.
+
+Must log:
 - weigh-in decisions
-- move-up / DQ
+- move-up actions
+- disqualifications
 - registration lock
 - draw execution
 - bracket edits
 - schedule overrides
 - fight results
+- timer-critical actions if they affect official match state
 
-## 3.6 Security
-
-- Enforce role/capability checks
-- Coach isolated to own data
-- Athlete cannot edit records
-- Public reads published data only
-
----
-
-# 4) Internationalisation + Design
-
-- No hardcoded strings
-- English + Georgian mandatory
-- Dark mode default
-- Design tokens required
-- UI readable at distance
-- Big controls for judge mode
+Preferred log fields:
+- actor
+- timestamp
+- action
+- target entity
+- previous state
+- new state
+- reason if manual override happened
 
 ---
 
-# 5) Required Folder Structure
+## 4.6 Security Rules
 
+Rules:
+- enforce role and capability checks
+- coach can only access own data
+- athlete cannot edit fight records or official outcomes
+- public can only read published data
+- sensitive admin actions must be protected server-side, not only in UI
+
+---
+
+# 5. Internationalisation and Design Rules
+
+## 5.1 Internationalisation
+
+Rules:
+- no hardcoded user-facing strings
+- English and Georgian are mandatory from day one
+- all new UI text must go through i18n system
+
+## 5.2 Design
+
+Rules:
+- dark mode by default
+- use design tokens, not random colours
+- public live UI must be readable at distance
+- judge/admin controls must be large and easy to use quickly
+- clarity beats decoration
+
+---
+
+# 6. Required Folder Structure
+
+Use this structure unless task explicitly justifies deviation:
+
+```text
 /app
 /components
   /ui
@@ -177,101 +351,155 @@ Log:
 /constants
 /i18n
 /theme
+````
+
+Rules:
+
+* keep folder responsibility clear
+* do not mix domain logic into random utility folders
+* do not create duplicate sources of truth
 
 ---
 
-# 6) Cursor Task Collaboration Rules (CRITICAL)
+# 7. Cursor Task Execution Protocol
 
-## 6.1 Task Execution Protocol
+When instructed:
 
-When told:
+`Execute Task Pxx.Tyy`
 
-> "Execute Task Pxx.Tyy"
+Cursor must:
 
-Cursor MUST:
+1. Open the exact task file
+2. Follow that task strictly
+3. Implement only what the task describes
+4. Avoid unrelated changes
+5. Avoid phase jumping
+6. Update task file after work is complete
 
-1. Open that exact task file.
-2. Follow it strictly.
-3. Not expand scope.
-4. Not modify unrelated files.
-5. Implement only what the task describes.
-6. After completion:
-   - Tick checkboxes in that task file.
-   - Do NOT tick acceptance items unless verified.
+After completion:
 
-## 6.2 Task Completion Behavior
+* mark completed items with `- [x]`
+* do not mark acceptance items complete unless verified
 
-- When task is finished:
-  - Update the task `.md` file.
-  - Mark completed checklist items with `- [x]`
-- If blocked:
-  - Add section `## Blockers`
-  - Explain clearly.
-  - Stop.
+If task and codebase conflict:
 
-## 6.3 Scope Protection
-
-Cursor must NOT:
-- Jump to next phase automatically
-- Add features not defined in the current task
-- Refactor entire project without task instruction
-
-## 6.4 File Size Enforcement
-
-If any file exceeds 250 lines:
-- Split immediately.
-- Update imports.
-- Keep single responsibility.
-
-## 6.5 Task-Safe Refactoring Rule
-
-Refactor ONLY if:
-- Current task requires it
-- Or file size rule violated
-
-Never refactor for style alone during feature tasks.
+* follow task intent
+* explain blocker or mismatch clearly
+* do not invent silent scope changes
 
 ---
 
-# 7) Stop Signs (Do NOT build in MVP)
+# 8. Blocker Protocol
 
-- Double elimination
-- Payments
-- Rankings
-- Media uploads
-- Smoothcomp-level complexity
-- AI-based analytics
+If blocked, stop and add:
 
----
+```md
+## Blockers
+- explanation here
+```
 
-# 8) Definition of Done
+Rules:
 
-System is good only if:
-
-- Spectators stop asking “which fight is now?”
-- Admin does not use Excel
-- Judge panel runs smoothly
-- Results are correct and auditable
+* explain clearly what is blocked
+* explain why
+* explain what decision or fix is needed
+* do not continue with guessed business logic if it risks wrong implementation
 
 ---
 
-# 9) Open Assumptions (Must Verify Before Hardcoding)
+# 9. Refactoring Rules
 
-- Official Georgian age categories + round durations
-- Official weight categories per age group
-- Minimum rest policy (minutes vs fight count)
+Refactor only when:
 
-These must become verification tasks before hardcoding.
+* current task requires it
+* file size rule is violated
+* current code structure prevents correct implementation
+
+Do not:
+
+* refactor large unrelated areas for style only
+* rename half the codebase during a feature task
+* introduce architectural churn without task need
+
+Refactoring must be task-safe and minimal.
 
 ---
 
-# 10) Enforcement Clause
+# 10. Explicitly Out of Scope for MVP
 
-If any generated code violates these rules:
+Do not build unless task explicitly says so:
 
-- Stop.
-- Explain violation.
-- Propose compliant solution.
-- Then implement.
+* double elimination
+* payment systems
+* ranking systems
+* media uploads
+* Smoothcomp-level complexity
+* AI analytics
+* overbuilt abstractions for hypothetical future formats
 
-Cursor must prioritize stability, clarity, and real tournament usability over cleverness.
+---
+
+# 11. Definition of Done
+
+A feature is done only if:
+
+* it works in real tournament conditions
+* it follows task scope
+* it respects lifecycle/business rules
+* it survives refresh/reconnect where relevant
+* it is typed
+* it is i18n-safe
+* it is auditable if operationally critical
+* it does not create hidden admin confusion
+
+The system is good only if:
+
+* spectators stop asking “which fight is now?”
+* admins do not need Excel
+* judges can run fights smoothly
+* results are reliable and recorded correctly
+
+---
+
+# 12. Open Assumptions That Must Be Verified Before Hardcoding
+
+Do not hardcode without verification:
+
+* official Georgian age categories
+* official round durations by age/group
+* official weight categories by age group
+* minimum rest policy
+* federation-specific edge-case handling
+
+If needed, create explicit verification tasks before implementation.
+
+---
+
+# 13. Enforcement Rule
+
+If a requested implementation violates these rules:
+
+1. Stop
+2. Explain the violation
+3. Propose a compliant solution
+4. Implement the compliant version
+
+Cursor must prioritise:
+
+* stability
+* clarity
+* auditability
+* tournament usability
+
+over:
+
+* cleverness
+* overengineering
+* unnecessary abstraction
+
+```
+
+Your original version had good instincts, but it was a bit fluffy for an AI agent. This one is stricter and more executable. The tiny silicon goblin will behave better with it.
+
+I can also turn this into a **stronger Cursor ruleset with `globs`, `description`, and more enforceable rule sections** if you want the proper production-grade `.mdc` style.
+```

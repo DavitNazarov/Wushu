@@ -2,16 +2,10 @@ import type { Event, EventLifecycle, Prisma } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
-
-const allowedTransitions: Record<EventLifecycle, EventLifecycle[]> = {
-  REG_OPEN: ['WEIGHIN'],
-  WEIGHIN: ['LOCKED'],
-  LOCKED: ['DRAWN'],
-  DRAWN: ['PUBLISHED'],
-  PUBLISHED: ['LIVE'],
-  LIVE: ['COMPLETED'],
-  COMPLETED: [],
-};
+import {
+  getNextLifecycle,
+  isForwardLifecycleTransition,
+} from './lifecycle-rules';
 
 /** Handles admin write-ops and summary reads for events (split from EventsService for size). */
 @Injectable()
@@ -73,9 +67,16 @@ export class EventOpsService {
     });
     if (!existing) return null;
 
+    const lifecycle =
+      published && existing.lifecycle === 'DRAWN'
+        ? 'PUBLISHED'
+        : !published && existing.lifecycle === 'PUBLISHED'
+          ? 'DRAWN'
+          : existing.lifecycle;
+
     const updated = await this.prisma.event.update({
       where: { id: eventId },
-      data: { published },
+      data: { published, lifecycle },
     });
 
     await this.audit.write({
@@ -149,9 +150,17 @@ export class EventOpsService {
     });
     if (!existing) throw new Error('EVENT_NOT_FOUND');
 
-    const allowed = allowedTransitions[existing.lifecycle] ?? [];
-    const isDirect = allowed.includes(input.targetState);
+    const expectedNext = getNextLifecycle(existing.lifecycle);
+    const isDirect = expectedNext === input.targetState;
     const now = new Date();
+    const isForward = isForwardLifecycleTransition(
+      existing.lifecycle,
+      input.targetState,
+    );
+
+    if (!isForward) {
+      throw new Error('INVALID_EVENT_TRANSITION');
+    }
 
     if (!isDirect) {
       if (!input.allowOverride) throw new Error('INVALID_EVENT_TRANSITION');
@@ -160,9 +169,9 @@ export class EventOpsService {
 
     if (
       existing.lifecycle === 'REG_OPEN' &&
-      input.targetState === 'WEIGHIN' &&
+      input.targetState === 'LOCKED' &&
       !input.allowOverride &&
-      now < existing.registrationEndDate
+      now <= (existing.registrationClosesAt ?? existing.registrationEndDate)
     ) {
       throw new Error('REGISTRATION_STILL_OPEN');
     }

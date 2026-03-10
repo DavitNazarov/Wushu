@@ -147,6 +147,7 @@ export class AthletesService {
   async merge(input: {
     organisationId: string;
     actorUserId: string;
+    actorClubId?: string | null;
     primaryId: string;
     secondaryId: string;
     reason: string;
@@ -164,6 +165,13 @@ export class AthletesService {
     ]);
 
     if (!primary || !secondary) throw new Error('ATHLETE_NOT_FOUND');
+    if (
+      input.actorClubId &&
+      (primary.clubId !== input.actorClubId ||
+        secondary.clubId !== input.actorClubId)
+    ) {
+      throw new Error('ATHLETE_NOT_IN_COACH_CLUB');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       await tx.registration.updateMany({
@@ -184,6 +192,11 @@ export class AthletesService {
       await tx.fight.updateMany({
         where: { winnerAthleteId: input.secondaryId },
         data: { winnerAthleteId: input.primaryId },
+      });
+
+      await tx.fight.updateMany({
+        where: { loserAthleteId: input.secondaryId },
+        data: { loserAthleteId: input.primaryId },
       });
 
       const merged = await tx.athlete.update({

@@ -1,50 +1,107 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma, WeighInDecision } from '@prisma/client';
+import type {
+  AthleteSex,
+  EventLifecycle,
+  Prisma,
+  Registration,
+  WeighInDecision,
+  WeighInStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { isWeighInStage } from '../events/lifecycle-rules';
+import { EventStageAutomationService } from '../events/event-stage-automation.service';
+import {
+  computeManualDecisionOutcome,
+  computePolicyWeighInOutcome,
+  type PolicyWeighInOutcome,
+  type WeightCategoryBounds,
+} from './weighin.logic';
+
+type RegistrationWithWeighInContext = Registration & {
+  event: {
+    id: string;
+    lifecycle: EventLifecycle;
+    weighInPolicyCode:
+      | 'IWUF_STRICT_ONE_HOUR'
+      | 'MOVE_UP_AFTER_FAILED_REWEIGH'
+      | 'DIRECT_MOVE_UP'
+      | 'MANUAL_ADMIN_DECISION';
+    reweighWindowMinutes: number;
+  };
+  weighIns: Array<{
+    attemptNo: number;
+    decision: WeighInDecision;
+    deadlineAt: Date | null;
+    resolvedAt: Date | null;
+  }>;
+  eventWeightCategory: {
+    id: string;
+    rulesetWeightCategory: {
+      name: string;
+      minWeightKgExcl: number | null;
+      maxWeightKgIncl: number | null;
+      sortOrder: number;
+    };
+    eventAgeGroup: {
+      weightCategories: Array<{
+        id: string;
+        rulesetWeightCategory: {
+          name: string;
+          minWeightKgExcl: number | null;
+          maxWeightKgIncl: number | null;
+          sortOrder: number;
+        };
+      }>;
+    };
+  } | null;
+};
 
 @Injectable()
 export class WeighinService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly eventStageAutomation: EventStageAutomationService,
   ) {}
 
-  async search(params: {
-    organisationId: string;
-    eventId: string;
-    q?: string;
-  }) {
-    const { organisationId, eventId, q } = params;
+  private toBounds(
+    cat: RegistrationWithWeighInContext['eventWeightCategory'],
+  ): WeightCategoryBounds[] {
+    if (!cat) return [];
+    return cat.eventAgeGroup.weightCategories.map((entry) => ({
+      id: entry.id,
+      name: entry.rulesetWeightCategory.name,
+      minWeightKgExcl: entry.rulesetWeightCategory.minWeightKgExcl,
+      maxWeightKgIncl: entry.rulesetWeightCategory.maxWeightKgIncl,
+      sortOrder: entry.rulesetWeightCategory.sortOrder,
+    }));
+  }
 
-    const where: Prisma.RegistrationWhereInput = { organisationId, eventId };
-
-    if (q?.trim()) {
-      const search = q.trim();
-      where.athlete = {
-        OR: [
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName: { contains: search, mode: 'insensitive' } },
-          { documentId: { contains: search, mode: 'insensitive' } },
-        ],
-      };
-    }
-
-    return this.prisma.registration.findMany({
-      where,
+  private async getRegistrationForRecord(
+    registrationId: string,
+    organisationId: string,
+  ): Promise<RegistrationWithWeighInContext> {
+    const registration = await this.prisma.registration.findFirst({
+      where: { id: registrationId, organisationId },
       include: {
-        athlete: {
+        event: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            dateOfBirth: true,
-            documentId: true,
-            sex: true,
+            lifecycle: true,
+            weighInPolicyCode: true,
+            reweighWindowMinutes: true,
           },
         },
-        club: { select: { id: true, name: true } },
-        weighIns: { orderBy: { attemptNo: 'asc' } },
+        weighIns: {
+          select: {
+            attemptNo: true,
+            decision: true,
+            deadlineAt: true,
+            resolvedAt: true,
+          },
+          orderBy: { attemptNo: 'desc' },
+        },
         eventWeightCategory: {
           include: {
             rulesetWeightCategory: {
@@ -52,24 +109,257 @@ export class WeighinService {
                 name: true,
                 minWeightKgExcl: true,
                 maxWeightKgIncl: true,
+                sortOrder: true,
               },
             },
             eventAgeGroup: {
               include: {
-                rulesetAgeGroup: {
-                  select: { name: true, roundDurationSeconds: true },
+                weightCategories: {
+                  include: {
+                    rulesetWeightCategory: {
+                      select: {
+                        name: true,
+                        minWeightKgExcl: true,
+                        maxWeightKgIncl: true,
+                        sortOrder: true,
+                      },
+                    },
+                  },
+                  orderBy: { rulesetWeightCategory: { sortOrder: 'asc' } },
                 },
               },
             },
           },
         },
       },
-      orderBy: [{ categoryCode: 'asc' }, { createdAt: 'asc' }],
     });
+    if (!registration) throw new Error('REGISTRATION_NOT_FOUND');
+    return registration;
   }
 
-  /** Checks measured weight against the registration's category limits.
-   *  Returns the expected decision or null if no structured category is linked. */
+  private async resolveMoveToCategory(input: {
+    eventId: string;
+    moveToCategoryId: string;
+  }) {
+    const targetCategory = await this.prisma.eventWeightCategory.findFirst({
+      where: {
+        id: input.moveToCategoryId,
+        eventAgeGroup: { eventId: input.eventId },
+      },
+      include: {
+        rulesetWeightCategory: { select: { name: true } },
+      },
+    });
+    if (!targetCategory) throw new Error('INVALID_MOVE_UP_CATEGORY');
+    return targetCategory;
+  }
+
+  private statusForOverrideOutcome(
+    outcome: PolicyWeighInOutcome,
+  ): WeighInStatus {
+    if (outcome.decision === 'FAIL') return 'FAILED';
+    if (outcome.decision === 'DISQUALIFIED') return 'DISQUALIFIED';
+    if (outcome.decision === 'ONE_HOUR' || outcome.decision === 'REWEIGH') {
+      return 'REWEIGH_ALLOWED';
+    }
+    return 'OVERRIDE_APPROVED';
+  }
+
+  private computeAgeOnDate(dateOfBirth: Date, onDate: Date): number {
+    let age = onDate.getUTCFullYear() - dateOfBirth.getUTCFullYear();
+    const monthDiff = onDate.getUTCMonth() - dateOfBirth.getUTCMonth();
+    const dayDiff = onDate.getUTCDate() - dateOfBirth.getUTCDate();
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+      age--;
+    }
+    return age;
+  }
+
+  private athleteMatchesAgeGroup(input: {
+    athleteDob: Date;
+    athleteSex: AthleteSex | null;
+    competitionStartDate: Date;
+    ageGroup: {
+      minAge: number | null;
+      maxAge: number | null;
+      sex: AthleteSex | null;
+    };
+  }): boolean {
+    const age = this.computeAgeOnDate(
+      input.athleteDob,
+      input.competitionStartDate,
+    );
+    if (input.ageGroup.minAge != null && age < input.ageGroup.minAge) {
+      return false;
+    }
+    if (input.ageGroup.maxAge != null && age > input.ageGroup.maxAge) {
+      return false;
+    }
+    if (input.ageGroup.sex && input.athleteSex && input.ageGroup.sex !== input.athleteSex) {
+      return false;
+    }
+    return true;
+  }
+
+  async search(params: {
+    organisationId: string;
+    actorUserId?: string;
+    eventId: string;
+    q?: string;
+  }) {
+    const { organisationId, actorUserId, eventId, q } = params;
+
+    const where: Prisma.RegistrationWhereInput = { organisationId, eventId };
+
+    if (q?.trim()) {
+      const search = q.trim();
+      where.OR = [
+        {
+          athlete: {
+            OR: [
+              { firstName: { contains: search, mode: 'insensitive' } },
+              { lastName: { contains: search, mode: 'insensitive' } },
+              { documentId: { contains: search, mode: 'insensitive' } },
+              { id: { contains: search, mode: 'insensitive' } },
+            ],
+          },
+        },
+        {
+          club: {
+            name: { contains: search, mode: 'insensitive' },
+          },
+        },
+      ];
+    }
+
+    const fetchRows = () =>
+      this.prisma.registration.findMany({
+        where,
+        include: {
+          athlete: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              dateOfBirth: true,
+              documentId: true,
+              sex: true,
+            },
+          },
+          club: { select: { id: true, name: true } },
+          weighIns: {
+            include: {
+              operator: {
+                select: {
+                  id: true,
+                  displayName: true,
+                  email: true,
+                },
+              },
+            },
+            orderBy: { attemptNo: 'asc' },
+          },
+          eventWeightCategory: {
+            include: {
+              rulesetWeightCategory: {
+                select: {
+                  name: true,
+                  minWeightKgExcl: true,
+                  maxWeightKgIncl: true,
+                  sortOrder: true,
+                },
+              },
+              eventAgeGroup: {
+                include: {
+                  rulesetAgeGroup: {
+                    select: {
+                      code: true,
+                      name: true,
+                      sex: true,
+                      minAge: true,
+                      maxAge: true,
+                      roundDurationSeconds: true,
+                      sortOrder: true,
+                    },
+                  },
+                  weightCategories: {
+                    include: {
+                      rulesetWeightCategory: {
+                        select: {
+                          name: true,
+                          minWeightKgExcl: true,
+                          maxWeightKgIncl: true,
+                          sortOrder: true,
+                        },
+                      },
+                    },
+                    orderBy: { rulesetWeightCategory: { sortOrder: 'asc' } },
+                  },
+                },
+              },
+            },
+          },
+          registeredEventWeightCategory: {
+            include: {
+              rulesetWeightCategory: {
+                select: {
+                  name: true,
+                  minWeightKgExcl: true,
+                  maxWeightKgIncl: true,
+                },
+              },
+            },
+          },
+          event: {
+            select: {
+              id: true,
+              name: true,
+              lifecycle: true,
+              weighInPolicyCode: true,
+              reweighWindowMinutes: true,
+            },
+          },
+        },
+        orderBy: [{ categoryCode: 'asc' }, { createdAt: 'asc' }],
+      });
+
+    const rows = await fetchRows();
+    if (!actorUserId) {
+      return rows;
+    }
+
+    const missingMappings = rows.filter(
+      (row) =>
+        row.eventWeightCategory == null &&
+        row.registeredEventWeightCategory == null &&
+        Boolean(row.categoryCode?.trim()),
+    );
+
+    if (!missingMappings.length) {
+      return rows;
+    }
+
+    const reconcileResults = await Promise.allSettled(
+      missingMappings.map((row) =>
+        this.reconcileCategoryMapping({
+          organisationId,
+          actorUserId,
+          registrationId: row.id,
+          reason: 'Auto-reconciled during weigh-in queue load',
+        }),
+      ),
+    );
+
+    const reconciledCount = reconcileResults.filter(
+      (result) => result.status === 'fulfilled',
+    ).length;
+    if (reconciledCount === 0) {
+      return rows;
+    }
+
+    return fetchRows();
+  }
+
   async getCategoryInfo(registrationId: string, organisationId: string) {
     const reg = await this.prisma.registration.findFirst({
       where: { id: registrationId, organisationId },
@@ -84,6 +374,7 @@ export class WeighinService {
                   include: {
                     rulesetWeightCategory: {
                       select: {
+                        minWeightKgExcl: true,
                         maxWeightKgIncl: true,
                         sortOrder: true,
                         name: true,
@@ -96,10 +387,16 @@ export class WeighinService {
             },
           },
         },
+        event: {
+          select: {
+            weighInPolicyCode: true,
+            reweighWindowMinutes: true,
+          },
+        },
       },
     });
     if (!reg) return null;
-    return reg.eventWeightCategory;
+    return reg;
   }
 
   async record(input: {
@@ -107,92 +404,204 @@ export class WeighinService {
     actorUserId: string;
     registrationId: string;
     weightKg: number;
-    decision: WeighInDecision;
+    decision?: WeighInDecision;
     override?: boolean;
     reason?: string | null;
+    nextEventWeightCategoryId?: string | null;
   }) {
-    const registration = await this.prisma.registration.findFirst({
-      where: { id: input.registrationId, organisationId: input.organisationId },
-      include: {
-        weighIns: { orderBy: { attemptNo: 'desc' }, take: 1 },
-        eventWeightCategory: {
-          include: { rulesetWeightCategory: true },
-        },
-      },
-    });
-    if (!registration) throw new Error('REGISTRATION_NOT_FOUND');
+    if (!Number.isFinite(input.weightKg) || input.weightKg <= 0) {
+      throw new Error('INVALID_WEIGHT');
+    }
 
-    const event = await this.prisma.event.findFirst({
-      where: { id: registration.eventId },
-    });
-    if (!event) throw new Error('EVENT_NOT_FOUND');
+    const registration = await this.getRegistrationForRecord(
+      input.registrationId,
+      input.organisationId,
+    );
 
-    if (event.lifecycle !== 'WEIGHIN' && !input.override) {
+    if (!isWeighInStage(registration.event.lifecycle) && !input.override) {
       throw new Error('EVENT_NOT_IN_WEIGHIN');
     }
 
-    if (input.override && !input.reason) {
-      throw new Error('OVERRIDE_REASON_REQUIRED');
+    if (!registration.eventWeightCategory) {
+      throw new Error('REGISTRATION_CATEGORY_NOT_SET');
     }
 
-    // Validate decision against weight limits when a structured category is linked
-    if (registration.eventWeightCategory && !input.override) {
-      const max =
-        registration.eventWeightCategory.rulesetWeightCategory.maxWeightKgIncl;
-      const min =
-        registration.eventWeightCategory.rulesetWeightCategory.minWeightKgExcl;
-      const withinLimits =
-        (max === null || input.weightKg <= max) &&
-        (min === null || input.weightKg > min);
+    const currentCategory = {
+      id: registration.eventWeightCategory.id,
+      name: registration.eventWeightCategory.rulesetWeightCategory.name,
+      minWeightKgExcl:
+        registration.eventWeightCategory.rulesetWeightCategory.minWeightKgExcl,
+      maxWeightKgIncl:
+        registration.eventWeightCategory.rulesetWeightCategory.maxWeightKgIncl,
+      sortOrder: registration.eventWeightCategory.rulesetWeightCategory.sortOrder,
+    };
+    const categoriesInAgeGroup = this.toBounds(registration.eventWeightCategory);
 
-      if (withinLimits && input.decision === 'FAIL') {
-        throw new Error('WEIGHT_WITHIN_LIMITS_CANNOT_FAIL');
+    let outcome: PolicyWeighInOutcome;
+    if (input.override) {
+      if (!input.reason) throw new Error('OVERRIDE_REASON_REQUIRED');
+      if (!input.decision) throw new Error('OVERRIDE_DECISION_REQUIRED');
+      outcome = computeManualDecisionOutcome({
+        decision: input.decision,
+        reason: input.reason,
+        currentCategory,
+        categoriesInAgeGroup,
+        weightKg: input.weightKg,
+        reweighWindowMinutes: registration.event.reweighWindowMinutes,
+        nextEventWeightCategoryId: input.nextEventWeightCategoryId ?? null,
+      });
+    } else if (registration.event.weighInPolicyCode === 'MANUAL_ADMIN_DECISION') {
+      if (!input.decision) throw new Error('MANUAL_DECISION_REQUIRED');
+      if (!input.reason) throw new Error('MANUAL_DECISION_REASON_REQUIRED');
+      outcome = computeManualDecisionOutcome({
+        decision: input.decision,
+        reason: input.reason,
+        currentCategory,
+        categoriesInAgeGroup,
+        weightKg: input.weightKg,
+        reweighWindowMinutes: registration.event.reweighWindowMinutes,
+        nextEventWeightCategoryId: input.nextEventWeightCategoryId ?? null,
+      });
+    } else {
+      outcome = computePolicyWeighInOutcome({
+        policyCode: registration.event.weighInPolicyCode,
+        weightKg: input.weightKg,
+        currentCategory,
+        categoriesInAgeGroup,
+        attemptHistory: registration.weighIns,
+        reweighWindowMinutes: registration.event.reweighWindowMinutes,
+      });
+
+      if (outcome.reason === 'MANUAL_DECISION_REQUIRED') {
+        throw new Error('MANUAL_DECISION_REQUIRED');
       }
-      if (!withinLimits && input.decision === 'PASS') {
-        throw new Error('WEIGHT_EXCEEDS_CATEGORY_LIMIT');
-      }
+    }
+
+    let moveToCategory:
+      | {
+          id: string;
+          rulesetWeightCategory: { name: string };
+        }
+      | null = null;
+
+    if (outcome.moveToCategoryId) {
+      moveToCategory = await this.resolveMoveToCategory({
+        eventId: registration.event.id,
+        moveToCategoryId: outcome.moveToCategoryId,
+      });
     }
 
     const lastAttemptNo = registration.weighIns[0]?.attemptNo ?? 0;
     const attemptNo = lastAttemptNo + 1;
-    const deadlineAt =
-      input.decision === 'ONE_HOUR'
-        ? new Date(Date.now() + 60 * 60 * 1000)
-        : null;
 
-    const attempt = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.weighInAttempt.create({
+    const result = await this.prisma.$transaction(async (tx) => {
+      const attempt = await tx.weighInAttempt.create({
         data: {
           organisationId: input.organisationId,
-          eventId: registration.eventId,
+          eventId: registration.event.id,
           registrationId: input.registrationId,
           attemptNo,
           weightKg: input.weightKg,
-          decision: input.decision,
-          deadlineAt,
+          decision: outcome.decision,
+          policyCode: registration.event.weighInPolicyCode,
+          deadlineAt: outcome.deadlineAt,
           operatorUserId: input.actorUserId,
           override: input.override ?? false,
-          reason: input.reason ?? null,
+          reason: input.reason ?? outcome.reason,
         },
       });
 
-      await this.audit.write({
-        organisationId: input.organisationId,
-        eventId: registration.eventId,
-        actorUserId: input.actorUserId,
-        action: 'WEIGHIN_DECISION',
-        entityType: 'weighin',
-        entityId: created.id,
-        before: null,
-        after: created as unknown as Prisma.JsonValue,
-        reason: input.reason ?? null,
-        override: input.override ?? false,
+      const newStatus = input.override
+        ? this.statusForOverrideOutcome(outcome)
+        : outcome.weighInStatus;
+
+      const registrationUpdate: Prisma.RegistrationUpdateInput = {
+        weighInStatus: newStatus,
+      };
+      if (moveToCategory) {
+        registrationUpdate.eventWeightCategory = {
+          connect: { id: moveToCategory.id },
+        };
+        registrationUpdate.categoryCode = moveToCategory.rulesetWeightCategory.name;
+      }
+      if (outcome.decision === 'DISQUALIFIED') {
+        registrationUpdate.status = 'REJECTED';
+      }
+
+      const updatedRegistration = await tx.registration.update({
+        where: { id: input.registrationId },
+        data: registrationUpdate,
       });
 
-      return created;
+      await this.audit.write(
+        {
+          organisationId: input.organisationId,
+          eventId: registration.event.id,
+          actorUserId: input.actorUserId,
+          action: 'WEIGHIN_WEIGHT_RECORDED',
+          entityType: 'weighin',
+          entityId: attempt.id,
+          before: null,
+          after: {
+            registrationId: input.registrationId,
+            weightKg: input.weightKg,
+            decision: attempt.decision,
+            policyCode: attempt.policyCode,
+            deadlineAt: attempt.deadlineAt,
+          } as unknown as Prisma.JsonValue,
+          reason: input.reason ?? null,
+          override: input.override ?? false,
+        },
+        tx,
+      );
+
+      await this.audit.write(
+        {
+          organisationId: input.organisationId,
+          eventId: registration.event.id,
+          actorUserId: input.actorUserId,
+          action: input.override
+            ? 'WEIGHIN_OVERRIDE_APPLIED'
+            : outcome.decision === 'PASS'
+              ? 'WEIGHIN_AUTO_PASSED'
+              : outcome.decision === 'MOVED_UP'
+                ? 'WEIGHIN_AUTO_MOVED_UP'
+                : outcome.decision === 'ONE_HOUR'
+                  ? 'WEIGHIN_AUTO_REWEIGH_ALLOWED'
+                  : outcome.decision === 'DISQUALIFIED'
+                    ? 'WEIGHIN_AUTO_DISQUALIFIED'
+                    : 'WEIGHIN_AUTO_FAILED',
+          entityType: 'registration',
+          entityId: input.registrationId,
+          before: {
+            eventWeightCategoryId: registration.eventWeightCategoryId,
+            categoryCode: registration.categoryCode,
+            weighInStatus: registration.weighInStatus,
+            status: registration.status,
+          } as unknown as Prisma.JsonValue,
+          after: {
+            eventWeightCategoryId: updatedRegistration.eventWeightCategoryId,
+            categoryCode: updatedRegistration.categoryCode,
+            weighInStatus: updatedRegistration.weighInStatus,
+            status: updatedRegistration.status,
+            decision: outcome.decision,
+          } as unknown as Prisma.JsonValue,
+          reason: input.reason ?? outcome.reason,
+          override: input.override ?? false,
+        },
+        tx,
+      );
+
+      return {
+        attempt,
+        registration: updatedRegistration,
+        outcome,
+      };
     });
 
-    return attempt;
+    await this.eventStageAutomation.maybeAutoAdvanceById(registration.event.id);
+
+    return result;
   }
 
   async resolveOneHour(input: {
@@ -200,7 +609,6 @@ export class WeighinService {
     actorUserId: string;
     attemptId: string;
     action: 'MOVE_UP' | 'DQ';
-    /** New EventWeightCategory id (preferred) or legacy category code */
     nextEventWeightCategoryId?: string | null;
     newCategoryCode?: string | null;
     reason?: string | null;
@@ -234,13 +642,11 @@ export class WeighinService {
     if (!attempt) throw new Error('ATTEMPT_NOT_FOUND');
     if (attempt.resolvedAt) throw new Error('ALREADY_RESOLVED');
 
-    // Validate move-up target is an enabled event category one step higher
     let nextEventWeightCategoryId = input.nextEventWeightCategoryId ?? null;
     let newCategoryCode = input.newCategoryCode ?? null;
 
     if (input.action === 'MOVE_UP') {
       if (nextEventWeightCategoryId) {
-        // Validate it belongs to the same event
         const targetCat = await this.prisma.eventWeightCategory.findFirst({
           where: {
             id: nextEventWeightCategoryId,
@@ -251,13 +657,10 @@ export class WeighinService {
         if (!targetCat) throw new Error('INVALID_MOVE_UP_CATEGORY');
         newCategoryCode = targetCat.rulesetWeightCategory.name;
       } else if (attempt.registration.eventWeightCategory) {
-        // Auto-find the next higher category in the same age group
         const currentSortOrder =
-          attempt.registration.eventWeightCategory.rulesetWeightCategory
-            .sortOrder;
+          attempt.registration.eventWeightCategory.rulesetWeightCategory.sortOrder;
         const candidates =
-          attempt.registration.eventWeightCategory.eventAgeGroup
-            .weightCategories;
+          attempt.registration.eventWeightCategory.eventAgeGroup.weightCategories;
         const next = candidates.find(
           (wc) => wc.rulesetWeightCategory.sortOrder > currentSortOrder,
         );
@@ -269,7 +672,7 @@ export class WeighinService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const resolvedAttempt = await tx.weighInAttempt.update({
         where: { id: input.attemptId },
         data: { resolvedAt: new Date(), resolvedAction: input.action },
@@ -281,6 +684,7 @@ export class WeighinService {
           data: {
             categoryCode: newCategoryCode ?? attempt.registration.categoryCode,
             eventWeightCategoryId: nextEventWeightCategoryId,
+            weighInStatus: 'MOVED_UP',
           },
         });
 
@@ -292,37 +696,157 @@ export class WeighinService {
             registrationId: attempt.registrationId,
             attemptNo: nextAttemptNo,
             weightKg: attempt.weightKg,
-            decision: 'PASS',
+            decision: 'MOVED_UP',
+            policyCode: attempt.policyCode,
             operatorUserId: input.actorUserId,
             override: true,
-            reason: `Moved up from ONE_HOUR: ${input.reason ?? 'category moved up'}`,
+            reason: `Resolved ONE_HOUR with move-up: ${input.reason ?? 'manual resolution'}`,
           },
         });
       } else {
         await tx.registration.update({
           where: { id: attempt.registrationId },
-          data: { status: 'REJECTED' },
+          data: { status: 'REJECTED', weighInStatus: 'DISQUALIFIED' },
         });
       }
 
-      await this.audit.write({
-        organisationId: input.organisationId,
-        eventId: attempt.eventId,
-        actorUserId: input.actorUserId,
-        action: 'WEIGHIN_ONE_HOUR_RESOLVED',
-        entityType: 'weighin',
-        entityId: input.attemptId,
-        before: attempt as unknown as Prisma.JsonValue,
-        after: {
-          action: input.action,
-          nextEventWeightCategoryId,
-          newCategoryCode,
-        } as unknown as Prisma.JsonValue,
-        reason: input.reason ?? null,
-        override: true,
-      });
+      await this.audit.write(
+        {
+          organisationId: input.organisationId,
+          eventId: attempt.eventId,
+          actorUserId: input.actorUserId,
+          action: 'WEIGHIN_ONE_HOUR_RESOLVED',
+          entityType: 'weighin',
+          entityId: input.attemptId,
+          before: attempt as unknown as Prisma.JsonValue,
+          after: {
+            action: input.action,
+            nextEventWeightCategoryId,
+            newCategoryCode,
+          } as unknown as Prisma.JsonValue,
+          reason: input.reason ?? null,
+          override: true,
+        },
+        tx,
+      );
 
       return resolvedAttempt;
     });
+
+    await this.eventStageAutomation.maybeAutoAdvanceById(attempt.eventId);
+
+    return result;
+  }
+
+  async reconcileCategoryMapping(input: {
+    organisationId: string;
+    actorUserId: string;
+    registrationId: string;
+    reason?: string | null;
+  }) {
+    const registration = await this.prisma.registration.findFirst({
+      where: {
+        id: input.registrationId,
+        organisationId: input.organisationId,
+      },
+      include: {
+        event: {
+          select: {
+            id: true,
+            competitionStartDate: true,
+          },
+        },
+        athlete: {
+          select: {
+            dateOfBirth: true,
+            sex: true,
+          },
+        },
+      },
+    });
+    if (!registration) throw new Error('REGISTRATION_NOT_FOUND');
+
+    if (registration.eventWeightCategoryId && registration.registeredEventWeightCategoryId) {
+      return registration;
+    }
+    const normalizedCategoryCode = registration.categoryCode?.trim();
+    if (!normalizedCategoryCode) throw new Error('CATEGORY_CODE_MISSING');
+
+    const byNameCandidates = await this.prisma.eventWeightCategory.findMany({
+      where: {
+        eventAgeGroup: {
+          eventId: registration.eventId,
+        },
+        rulesetWeightCategory: {
+          name: { equals: normalizedCategoryCode, mode: 'insensitive' },
+        },
+      },
+      include: {
+        rulesetWeightCategory: {
+          select: { name: true },
+        },
+        eventAgeGroup: {
+          include: {
+            rulesetAgeGroup: {
+              select: {
+                minAge: true,
+                maxAge: true,
+                sex: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const eligibleCandidates = byNameCandidates.filter((candidate) =>
+      this.athleteMatchesAgeGroup({
+        athleteDob: registration.athlete.dateOfBirth,
+        athleteSex: registration.athlete.sex,
+        competitionStartDate: registration.event.competitionStartDate,
+        ageGroup: candidate.eventAgeGroup.rulesetAgeGroup,
+      }),
+    );
+
+    if (eligibleCandidates.length === 0) {
+      throw new Error('NO_MATCHING_EVENT_CATEGORY');
+    }
+    if (eligibleCandidates.length > 1) {
+      throw new Error('AMBIGUOUS_EVENT_CATEGORY_MATCH');
+    }
+
+    const target = eligibleCandidates[0];
+
+    const updated = await this.prisma.registration.update({
+      where: { id: registration.id },
+      data: {
+        eventWeightCategoryId: target.id,
+        registeredEventWeightCategoryId:
+          registration.registeredEventWeightCategoryId ?? target.id,
+      },
+    });
+
+    await this.audit.write({
+      organisationId: input.organisationId,
+      eventId: registration.eventId,
+      actorUserId: input.actorUserId,
+      action: 'REGISTRATION_CATEGORY_RECONCILED',
+      entityType: 'registration',
+      entityId: registration.id,
+      before: {
+        eventWeightCategoryId: registration.eventWeightCategoryId,
+        registeredEventWeightCategoryId: registration.registeredEventWeightCategoryId,
+        categoryCode: registration.categoryCode,
+      } as unknown as Prisma.JsonValue,
+      after: {
+        eventWeightCategoryId: updated.eventWeightCategoryId,
+        registeredEventWeightCategoryId: updated.registeredEventWeightCategoryId,
+        categoryCode: updated.categoryCode,
+      } as unknown as Prisma.JsonValue,
+      reason: input.reason ?? 'Auto-reconciled from categoryCode',
+      override: true,
+    });
+
+    return updated;
   }
 }

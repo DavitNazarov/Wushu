@@ -146,10 +146,21 @@ export class EventsController {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
-      throw new HttpException(
-        { code: 'INTERNAL_ERROR', message: 'Internal Server Error' },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      if (msg === 'RULESET_NOT_FOUND') {
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      }
+      if (msg === 'RULESET_SELECTION_REQUIRED') {
+        throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      }
+      if (
+        msg === 'INVALID_MIN_REST_MINUTES' ||
+        msg === 'INVALID_REWEIGH_WINDOW_MINUTES' ||
+        msg === 'MIN_REST_POLICY_REQUIRES_15_MINUTES' ||
+        msg === 'IWUF_STRICT_POLICY_REQUIRES_60_MINUTE_WINDOW'
+      ) {
+        throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      }
+      throw e;
     }
   }
 
@@ -184,6 +195,14 @@ export class EventsController {
       const msg = e instanceof Error ? e.message : 'Unknown';
       if (msg === 'EVENT_NOT_FOUND')
         throw new HttpException('EVENT_NOT_FOUND', HttpStatus.NOT_FOUND);
+      if (
+        msg === 'INVALID_MIN_REST_MINUTES' ||
+        msg === 'INVALID_REWEIGH_WINDOW_MINUTES' ||
+        msg === 'MIN_REST_POLICY_REQUIRES_15_MINUTES' ||
+        msg === 'IWUF_STRICT_POLICY_REQUIRES_60_MINUTE_WINDOW'
+      ) {
+        throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      }
       if (hasCode(e, 'P2002')) {
         throw new HttpException(
           {
@@ -194,10 +213,7 @@ export class EventsController {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
-      throw new HttpException(
-        { code: 'INTERNAL_ERROR', message: 'Internal Server Error' },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw e;
     }
   }
 
@@ -316,6 +332,7 @@ export class EventsController {
       if (msg === 'EVENT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
       if (
+        msg === 'EVENT_CATEGORIES_LOCKED_AFTER_ACTIVITY' ||
         msg === 'AT_LEAST_ONE_CATEGORY_REQUIRED' ||
         msg.startsWith('INVALID_')
       ) {

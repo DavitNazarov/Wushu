@@ -1,10 +1,14 @@
 import type { Event, Prisma } from '@prisma/client';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { RulesetsService } from '../rulesets/rulesets.service';
 import { EventStageAutomationService } from './event-stage-automation.service';
+import {
+  readEventPolicies,
+  resolveEventPolicies,
+} from '../event-policies/event-policy.resolver';
 import {
   isLegacyDatesInput,
   listDaysInclusive,
@@ -13,9 +17,12 @@ import {
   type LegacyDatesDto,
   type UpdateEventDto,
 } from './event.types';
+import { canDiscoverEventPublicly } from './public-event-access';
 
 @Injectable()
 export class EventsService {
+  private readonly logger = new Logger(EventsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -27,7 +34,13 @@ export class EventsService {
     eventId: string,
     organisationId: string,
   ): Promise<Event | null> {
-    await this.automation.maybeAutoAdvanceById(eventId);
+    try {
+      await this.automation.maybeAutoAdvanceById(eventId);
+    } catch (error) {
+      this.logger.error(
+        `Auto-advance check failed for event ${eventId}: ${String(error)}`,
+      );
+    }
     return this.prisma.event.findFirst({
       where: { id: eventId, organisationId },
     });
@@ -48,7 +61,11 @@ export class EventsService {
   }
 
   async listPublicAndRegistrable(): Promise<Event[]> {
-    return this.listPublished();
+    const events = await this.prisma.event.findMany({
+      orderBy: { competitionStartDate: 'desc' },
+    });
+
+    return events.filter((event) => canDiscoverEventPublicly(event));
   }
 
   async getPublishedBySlug(slug: string): Promise<Event | null> {
@@ -59,16 +76,28 @@ export class EventsService {
 
   async getPublicOrRegistrableBySlug(slug: string): Promise<Event | null> {
     const found = await this.prisma.event.findFirst({
-      where: { slug, published: true },
+      where: { slug },
       select: { id: true },
     });
     if (!found) return null;
 
-    await this.automation.maybeAutoAdvanceById(found.id);
+    try {
+      await this.automation.maybeAutoAdvanceById(found.id);
+    } catch (error) {
+      this.logger.error(
+        `Auto-advance check failed for event ${found.id}: ${String(error)}`,
+      );
+    }
 
-    return this.prisma.event.findFirst({
-      where: { id: found.id, published: true },
+    const event = await this.prisma.event.findFirst({
+      where: { id: found.id },
     });
+
+    if (!event) {
+      return null;
+    }
+
+    return canDiscoverEventPublicly(event) ? event : null;
   }
 
   async create(
@@ -76,9 +105,17 @@ export class EventsService {
     actorUserId: string,
     dto: CreateEventDto,
   ): Promise<Event> {
-    const { name, slug, location, timezone, autoAdvanceStage } = dto;
+    const { name, slug, location, timezone, autoAdvanceStage, policies } = dto;
     const normalized = this.normalizeDates(dto, timezone);
-    const activeRuleset = await this.rulesets.getActive(organisationId);
+    const resolvedPolicies = resolveEventPolicies(policies);
+    const selectedRuleset = dto.rulesetId
+      ? await this.rulesets.getForEventSelection(organisationId, dto.rulesetId)
+      : await this.rulesets.getActive(organisationId);
+    if (!selectedRuleset) {
+      throw new Error(
+        dto.rulesetId ? 'RULESET_NOT_FOUND' : 'RULESET_SELECTION_REQUIRED',
+      );
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const event = await tx.event.create({
@@ -98,19 +135,23 @@ export class EventsService {
           registrationOpensAt: normalized.registrationOpensAt,
           registrationClosesAt: normalized.registrationClosesAt,
           dates: normalized.datesJson,
+          weighInPolicyCode: resolvedPolicies.weighInPolicyCode,
+          bronzePolicyCode: resolvedPolicies.bronzePolicyCode,
+          restPolicyCode: resolvedPolicies.restPolicyCode,
+          minRestMinutes: resolvedPolicies.minRestMinutes,
+          publishTimingPolicyCode: resolvedPolicies.publishTimingPolicyCode,
+          reweighWindowMinutes: resolvedPolicies.reweighWindowMinutes,
         },
       });
 
-      if (activeRuleset) {
-        await tx.eventRulesetSnapshot.create({
-          data: {
-            eventId: event.id,
-            rulesetId: activeRuleset.id,
-            version: activeRuleset.version,
-            snapshot: activeRuleset.definition as Prisma.InputJsonValue,
-          },
-        });
-      }
+      await tx.eventRulesetSnapshot.create({
+        data: {
+          eventId: event.id,
+          rulesetId: selectedRuleset.id,
+          version: selectedRuleset.version,
+          snapshot: selectedRuleset.definition as Prisma.InputJsonValue,
+        },
+      });
 
       await this.audit.write(
         {
@@ -141,8 +182,12 @@ export class EventsService {
     const existing = await this.getById(eventId, organisationId);
     if (!existing) throw new Error('EVENT_NOT_FOUND');
 
-    const { name, slug, location, timezone, autoAdvanceStage } = dto;
+    const { name, slug, location, timezone, autoAdvanceStage, policies } = dto;
     const normalized = this.normalizeDates(dto, timezone);
+    const resolvedPolicies = resolveEventPolicies({
+      ...readEventPolicies(existing),
+      ...(policies ?? {}),
+    });
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.event.update({
@@ -162,6 +207,12 @@ export class EventsService {
           registrationOpensAt: normalized.registrationOpensAt,
           registrationClosesAt: normalized.registrationClosesAt,
           dates: normalized.datesJson,
+          weighInPolicyCode: resolvedPolicies.weighInPolicyCode,
+          bronzePolicyCode: resolvedPolicies.bronzePolicyCode,
+          restPolicyCode: resolvedPolicies.restPolicyCode,
+          minRestMinutes: resolvedPolicies.minRestMinutes,
+          publishTimingPolicyCode: resolvedPolicies.publishTimingPolicyCode,
+          reweighWindowMinutes: resolvedPolicies.reweighWindowMinutes,
         },
       });
 

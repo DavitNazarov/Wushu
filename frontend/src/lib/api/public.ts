@@ -55,12 +55,30 @@ export type PublicBracket = {
 
 export type ScheduleFight = {
   id: string;
-  categoryCode: string;
+  bracketRoundLabel: string;
+  bracketFightNumber: number;
+  scheduleOrder: number | null;
+  redDisplayName: string;
+  blueDisplayName: string;
+  redSourceScheduleOrder: number | null;
+  blueSourceScheduleOrder: number | null;
+  isPlayable: boolean;
+  isScheduled: boolean;
+  status: string;
+  matId: string | null;
+  matName: string | null;
   orderInMat: number | null;
-  scheduledStartTime: string | null;
-  mat?: { id: string; name: string } | null;
-  redAthlete?: { id: string; firstName: string; lastName: string } | null;
-  blueAthlete?: { id: string; firstName: string; lastName: string } | null;
+  scheduledAt: string | null;
+  liveStatus?: 'PENDING' | 'UPCOMING' | 'RUNNING' | 'FINISHED';
+};
+
+export type PublicLiveFeed = {
+  eventId: string;
+  mats: Array<{ id: string; name: string }>;
+  selectedMatId: string | null;
+  selectedMatName: string | null;
+  current: ScheduleFight | null;
+  upNext: ScheduleFight[];
 };
 
 export type MatFight = {
@@ -125,9 +143,15 @@ export async function fetchPublicBrackets(eventSlug: string): Promise<PublicBrac
 }
 
 export async function fetchPublicSchedule(eventSlug: string): Promise<ScheduleFight[]> {
-  return publicFetch<ScheduleFight[]>(
+  const res = await fetch(
     `/api/public/schedule?eventSlug=${encodeURIComponent(eventSlug)}`,
+    {
+      credentials: 'include',
+    },
   );
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
 }
 
 export async function fetchPublicMat(
@@ -138,6 +162,20 @@ export async function fetchPublicMat(
     `/api/public/mat?eventSlug=${encodeURIComponent(eventSlug)}&mat=${encodeURIComponent(matName)}`,
     { credentials: 'include' },
   );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchPublicLive(
+  eventSlug: string,
+  matName?: string | null,
+): Promise<PublicLiveFeed | null> {
+  const query = new URLSearchParams({ eventSlug });
+  if (matName) query.set('mat', matName);
+  const res = await fetch(`/api/public/live?${query.toString()}`, {
+    credentials: 'include',
+  });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   return res.json();

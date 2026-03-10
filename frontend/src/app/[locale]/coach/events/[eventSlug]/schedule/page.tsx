@@ -8,8 +8,8 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { StatusChip } from '@/components/ui/StatusChip';
-import { apiGet } from '@/lib/api/client';
-import type { EventRow, FightRow } from '@/types/api';
+import { ApiError, apiGet } from '@/lib/api/client';
+import type { EventRow, ScheduleFightRow } from '@/types/api';
 
 type Props = { params: Promise<{ locale: string; eventSlug: string }> };
 
@@ -26,16 +26,24 @@ export default function CoachSchedulePage({ params }: Props) {
 
   const { data: fights, isLoading, error, refetch } = useQuery({
     queryKey: ['public', 'schedule', eventSlug],
-    queryFn: () =>
-      apiGet<(FightRow & { mat?: { name: string } })[]>(
-        `/api/public/schedule?eventSlug=${encodeURIComponent(eventSlug)}`,
-      ),
+    queryFn: async () => {
+      try {
+        return await apiGet<ScheduleFightRow[]>(
+          `/api/public/schedule?eventSlug=${encodeURIComponent(eventSlug)}`,
+        );
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          return [];
+        }
+        throw error;
+      }
+    },
     enabled: !!eventSlug,
   });
 
   const list = fights ?? [];
   const byMat = list.reduce<Record<string, typeof list>>((acc, f) => {
-    const mat = f.mat?.name ?? 'Unknown';
+    const mat = f.matName ?? 'Unassigned';
     if (!acc[mat]) acc[mat] = [];
     acc[mat].push(f);
     return acc;
@@ -79,8 +87,7 @@ export default function CoachSchedulePage({ params }: Props) {
                     className="flex items-center justify-between rounded border border-[var(--color-border)] px-3 py-2 text-[13px]"
                   >
                     <span>
-                      {f.redAthlete ? `${f.redAthlete.firstName} ${f.redAthlete.lastName}` : 'TBD'} vs{' '}
-                      {f.blueAthlete ? `${f.blueAthlete.firstName} ${f.blueAthlete.lastName}` : 'TBD'}
+                      #{f.scheduleOrder ?? '-'} {f.redDisplayName} vs {f.blueDisplayName}
                     </span>
                     <StatusChip status={f.status} label={tC(`fightStatus.${f.status}` as Parameters<typeof tC>[0])} domain="fight" />
                   </div>

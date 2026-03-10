@@ -9,6 +9,7 @@ import { InlineAlert } from '@/components/ui/InlineAlert';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { apiPost, ApiError } from '@/lib/api/client';
+import { getCompactErrorMessage } from '@/lib/api/error';
 import { useQuery } from '@tanstack/react-query';
 import type { NewsPostRow } from '@/types/api';
 import type { PublicEvent } from '@/lib/api/public';
@@ -17,6 +18,7 @@ import { TextInput } from '@/components/form/TextInput';
 import { Textarea } from '@/components/form/Textarea';
 import { Select } from '@/components/form/Select';
 import { Checkbox } from '@/components/form/Checkbox';
+import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 function slugify(title: string): string {
   return title
@@ -44,7 +46,7 @@ export default function CreateNewsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: events = [] } = useQuery({
+  const { data: events = [], error: eventsError, refetch: refetchEvents } = useQuery({
     queryKey: ['public', 'events'],
     queryFn: async () => {
       const res = await fetch('/api/public/events', { credentials: 'include' });
@@ -92,7 +94,11 @@ export default function CreateNewsPage() {
       await apiPost<NewsPostRow>('/api/admin/news', payload);
       router.push('/admin/news');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tCommon('saveFailed'));
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : getCompactErrorMessage(err, tCommon('saveFailed')),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -111,6 +117,14 @@ export default function CreateNewsPage() {
 
       <Card>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {eventsError && (
+            <AdminErrorAlert
+              error={eventsError}
+              fallbackMessage="Failed to load events list."
+              retryLabel={tCommon('retry')}
+              onRetry={() => refetchEvents()}
+            />
+          )}
           {error && (
             <InlineAlert variant="error">
               {error}

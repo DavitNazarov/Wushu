@@ -54,18 +54,21 @@ async function handleResponse<T>(res: Response): Promise<T> {
     }
   }
 
+  const rawBody = await res.text();
   let body: Record<string, unknown> = {};
-  try {
-    body = (await res.json()) as Record<string, unknown>;
-  } catch {
-    /* empty */
+  if (rawBody) {
+    try {
+      body = JSON.parse(rawBody) as Record<string, unknown>;
+    } catch {
+      body = { message: rawBody };
+    }
   }
 
   throw new ApiError(
     res.status,
     (body.code as string) ?? (body.error as string) ?? `HTTP_${res.status}`,
-    (body.message as string) ?? `Request failed with status ${res.status}`,
-    body.issues ?? body.details,
+    (body.message as string) ?? rawBody ?? `Request failed with status ${res.status}`,
+    body.issues ?? body.details ?? rawBody,
   );
 }
 
