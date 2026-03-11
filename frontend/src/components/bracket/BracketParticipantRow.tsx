@@ -1,14 +1,16 @@
 'use client';
 
+import Link from 'next/link';
 import { countryToFlag } from './bracketDisplayMapper';
 import type { BracketRendererParticipantSlot } from './types';
 
 type Props = {
   slot: BracketRendererParticipantSlot;
   tBracket: (key: string, values?: Record<string, string | number | Date>) => string;
+  getAthleteHref?: (athleteId: string) => string;
 };
 
-export function BracketParticipantRow({ slot, tBracket }: Props) {
+export function BracketParticipantRow({ slot, tBracket, getAthleteHref }: Props) {
   if (slot.type === 'bye') {
     return (
       <div className="flex items-center gap-2 rounded-[var(--radius-input)] bg-[var(--color-surface-alt)] px-2 py-1.5">
@@ -42,8 +44,7 @@ export function BracketParticipantRow({ slot, tBracket }: Props) {
 
   const participant = slot.athlete;
   const flag = countryToFlag(participant.country);
-
-  return (
+  const content = (
     <div
       className={`flex items-center gap-2 rounded-[var(--radius-input)] px-2 py-1.5 ${
         participant.winner
@@ -67,5 +68,13 @@ export function BracketParticipantRow({ slot, tBracket }: Props) {
         )}
       </div>
     </div>
+  );
+
+  if (!getAthleteHref) return content;
+
+  return (
+    <Link href={getAthleteHref(participant.athleteId)} className="block transition hover:opacity-90">
+      {content}
+    </Link>
   );
 }

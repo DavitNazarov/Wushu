@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
@@ -17,6 +18,7 @@ export default function CoachAthletesPage() {
   const t = useTranslations('coach.athletes');
   const tC = useTranslations('common');
   const tAth = useTranslations('athletes');
+  const locale = useLocale();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
@@ -120,7 +122,9 @@ export default function CoachAthletesPage() {
               {rows.map((a) => (
                 <tr key={a.id} className="border-t border-[var(--color-border)]">
                   <td className="px-4 py-3">
-                    {a.firstName} {a.lastName}
+                    <Link href={`/${locale}/coach/athletes/${a.id}`} className="hover:underline">
+                      {a.firstName} {a.lastName}
+                    </Link>
                   </td>
                   <td className="px-4 py-3">
                     {a.dateOfBirth ? new Date(a.dateOfBirth).toLocaleDateString() : '—'}

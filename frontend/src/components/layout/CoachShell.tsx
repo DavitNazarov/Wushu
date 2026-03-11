@@ -4,7 +4,7 @@ import { ReactNode, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useTranslations, useLocale } from 'next-intl';
 import { usePathname } from 'next/navigation';
-import { Calendar, UserCircle2, Users, Menu } from 'lucide-react';
+import { Calendar, LayoutDashboard, UserCircle2, Users, Menu } from 'lucide-react';
 import { TopbarToggles } from './TopbarToggles';
 import { LogoutButton } from './LogoutButton';
 import { MobileDrawer } from './MobileDrawer';
@@ -17,6 +17,7 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
+  { key: 'dashboard', href: '/coach', icon: LayoutDashboard },
   { key: 'events', href: '/coach/events', icon: Calendar },
   { key: 'athletes', href: '/coach/athletes', icon: Users },
   { key: 'me', href: '/coach/me', icon: UserCircle2 },
@@ -37,7 +38,9 @@ export function CoachShell({ children }: CoachShellProps) {
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   function isActive(href: string) {
-    return href === '/coach/me'
+    return href === '/coach'
+      ? pathname === `/${locale}/coach` || pathname === `/${locale}/coach/`
+      : href === '/coach/me'
       ? pathname === `/${locale}/coach/me` || pathname === `/${locale}/coach/me/`
       : pathname.startsWith(`/${locale}${href}`);
   }

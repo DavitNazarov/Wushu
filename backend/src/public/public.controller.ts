@@ -14,6 +14,7 @@ import { getRegistrationStatus } from '../events/event-dates.helper';
 import { PrismaService } from '../prisma/prisma.service';
 import { BracketsService } from '../draw/brackets.service';
 import { ScheduleService } from '../schedule/schedule.service';
+import { AthleteProfileService } from '../athletes/athlete-profile.service';
 import {
   buildMedalTable,
   buildPlacementsFromConfirmedFights,
@@ -37,6 +38,7 @@ export class PublicController {
     private readonly eventCategories: EventCategoriesService,
     private readonly brackets: BracketsService,
     private readonly schedule: ScheduleService,
+    private readonly athleteProfiles: AthleteProfileService,
   ) {}
 
   private assertCompetitionDataPublished(event: Pick<Event, 'published'>): void {
@@ -102,6 +104,13 @@ export class PublicController {
   @Get('clubs')
   async listPublicClubs() {
     return this.clubs.listPublic();
+  }
+
+  @Get('athletes/:id')
+  async getPublicAthlete(@Param('id') id: string) {
+    const profile = await this.athleteProfiles.getPublicProfile(id);
+    if (!profile) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    return profile;
   }
 
   @Get('brackets/overview')

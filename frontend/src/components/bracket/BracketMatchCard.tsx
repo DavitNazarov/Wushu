@@ -13,6 +13,7 @@ type Props = {
   showConnectorLeft: boolean;
   tFightStatus: (key: string) => string;
   tBracket: (key: string, values?: Record<string, string | number | Date>) => string;
+  getAthleteHref?: (athleteId: string) => string;
 };
 
 export function BracketMatchCard({
@@ -21,6 +22,7 @@ export function BracketMatchCard({
   showConnectorLeft,
   tFightStatus,
   tBracket,
+  getAthleteHref,
 }: Props) {
   return (
     <article className="relative space-y-2 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5">
@@ -35,8 +37,8 @@ export function BracketMatchCard({
       </div>
 
       <div className="space-y-1.5">
-        <BracketParticipantRow slot={match.participants.a} tBracket={tBracket} />
-        <BracketParticipantRow slot={match.participants.b} tBracket={tBracket} />
+        <BracketParticipantRow slot={match.participants.a} tBracket={tBracket} getAthleteHref={getAthleteHref} />
+        <BracketParticipantRow slot={match.participants.b} tBracket={tBracket} getAthleteHref={getAthleteHref} />
       </div>
 
       {match.isBye && <BracketByeCard label={tBracket('badgeBye')} />}

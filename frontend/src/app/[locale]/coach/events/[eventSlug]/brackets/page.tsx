@@ -44,6 +44,7 @@ export default function CoachBracketsPage({ params }: Props) {
         tCommon={tCommon}
         emptyTitle={tCoach('emptyTitle')}
         emptyDescription={tCoach('emptyDescription')}
+        getAthleteHref={(athleteId) => `/${locale}/coach/athletes/${athleteId}`}
       />
     </div>
   );

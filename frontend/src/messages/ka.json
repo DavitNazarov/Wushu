@@ -493,6 +493,121 @@
   "coach": {
     "title": "Coach Dashboard",
     "sidebarSubtitle": "Coach",
+    "dashboard": {
+      "title": "პანელი",
+      "subtitle": "ერთ ეკრანზე ნახეთ სპორტსმენები, რეგისტრაციები და მოახლოებული ღონისძიებები.",
+      "partialRegistrationsWarning": "ზოგი რეგისტრაციის სია ვერ ჩაიტვირთა. დათვლები შეიძლება არასრული იყოს.",
+      "emptyTitle": "ჯერჯერობით აქტივობა არ არის",
+      "emptyDescription": "დაამატეთ სპორტსმენები ან გახსენით რეგისტრაცია, რომ ეს გვერდი რეალურ სამუშაო პანელად იქცეს.",
+      "summary": {
+        "totalAthletes": "სულ სპორტსმენი",
+        "activeRegistrations": "აქტიური რეგისტრაციები",
+        "pendingWeighIns": "მოსაგვარებელი weigh-in",
+        "upcomingEvents": "მოახლოებული ღონისძიებები"
+      },
+      "pendingActions": {
+        "title": "მოსაგვარებელი მოქმედებები",
+        "subtitle": "უმაღლესი პრიორიტეტის სამუშაოები თქვენი სპორტსმენების, რეგისტრაციების და ღონისძიებების მიხედვით.",
+        "count": "{count, plural, one {# მოქმედება} other {# მოქმედება}}",
+        "emptyTitle": "მოსაგვარებელი არაფერი არის",
+        "emptyDescription": "ამ ეტაპზე თქვენი სპორტსმენები და ღონისძიებები წესრიგშია.",
+        "items": {
+          "completeAthleteProfile": {
+            "title": "შეავსეთ {athleteName}",
+            "description": "დაამატეთ დაკარგული მონაცემები, სანამ რეგისტრაციის ზეწოლა გაიზრდება."
+          },
+          "registrationOpen": {
+            "title": "{eventName}-ზე რეგისტრაცია ღიაა",
+            "description": "{athleteCount, plural, one {# სპორტსმენი ჯერ კიდევ შეგიძლიათ დაარეგისტრიროთ.} other {# სპორტსმენი ჯერ კიდევ შეგიძლიათ დაარეგისტრიროთ.}}"
+          },
+          "registrationClosingSoon": {
+            "title": "{eventName}-ზე რეგისტრაცია მალე იხურება",
+            "description": "ონლაინ რეგისტრაცია სრულდება {date}-ში."
+          },
+          "weighInActive": {
+            "title": "{eventName}-ზე weigh-in მიმდინარეობს",
+            "description": "{registrationCount, plural, one {# რეგისტრაცია ეხება მიმდინარე weigh-in ეტაპს.} other {# რეგისტრაცია ეხება მიმდინარე weigh-in ეტაპს.}}"
+          },
+          "registrationRejected": {
+            "title": "{athleteName}-ის რეგისტრაცია გადასახედია",
+            "description": "{eventName}-ში რეგისტრაცია უარყოფილია და საჭიროებს ყურადღებას."
+          }
+        }
+      },
+      "upcomingEvents": {
+        "title": "მოახლოებული ღონისძიებები",
+        "subtitle": "უახლოესი შეჯიბრებები პირველ რიგში, თქვენი კლუბის კონტექსტით.",
+        "filters": {
+          "all": "ყველა ღონისძიება",
+          "registrationOpen": "რეგისტრაცია ღიაა",
+          "weighIn": "Weigh-in ეტაპი"
+        },
+        "emptyTitle": "მოახლოებული ღონისძიებები არ არის",
+        "emptyDescription": "გამოქვეყნებული ღონისძიებები აქ გამოჩნდება, როცა კალენდარი შეივსება.",
+        "cards": {
+          "registrations": "თქვენი რეგისტრაციები",
+          "availableAthletes": "ხელმისაწვდომი სპორტსმენები",
+          "registrationState": "რეგისტრაცია"
+        },
+        "registrationStatus": {
+          "OPEN": "ღიაა",
+          "UPCOMING": "მალე",
+          "CLOSED": "დახურულია"
+        }
+      },
+      "recentUpdates": {
+        "title": "სპორტსმენების ბოლო განახლებები",
+        "subtitleChronological": "არსებული რეგისტრაციის მონაცემებიდან დალაგებული უახლესი ცვლილებები.",
+        "subtitleVisible": "უახლესი ხილული სტატუსები, როცა ყველა ჩანაწერს ზუსტი დრო არ ახლავს.",
+        "searchPlaceholder": "ფილტრი სპორტსმენის, ღონისძიების ან კატეგორიის მიხედვით…",
+        "emptyTitle": "განახლებები ჯერ არ არის",
+        "emptyDescription": "რეგისტრაციის აქტივობა აქ ავტომატურად გამოჩნდება.",
+        "latestVisible": "უახლესი ხილული სტატუსი",
+        "items": {
+          "registrationSubmitted": "{eventName}: რეგისტრაცია გაგზავნილია კატეგორიაში {categoryCode}.",
+          "registrationApproved": "{eventName}: რეგისტრაცია დამტკიცებულია კატეგორიაში {categoryCode}.",
+          "registrationPending": "{eventName}: რეგისტრაცია ელოდება გადახედვას კატეგორიაში {categoryCode}.",
+          "registrationRejected": "{eventName}: რეგისტრაცია უარყოფილია კატეგორიაში {categoryCode}.",
+          "registrationWithdrawn": "{eventName}: რეგისტრაცია მოხსნილია კატეგორიიდან {categoryCode}.",
+          "weighInInProgress": "{eventName}: სპორტსმენი აქტიურ weigh-in ღონისძიებას უკავშირდება კატეგორიაში {categoryCode}.",
+          "eventPublished": "{eventName}: ბადეების ეტაპი უკვე ჩანს კატეგორიისთვის {categoryCode}.",
+          "competitionLive": "{eventName}: შეჯიბრი live რეჟიმშია კატეგორიისთვის {categoryCode}.",
+          "eventCompleted": "{eventName}: ღონისძიება დასრულებულია კატეგორიისთვის {categoryCode}."
+        }
+      },
+      "sidebar": {
+        "eyebrow": "კონტექსტი",
+        "noClub": "კლუბი მინიჭებული არ არის",
+        "organisation": "ორგანიზაცია",
+        "athletes": "სპორტსმენები"
+      },
+      "quickActions": {
+        "title": "სწრაფი მოქმედებები",
+        "subtitle": "გადადით იმ coach გვერდებზე, რომლებიც ყველაზე ხშირად გჭირდებათ.",
+        "items": {
+          "athletes": {
+            "label": "სპორტსმენები",
+            "description": "განაახლეთ გუნდი და შეავსეთ დაკარგული მონაცემები."
+          },
+          "events": {
+            "label": "ღონისძიებები",
+            "description": "ნახეთ ეტაპები, ფანჯრები და ვადები."
+          },
+          "registrations": {
+            "label": "რეგისტრაციები",
+            "description": "გახსენით ყველაზე შესაბამისი რეგისტრაციის სამუშაო სივრცე."
+          },
+          "weighIn": {
+            "label": "Weigh-in ფოკუსი",
+            "description": "გახსენით ღონისძიება, რომელსაც ახლა weigh-in ყურადღება სჭირდება."
+          },
+          "profile": {
+            "label": "პროფილი",
+            "description": "შეამოწმეთ თქვენი coach და კლუბის ინფორმაცია."
+          }
+        }
+      }
+    },
     "events": {
       "title": "Events",
       "subtitle": "Pick an event to manage registrations or view tournament info.",
@@ -585,6 +700,77 @@
     "emptyTitle": "No athletes yet",
     "emptyDescription": "Create athletes as registration opens and link them to clubs.",
     "dedupeHint": "Rows with a higher duplicate count may need review."
+  },
+  "athleteProfile": {
+    "title": "სპორტსმენის პროფილი",
+    "subtitle": {
+      "admin": "სპორტსმენის მთავარი დეტალური ხედი საოპერაციო სამუშაოსთვის.",
+      "coach": "სპორტსმენის მთავარი დეტალური ხედი თქვენი კლუბის სამუშაოსთვის.",
+      "public": "სპორტსმენის საჯარო საკონკურსო პროფილი."
+    },
+    "identity": {
+      "eyebrow": "იდენტობა",
+      "club": "კლუბი",
+      "sex": "სქესი",
+      "dateOfBirth": "დაბადების თარიღი",
+      "coaches": "მწვრთნელები",
+      "sexValue": {
+        "MALE": "კაცი",
+        "FEMALE": "ქალი"
+      }
+    },
+    "registrations": {
+      "title": "ღონისძიებებში მონაწილეობა",
+      "subtitle": "რეგისტრაციები კატეგორიის და weigh-in კონტექსტით.",
+      "emptyTitle": "რეგისტრაციები არ არის",
+      "emptyDescription": "ეს სპორტსმენი ჯერ არცერთ ღონისძიებაში არ არის შეყვანილი.",
+      "unknownAgeGroup": "ასაკობრივი ჯგუფი უცნობია",
+      "movedUp": "გადაყვანილია {from}-დან {to}-ში",
+      "columns": {
+        "weighIn": "Weigh-in",
+        "initialCategory": "საწყისი კატეგორია",
+        "latestDecision": "ბოლო გადაწყვეტილება"
+      }
+    },
+    "competition": {
+      "title": "შეჯიბრი",
+      "subtitle": "ამ სპორტსმენთან დაკავშირებული ბრძოლები და შედეგები.",
+      "emptyTitle": "შეჯიბრის მონაცემები ჯერ არ არის",
+      "emptyDescription": "ბრძოლები და შედეგები აქ გამოჩნდება, როცა სპორტსმენი შეჯიბრის ეტაპზე გადავა.",
+      "summary": {
+        "fights": "ბრძოლები",
+        "record": "ბალანსი",
+        "pending": "მოლოდინში"
+      },
+      "fightLine": "რაუნდი {round} · ბრძოლა {bout} · {category}",
+      "opponent": "მოწინააღმდეგე: {name}",
+      "opponentPending": "მოწინააღმდეგე ჯერ გადაწყვეტილი არ არის",
+      "outcome": {
+        "win": "მოგება",
+        "loss": "წაგება",
+        "pending": "მოლოდინში"
+      }
+    },
+    "actions": {
+      "title": "დაკავშირებული მოქმედებები",
+      "subtitle": "გადადით იმ გვერდებზე, სადაც რეალურად ხდება სიის და ღონისძიების მართვა.",
+      "admin": {
+        "athletes": "სპორტსმენების სია",
+        "athletesDescription": "დაბრუნდით სპორტსმენების მართვის სრულ ცხრილში.",
+        "registrations": "რეგისტრაციები",
+        "registrationsDescription": "გახსენით admin რეგისტრაციების სამუშაო სივრცე.",
+        "event": "ბოლო ღონისძიება",
+        "eventDescription": "გახსენით {event} admin ღონისძიების გვერდზე."
+      },
+      "coach": {
+        "athletes": "სპორტსმენების სია",
+        "athletesDescription": "დაბრუნდით თქვენი კლუბის სპორტსმენების სიაში.",
+        "events": "ღონისძიებები",
+        "eventsDescription": "ნახეთ ღონისძიებები და რეგისტრაციის ფანჯრები.",
+        "event": "ბოლო ღონისძიების რეგისტრაციები",
+        "eventDescription": "გახსენით {event}-ის რეგისტრაციები."
+      }
+    }
   },
   "content": {
     "title": "Content",

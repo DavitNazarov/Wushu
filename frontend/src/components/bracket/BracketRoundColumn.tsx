@@ -11,6 +11,7 @@ type Props = {
   isLast: boolean;
   tFightStatus: (key: string) => string;
   tBracket: (key: string, values?: Record<string, string | number | Date>) => string;
+  getAthleteHref?: (athleteId: string) => string;
 };
 
 export function BracketRoundColumn({
@@ -20,6 +21,7 @@ export function BracketRoundColumn({
   isLast,
   tFightStatus,
   tBracket,
+  getAthleteHref,
 }: Props) {
   return (
     <section className="w-[308px] shrink-0 space-y-3">
@@ -33,6 +35,7 @@ export function BracketRoundColumn({
             showConnectorRight={!isLast}
             tFightStatus={tFightStatus}
             tBracket={tBracket}
+            getAthleteHref={getAthleteHref}
           />
         ))}
       </div>

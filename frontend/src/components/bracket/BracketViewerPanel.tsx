@@ -15,6 +15,7 @@ type Props = {
   tCommon: (key: string, values?: Record<string, string | number | Date>) => string;
   emptyTitle: string;
   emptyDescription: string;
+  getAthleteHref?: (athleteId: string) => string;
 };
 
 export function BracketViewerPanel({
@@ -23,6 +24,7 @@ export function BracketViewerPanel({
   tCommon,
   emptyTitle,
   emptyDescription,
+  getAthleteHref,
 }: Props) {
   const overviewQuery = usePublicBracketOverview(eventSlug);
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
@@ -132,12 +134,14 @@ export function BracketViewerPanel({
               fights={detailsQuery.data?.fights ?? []}
               tBracket={tBracket}
               tFightStatus={(status) => tCommon(`fightStatus.${status}`)}
+              getAthleteHref={getAthleteHref}
             />
           ) : (
             <BracketRenderer
               data={rendererData}
               tBracket={tBracket}
               tFightStatus={(status) => tCommon(`fightStatus.${status}`)}
+              getAthleteHref={getAthleteHref}
             />
           )}
         </>

@@ -493,6 +493,121 @@
   "coach": {
     "title": "Coach Dashboard",
     "sidebarSubtitle": "Coach",
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "Track roster work, registration pressure, and event readiness from one place.",
+      "partialRegistrationsWarning": "Some registration lists could not be loaded. Dashboard counts may be incomplete.",
+      "emptyTitle": "No coach activity yet",
+      "emptyDescription": "Add athletes or open an event registration to turn this page into your control panel.",
+      "summary": {
+        "totalAthletes": "Total athletes",
+        "activeRegistrations": "Active registrations",
+        "pendingWeighIns": "Pending weigh-ins",
+        "upcomingEvents": "Upcoming events"
+      },
+      "pendingActions": {
+        "title": "Pending actions",
+        "subtitle": "Highest-priority work derived from your roster, registrations, and event stages.",
+        "count": "{count, plural, one {# action} other {# actions}}",
+        "emptyTitle": "No pending actions",
+        "emptyDescription": "Your athletes and current event work look up to date.",
+        "items": {
+          "completeAthleteProfile": {
+            "title": "Complete {athleteName}",
+            "description": "Add the missing athlete details needed before registration pressure builds."
+          },
+          "registrationOpen": {
+            "title": "Registration open for {eventName}",
+            "description": "{athleteCount, plural, one {# athlete is still available to register.} other {# athletes are still available to register.}}"
+          },
+          "registrationClosingSoon": {
+            "title": "Registration closes soon for {eventName}",
+            "description": "Online registration is due by {date}."
+          },
+          "weighInActive": {
+            "title": "Weigh-in window active for {eventName}",
+            "description": "{registrationCount, plural, one {# registration is in the current weigh-in event.} other {# registrations are in the current weigh-in event.}}"
+          },
+          "registrationRejected": {
+            "title": "{athleteName} needs registration review",
+            "description": "A registration in {eventName} was rejected and may need coach attention."
+          }
+        }
+      },
+      "upcomingEvents": {
+        "title": "Upcoming events",
+        "subtitle": "Nearest competitions first, with your roster impact visible at a glance.",
+        "filters": {
+          "all": "All events",
+          "registrationOpen": "Registration open",
+          "weighIn": "Weigh-in stage"
+        },
+        "emptyTitle": "No upcoming events",
+        "emptyDescription": "Published events will appear here when the calendar opens up.",
+        "cards": {
+          "registrations": "Your registrations",
+          "availableAthletes": "Available athletes",
+          "registrationState": "Registration"
+        },
+        "registrationStatus": {
+          "OPEN": "Open",
+          "UPCOMING": "Upcoming",
+          "CLOSED": "Closed"
+        }
+      },
+      "recentUpdates": {
+        "title": "Recent athlete updates",
+        "subtitleChronological": "Newest visible athlete changes from existing registration data.",
+        "subtitleVisible": "Latest visible athlete status when exact timestamps are not available for every row.",
+        "searchPlaceholder": "Filter by athlete, event, or category…",
+        "emptyTitle": "No athlete updates yet",
+        "emptyDescription": "Registration activity will start filling this feed automatically.",
+        "latestVisible": "Latest visible status",
+        "items": {
+          "registrationSubmitted": "{eventName}: registration submitted in {categoryCode}.",
+          "registrationApproved": "{eventName}: registration approved in {categoryCode}.",
+          "registrationPending": "{eventName}: registration is pending review in {categoryCode}.",
+          "registrationRejected": "{eventName}: registration was rejected in {categoryCode}.",
+          "registrationWithdrawn": "{eventName}: registration was withdrawn from {categoryCode}.",
+          "weighInInProgress": "{eventName}: athlete is attached to an active weigh-in event in {categoryCode}.",
+          "eventPublished": "{eventName}: bracket stage is visible for {categoryCode}.",
+          "competitionLive": "{eventName}: competition is live for {categoryCode}.",
+          "eventCompleted": "{eventName}: event completed for {categoryCode}."
+        }
+      },
+      "sidebar": {
+        "eyebrow": "Coach context",
+        "noClub": "No club assigned",
+        "organisation": "Organisation",
+        "athletes": "Athletes"
+      },
+      "quickActions": {
+        "title": "Quick actions",
+        "subtitle": "Jump into the coach pages used most during registration and competition days.",
+        "items": {
+          "athletes": {
+            "label": "Athletes",
+            "description": "Update your roster and fix missing athlete details."
+          },
+          "events": {
+            "label": "Events",
+            "description": "Browse event windows, stages, and deadlines."
+          },
+          "registrations": {
+            "label": "Registrations",
+            "description": "Open the most relevant event registration workspace."
+          },
+          "weighIn": {
+            "label": "Weigh-in focus",
+            "description": "Open the event that currently needs weigh-in attention."
+          },
+          "profile": {
+            "label": "Profile",
+            "description": "Check your coach and club context."
+          }
+        }
+      }
+    },
     "events": {
       "title": "Events",
       "subtitle": "Pick an event to manage registrations or view tournament info.",
@@ -585,6 +700,77 @@
     "emptyTitle": "No athletes yet",
     "emptyDescription": "Create athletes as registration opens and link them to clubs.",
     "dedupeHint": "Rows with a higher duplicate count may need review."
+  },
+  "athleteProfile": {
+    "title": "Athlete profile",
+    "subtitle": {
+      "admin": "Canonical athlete detail for tournament operations.",
+      "coach": "Canonical athlete detail for your club workflow.",
+      "public": "Public athlete competition profile."
+    },
+    "identity": {
+      "eyebrow": "Identity",
+      "club": "Club",
+      "sex": "Gender",
+      "dateOfBirth": "Date of birth",
+      "coaches": "Coaches",
+      "sexValue": {
+        "MALE": "Male",
+        "FEMALE": "Female"
+      }
+    },
+    "registrations": {
+      "title": "Event participation",
+      "subtitle": "Current and past registrations with category and weigh-in context.",
+      "emptyTitle": "No registrations yet",
+      "emptyDescription": "This athlete has not been entered into any events yet.",
+      "unknownAgeGroup": "Unknown age group",
+      "movedUp": "Moved from {from} to {to}",
+      "columns": {
+        "weighIn": "Weigh-in",
+        "initialCategory": "Original category",
+        "latestDecision": "Latest decision"
+      }
+    },
+    "competition": {
+      "title": "Competition",
+      "subtitle": "Fight and result data currently attached to this athlete.",
+      "emptyTitle": "No competition data yet",
+      "emptyDescription": "Fights and results will appear here once the athlete reaches competition flow.",
+      "summary": {
+        "fights": "Fights",
+        "record": "Record",
+        "pending": "Pending"
+      },
+      "fightLine": "Round {round} · Bout {bout} · {category}",
+      "opponent": "Opponent: {name}",
+      "opponentPending": "Opponent not resolved yet",
+      "outcome": {
+        "win": "Win",
+        "loss": "Loss",
+        "pending": "Pending"
+      }
+    },
+    "actions": {
+      "title": "Related actions",
+      "subtitle": "Jump back to the pages where roster and event work actually happens.",
+      "admin": {
+        "athletes": "Athlete list",
+        "athletesDescription": "Return to the full athlete management table.",
+        "registrations": "Registrations",
+        "registrationsDescription": "Open the admin registration workspace.",
+        "event": "Latest event",
+        "eventDescription": "Open {event} in the admin event workspace."
+      },
+      "coach": {
+        "athletes": "Athlete list",
+        "athletesDescription": "Return to your club athlete roster.",
+        "events": "Events",
+        "eventsDescription": "Browse events and registration windows.",
+        "event": "Latest event registrations",
+        "eventDescription": "Open registrations for {event}."
+      }
+    }
   },
   "content": {
     "title": "Content",

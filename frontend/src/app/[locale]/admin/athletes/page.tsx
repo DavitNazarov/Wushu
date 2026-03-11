@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useTranslations, useLocale } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -152,9 +153,13 @@ export default function AthletesPage() {
                             onClick={(e) => e.stopPropagation()}
                             className="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
                           />
-                          <span className="font-medium text-[var(--color-text)]">
+                          <Link
+                            href={`/${locale}/admin/athletes/${a.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-medium text-[var(--color-text)] hover:underline"
+                          >
                             {a.lastName} {a.firstName}
-                          </span>
+                          </Link>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-[var(--color-text-muted)]">{formatDob(a.dateOfBirth)}</td>
@@ -199,7 +204,13 @@ export default function AthletesPage() {
                       className="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-primary)]"
                     />
                     <p className="text-[13px] font-medium text-[var(--color-text)]">
-                      {a.lastName} {a.firstName}
+                      <Link
+                        href={`/${locale}/admin/athletes/${a.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="hover:underline"
+                      >
+                        {a.lastName} {a.firstName}
+                      </Link>
                     </p>
                   </div>
                   <p className="mt-1 pl-6 text-[12px] text-[var(--color-text-muted)]">

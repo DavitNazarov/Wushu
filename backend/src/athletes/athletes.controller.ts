@@ -4,6 +4,7 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  Param,
   Post,
   Query,
   Req,
@@ -15,6 +16,7 @@ import { CapabilityGuard } from '../auth/capability.guard';
 import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
 import { z } from 'zod';
+import { AthleteProfileService } from './athlete-profile.service';
 
 const athleteBodySchema = z.object({
   id: z.string().cuid().optional(),
@@ -40,7 +42,10 @@ type AthleteBodyInput = z.infer<typeof athleteBodySchema>;
 @Controller('athletes')
 @UseGuards(AuthGuard, CapabilityGuard)
 export class AthletesController {
-  constructor(private readonly athletes: AthletesService) {}
+  constructor(
+    private readonly athletes: AthletesService,
+    private readonly athleteProfiles: AthleteProfileService,
+  ) {}
 
   @Get()
   @RequireCapability(CAPABILITIES.ATHLETES_MANAGE)
@@ -117,6 +122,23 @@ export class AthletesController {
       }
       throw e;
     }
+  }
+
+  @Get(':id')
+  @RequireCapability(CAPABILITIES.ATHLETES_MANAGE)
+  async getById(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    const auth = req.auth!;
+    const profile = await this.athleteProfiles.getPrivateProfile({
+      organisationId: auth.organisationId,
+      athleteId: id,
+      actorClubId: auth.role === 'coach' ? (auth.clubId ?? null) : null,
+    });
+
+    if (!profile) {
+      throw new HttpException('ATHLETE_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
+
+    return profile;
   }
 
   @Post('merge')

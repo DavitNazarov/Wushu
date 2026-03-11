@@ -726,6 +726,81 @@ export interface ResultsSummaryResponse {
   }>;
 }
 
+export interface AthleteProfileCoachRow {
+  id: string;
+  displayName: string;
+}
+
+export interface AthleteProfileClubRow {
+  id: string;
+  name: string;
+  city: string | null;
+  country: string | null;
+}
+
+export interface AthleteProfileRegistrationRow {
+  id: string;
+  eventId: string;
+  eventName: string;
+  eventSlug: string;
+  eventLifecycle: EventLifecycle;
+  eventPublished: boolean;
+  competitionStartDate: string;
+  competitionEndDate: string;
+  categoryCode: string;
+  ageGroupName: string | null;
+  division: AthleteSex | null;
+  registrationStatus?: RegistrationStatus;
+  weighInStatus?:
+    | 'NOT_WEIGHED'
+    | 'PASSED'
+    | 'MOVED_UP'
+    | 'FAILED'
+    | 'OVERRIDE_APPROVED'
+    | 'REWEIGH_ALLOWED'
+    | 'DISQUALIFIED';
+  initialWeightCategoryName: string | null;
+  finalWeightCategoryName: string | null;
+  movedUp: boolean;
+  latestWeighInDecision?: WeighInDecision | null;
+  latestWeighInAt?: string | null;
+}
+
+export interface AthleteProfileFightRow {
+  id: string;
+  eventId: string;
+  eventName: string;
+  eventSlug: string;
+  eventLifecycle: EventLifecycle;
+  categoryCode: string;
+  round: number;
+  boutNo: number;
+  status: FightStatus;
+  winMethod: WinMethod | null;
+  score: string | null;
+  scheduledStartTime: string | null;
+  matName: string | null;
+  athleteCorner: 'RED' | 'BLUE';
+  opponentAthleteId: string | null;
+  opponentName: string | null;
+  winnerAthleteId: string | null;
+}
+
+export interface AthleteProfileResponse {
+  athlete: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+    sex: AthleteSex | null;
+    dateOfBirth?: string | null;
+    club: AthleteProfileClubRow | null;
+    coaches?: AthleteProfileCoachRow[];
+  };
+  registrations: AthleteProfileRegistrationRow[];
+  fights: AthleteProfileFightRow[];
+}
+
 export interface MatRow {
   id: string;
   eventId: string;

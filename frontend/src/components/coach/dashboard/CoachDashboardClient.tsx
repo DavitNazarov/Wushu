@@ -1,0 +1,77 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { InlineAlert } from '@/components/ui/InlineAlert';
+import { SkeletonKpiRow, SkeletonRows } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { CoachDashboardPendingActions } from './CoachDashboardPendingActions';
+import { CoachDashboardRecentUpdates } from './CoachDashboardRecentUpdates';
+import { CoachDashboardSidebar } from './CoachDashboardSidebar';
+import { CoachDashboardSummaryCards } from './CoachDashboardSummaryCards';
+import { CoachDashboardUpcomingEvents } from './CoachDashboardUpcomingEvents';
+import type { CoachDashboardContext } from './types';
+import { useCoachDashboardData } from './useCoachDashboardData';
+
+type Props = {
+  context: CoachDashboardContext;
+};
+
+export function CoachDashboardClient({ context }: Props) {
+  const t = useTranslations('coach.dashboard');
+  const tCommon = useTranslations('common');
+  const { athletesQuery, eventsQuery, registrationErrors, isLoading, isBaseLoading, model } = useCoachDashboardData();
+
+  const baseError = athletesQuery.error ?? eventsQuery.error;
+
+  return (
+    <div className="space-y-6">
+      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+
+      {baseError && (
+        <InlineAlert variant="error">
+          {tCommon('loadError')}
+        </InlineAlert>
+      )}
+
+      {registrationErrors > 0 && !baseError && (
+        <InlineAlert variant="warning">{t('partialRegistrationsWarning')}</InlineAlert>
+      )}
+
+      {isBaseLoading || isLoading || !model ? (
+        <div className="space-y-6">
+          <SkeletonKpiRow count={4} />
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_360px]">
+            <div className="space-y-6">
+              <SkeletonRows rows={4} cols={2} />
+              <SkeletonRows rows={4} cols={3} />
+            </div>
+            <SkeletonRows rows={4} cols={1} />
+          </div>
+        </div>
+      ) : model.summary.totalAthletes === 0 && model.upcomingEvents.length === 0 ? (
+        <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
+      ) : (
+        <>
+          <CoachDashboardSummaryCards summary={model.summary} />
+
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_360px]">
+            <div className="space-y-6">
+              <CoachDashboardPendingActions actions={model.pendingActions} />
+              <CoachDashboardUpcomingEvents events={model.upcomingEvents} />
+              <CoachDashboardRecentUpdates
+                updates={model.recentUpdates}
+                hasExactTimestamps={model.hasExactUpdateTimestamps}
+              />
+            </div>
+            <CoachDashboardSidebar
+              context={context}
+              athleteCount={model.summary.totalAthletes}
+              quickActions={model.quickActions}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

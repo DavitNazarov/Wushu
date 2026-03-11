@@ -1,5 +1,6 @@
 'use client';
 
+import { useLocale } from 'next-intl';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import {
@@ -31,6 +32,8 @@ function Metric({ label, value }: { label: string; value: number | string }) {
 }
 
 export function BracketDetailsPanel({ details, isLoading, t, tFightStatus }: Props) {
+  const locale = useLocale();
+
   if (isLoading) {
     return (
       <section className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
@@ -132,12 +135,14 @@ export function BracketDetailsPanel({ details, isLoading, t, tFightStatus }: Pro
             fights={details.fights}
             tBracket={t}
             tFightStatus={(status) => tFightStatus(status)}
+            getAthleteHref={(athleteId) => `/${locale}/admin/athletes/${athleteId}`}
           />
         ) : (
           <BracketRenderer
             data={rendererData}
             tBracket={t}
             tFightStatus={(status) => tFightStatus(status)}
+            getAthleteHref={(athleteId) => `/${locale}/admin/athletes/${athleteId}`}
           />
         )}
       </div>

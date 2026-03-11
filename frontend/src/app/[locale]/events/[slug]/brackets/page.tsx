@@ -6,11 +6,11 @@ import { PublicLayout } from '@/components/layout/PublicLayout';
 import { BracketViewerPanel } from '@/components/bracket';
 
 type Props = {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ locale: string; slug: string }>;
 };
 
 export default function PublicEventBracketsPage({ params }: Props) {
-  const { slug } = use(params);
+  const { locale, slug } = use(params);
   const tPublic = useTranslations('public');
   const tBracket = useTranslations('brackets');
   const tCommon = useTranslations('common');
@@ -27,6 +27,7 @@ export default function PublicEventBracketsPage({ params }: Props) {
           tCommon={tCommon}
           emptyTitle={tPublic('bracketsNotPublished')}
           emptyDescription={tPublic('notPublishedDescription')}
+          getAthleteHref={(athleteId) => `/${locale}/athletes/${athleteId}`}
         />
       </div>
     </PublicLayout>

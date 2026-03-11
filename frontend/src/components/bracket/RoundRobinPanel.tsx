@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import type { BracketFightListRow } from '@/types/api';
 import { StatusChip } from '@/components/ui/StatusChip';
 
@@ -7,6 +8,7 @@ type Props = {
   fights: BracketFightListRow[];
   tBracket: (key: string, values?: Record<string, string | number | Date>) => string;
   tFightStatus: (key: string, values?: Record<string, string | number | Date>) => string;
+  getAthleteHref?: (athleteId: string) => string;
 };
 
 type StandingRow = {
@@ -74,7 +76,7 @@ function buildStandings(fights: BracketFightListRow[]): StandingRow[] {
   });
 }
 
-export function RoundRobinPanel({ fights, tBracket, tFightStatus }: Props) {
+export function RoundRobinPanel({ fights, tBracket, tFightStatus, getAthleteHref }: Props) {
   const standings = buildStandings(fights);
 
   return (
@@ -97,7 +99,15 @@ export function RoundRobinPanel({ fights, tBracket, tFightStatus }: Props) {
             <tbody>
               {standings.map((row) => (
                 <tr key={row.athleteId} className="border-t border-[var(--color-border)]">
-                  <td className="px-2 py-1.5 text-[var(--color-text)]">{row.name}</td>
+                  <td className="px-2 py-1.5 text-[var(--color-text)]">
+                    {getAthleteHref ? (
+                      <Link href={getAthleteHref(row.athleteId)} className="hover:underline">
+                        {row.name}
+                      </Link>
+                    ) : (
+                      row.name
+                    )}
+                  </td>
                   <td className="px-2 py-1.5 text-[var(--color-text)]">{row.fights}</td>
                   <td className="px-2 py-1.5 text-[var(--color-text)]">{row.wins}</td>
                   <td className="px-2 py-1.5 text-[var(--color-text)]">{row.losses}</td>
@@ -131,8 +141,24 @@ export function RoundRobinPanel({ fights, tBracket, tFightStatus }: Props) {
             {fights.map((fight) => (
               <tr key={fight.id} className="border-t border-[var(--color-border)] bg-[var(--color-surface)]">
                 <td className="px-2 py-2 text-[var(--color-text)]">#{fight.boutNo}</td>
-                <td className="px-2 py-2 text-[var(--color-text)]">{fight.redAthleteName ?? tBracket('bye')}</td>
-                <td className="px-2 py-2 text-[var(--color-text)]">{fight.blueAthleteName ?? tBracket('bye')}</td>
+                <td className="px-2 py-2 text-[var(--color-text)]">
+                  {fight.redAthleteId && fight.redAthleteName && getAthleteHref ? (
+                    <Link href={getAthleteHref(fight.redAthleteId)} className="hover:underline">
+                      {fight.redAthleteName}
+                    </Link>
+                  ) : (
+                    fight.redAthleteName ?? tBracket('bye')
+                  )}
+                </td>
+                <td className="px-2 py-2 text-[var(--color-text)]">
+                  {fight.blueAthleteId && fight.blueAthleteName && getAthleteHref ? (
+                    <Link href={getAthleteHref(fight.blueAthleteId)} className="hover:underline">
+                      {fight.blueAthleteName}
+                    </Link>
+                  ) : (
+                    fight.blueAthleteName ?? tBracket('bye')
+                  )}
+                </td>
                 <td className="px-2 py-2 text-[var(--color-text)]">
                   <StatusChip status={fight.status} label={tFightStatus(fight.status)} domain="fight" />
                 </td>
