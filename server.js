@@ -12,6 +12,7 @@ const frontendDir = path.join(__dirname, 'frontend');
 
 async function bootstrap() {
   const server = express();
+  const apiServer = express();
   const originalCwd = process.cwd();
 
   process.chdir(frontendDir);
@@ -20,9 +21,13 @@ async function bootstrap() {
   await nextApp.prepare();
   process.chdir(originalCwd);
 
-  const nestApp = await createApp(new ExpressAdapter(server));
+  const nestApp = await createApp({
+    httpAdapter: new ExpressAdapter(apiServer),
+    globalPrefix: false,
+  });
   await nestApp.init();
 
+  server.use('/api', apiServer);
   server.all(/^(?!\/api(?:\/|$)).*/, (req, res) => nextHandler(req, res));
 
   server.listen(port, () => {

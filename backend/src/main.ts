@@ -7,9 +7,15 @@ import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/global-exception.filter';
 import { ZodValidationPipe } from './common/zod-validation.pipe';
 
+type CreateAppOptions = {
+  httpAdapter?: AbstractHttpAdapter;
+  globalPrefix?: string | false;
+};
+
 export async function createApp(
-  httpAdapter?: AbstractHttpAdapter,
+  options: CreateAppOptions = {},
 ): Promise<INestApplication> {
+  const { httpAdapter, globalPrefix = 'api' } = options;
   const app = httpAdapter
     ? await NestFactory.create(AppModule, httpAdapter)
     : await NestFactory.create(AppModule);
@@ -18,7 +24,9 @@ export async function createApp(
     origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
     credentials: true,
   });
-  app.setGlobalPrefix('api');
+  if (globalPrefix) {
+    app.setGlobalPrefix(globalPrefix);
+  }
   app.useGlobalPipes(new ZodValidationPipe());
   app.useGlobalFilters(new GlobalExceptionFilter());
   return app;
