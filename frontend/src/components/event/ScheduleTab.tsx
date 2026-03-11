@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/Card';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -8,10 +8,10 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { usePublicSchedule } from '@/hooks/usePublicApi';
 import type { ScheduleFight } from '@/lib/api/public';
 
-function formatTime(iso: string | null): string {
+function formatTime(iso: string | null, locale: string): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 }
 
 function statusTone(status: ScheduleFight['liveStatus']) {
@@ -30,6 +30,7 @@ function statusTone(status: ScheduleFight['liveStatus']) {
 export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
   const tPublic = useTranslations('public');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
   const { data: fights, isLoading, error, refetch } = usePublicSchedule(eventSlug);
 
   if (error) {
@@ -66,8 +67,8 @@ export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
 
   const byDate = fights.reduce<Record<string, ScheduleFight[]>>((acc, f) => {
     const date = f.scheduledAt
-      ? new Date(f.scheduledAt).toLocaleDateString()
-      : 'Unscheduled';
+      ? new Date(f.scheduledAt).toLocaleDateString(locale)
+      : tPublic('scheduleUnscheduled');
     if (!acc[date]) acc[date] = [];
     acc[date].push(f);
     return acc;
@@ -85,14 +86,14 @@ export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
                 className="flex flex-wrap items-center gap-2 rounded border border-[var(--color-border)] bg-[var(--color-surface-alt)]/50 px-3 py-2 text-[13px]"
               >
                 <span className="font-medium text-[var(--color-text-muted)]">
-                  #{f.scheduleOrder ?? '-'} · {formatTime(f.scheduledAt)}
+                  #{f.scheduleOrder ?? '-'} · {formatTime(f.scheduledAt, locale)}
                 </span>
                 <span
                   className={`rounded-[var(--radius-pill)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusTone(
                     f.liveStatus,
                   )}`}
                 >
-                  {(f.liveStatus ?? 'PENDING').toLowerCase()}
+                  {tPublic(`liveStatus.${f.liveStatus ?? 'PENDING'}`)}
                 </span>
                 {f.matName && (
                   <span className="text-[11px] text-[var(--color-text-muted)]">
@@ -100,7 +101,7 @@ export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
                   </span>
                 )}
                 <span className="text-[var(--color-text)]">
-                  {f.redDisplayName} vs {f.blueDisplayName}
+                  {f.redDisplayName} {tPublic('versus')} {f.blueDisplayName}
                 </span>
                 <span className="text-[11px] text-[var(--color-text-muted)]">
                   {f.bracketRoundLabel} {f.bracketFightNumber}

@@ -2,7 +2,7 @@
 
 import { use } from 'react';
 import { notFound } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { Card } from '@/components/ui/Card';
 import { InlineAlert } from '@/components/ui/InlineAlert';
@@ -12,22 +12,24 @@ import { EventStageStepper, STEPPER_STAGES } from '@/components/event/EventStage
 import { EventTabs } from '@/components/event/EventTabs';
 import { BracketsTab } from '@/components/event/BracketsTab';
 import { ScheduleTab } from '@/components/event/ScheduleTab';
-import { MatTab } from '@/components/event/MatTab';
+import { PublicLivePanel } from '@/components/event/PublicLivePanel';
+import { PublicEventFaq } from '@/components/event/PublicEventFaq';
 import { usePublicEvent } from '@/hooks/usePublicApi';
 import type { PublicEvent } from '@/lib/api/public';
 import type { EventLifecycle } from '@/types/api';
 
 type Props = { params: Promise<{ slug: string }> };
 
-function formatDateRange(start: string, end: string): string {
+function formatDateRange(start: string, end: string, locale: string): string {
   const s = new Date(start);
   const e = new Date(end);
-  return `${s.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} – ${e.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  return `${s.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })} – ${e.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
 export default function PublicEventDetailPage({ params }: Props) {
   const tPublic = useTranslations('public');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
   const { slug: eventSlug } = use(params);
   const { data: event, isLoading, error, refetch, isFetched } = usePublicEvent(eventSlug);
 
@@ -80,6 +82,7 @@ export default function PublicEventDetailPage({ params }: Props) {
                   {formatDateRange(
                     (event as PublicEvent).competitionStartDate,
                     (event as PublicEvent).competitionEndDate,
+                    locale,
                   )}
                 </span>
               </div>
@@ -99,7 +102,6 @@ export default function PublicEventDetailPage({ params }: Props) {
             </div>
 
             <EventTabs
-              eventSlug={eventSlug}
               overview={
                 <Card>
                   <div className="space-y-2 text-[15px] text-[var(--color-text)]">
@@ -115,6 +117,7 @@ export default function PublicEventDetailPage({ params }: Props) {
                       {formatDateRange(
                         (event as PublicEvent).competitionStartDate,
                         (event as PublicEvent).competitionEndDate,
+                        locale,
                       )}
                     </p>
                   </div>
@@ -122,7 +125,8 @@ export default function PublicEventDetailPage({ params }: Props) {
               }
               brackets={<BracketsTab eventSlug={eventSlug} />}
               schedule={<ScheduleTab eventSlug={eventSlug} />}
-              mat={<MatTab eventSlug={eventSlug} />}
+              live={<PublicLivePanel eventSlug={eventSlug} />}
+              faq={<PublicEventFaq event={event as PublicEvent} />}
             />
           </>
         )}

@@ -1,13 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Card } from '@/components/ui/Card';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BracketRenderer } from './BracketRenderer';
 import { RoundRobinPanel } from './RoundRobinPanel';
 import { mapRoundsToBracketRendererData } from './bracketDisplayMapper';
 import { usePublicBracketCategory, usePublicBracketOverview } from '@/hooks/useBracketData';
+import type { AthleteSex, BracketsOverviewCategoryRow, CompetitionFormat } from '@/types/api';
 
 type Props = {
   eventSlug: string;
@@ -26,24 +29,49 @@ export function BracketViewerPanel({
   emptyDescription,
   getAthleteHref,
 }: Props) {
+  const tPublic = useTranslations('public');
   const overviewQuery = usePublicBracketOverview(eventSlug);
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState('');
+  const [selectedDivision, setSelectedDivision] = useState('');
+  const [selectedFormat, setSelectedFormat] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
 
-  const categories = overviewQuery.data?.categories ?? [];
+  const categories = useMemo(() => overviewQuery.data?.categories ?? [], [overviewQuery.data?.categories]);
 
-  useEffect(() => {
-    if (!categories.length) {
-      setSelectedCategoryId('');
-      return;
-    }
-    if (!selectedCategoryId || !categories.some((category) => category.id === selectedCategoryId)) {
-      setSelectedCategoryId(categories[0].id);
-    }
-  }, [categories, selectedCategoryId]);
+  const ageGroups = useMemo(
+    () => Array.from(new Set(categories.map((category) => category.ageGroupName))).sort(),
+    [categories],
+  );
+  const divisions = useMemo(
+    () =>
+      Array.from(new Set(categories.map((category) => category.division ?? 'OPEN'))) as Array<
+        AthleteSex | 'OPEN'
+      >,
+    [categories],
+  );
+  const formats = useMemo(
+    () => Array.from(new Set(categories.map((category) => category.competitionFormat))) as CompetitionFormat[],
+    [categories],
+  );
+  const categoryOptions = useMemo(
+    () =>
+      categories.filter((category) => {
+        if (selectedAgeGroup && category.ageGroupName !== selectedAgeGroup) return false;
+        if (selectedDivision && (category.division ?? 'OPEN') !== selectedDivision) return false;
+        if (selectedFormat && category.competitionFormat !== selectedFormat) return false;
+        return true;
+      }),
+    [categories, selectedAgeGroup, selectedDivision, selectedFormat],
+  );
+
+  const activeCategoryId =
+    selectedCategoryId && categoryOptions.some((category) => category.id === selectedCategoryId)
+      ? selectedCategoryId
+      : '';
 
   const detailsQuery = usePublicBracketCategory({
     eventSlug,
-    eventWeightCategoryId: selectedCategoryId,
+    eventWeightCategoryId: activeCategoryId,
   });
 
   if (overviewQuery.error) {
@@ -70,30 +98,117 @@ export function BracketViewerPanel({
   }
 
   const rendererData = mapRoundsToBracketRendererData(detailsQuery.data?.rounds ?? []);
-  const isRoundRobin =
-    detailsQuery.data?.category.competitionFormat === 'ROUND_ROBIN';
+  const isRoundRobin = detailsQuery.data?.category.competitionFormat === 'ROUND_ROBIN';
+
+  function divisionLabel(value: AthleteSex | 'OPEN') {
+    if (value === 'OPEN') return tPublic('bracketDivisionOpen');
+    return tPublic(`bracketDivision${value === 'MALE' ? 'Male' : 'Female'}`);
+  }
+
+  function categoryLabel(category: BracketsOverviewCategoryRow) {
+    return `${category.ageGroupName} · ${divisionLabel(category.division ?? 'OPEN')} · ${category.categoryName}`;
+  }
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        {categories.map((category) => {
-          const selected = category.id === selectedCategoryId;
-          return (
-            <button
-              key={category.id}
-              type="button"
-              onClick={() => setSelectedCategoryId(category.id)}
-              className={`rounded-[var(--radius-pill)] border px-3 py-1.5 text-[12px] transition ${
-                selected
-                  ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
-                  : 'border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/35'
-              }`}
+      <Card className="space-y-4 bg-[var(--color-surface-alt)]/40">
+        <div>
+          <h3 className="text-[15px] font-semibold text-[var(--color-text)]">
+            {tPublic('bracketFiltersTitle')}
+          </h3>
+          <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
+            {tPublic('bracketFiltersBody')}
+          </p>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <label className="space-y-1">
+            <span className="text-[12px] font-medium text-[var(--color-text-muted)]">
+              {tPublic('bracketFilterAgeGroup')}
+            </span>
+            <select
+              value={selectedAgeGroup}
+              onChange={(event) => setSelectedAgeGroup(event.target.value)}
+              className="h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
             >
-              {category.categoryName}
-            </button>
-          );
-        })}
-      </div>
+              <option value="">{tPublic('bracketFilterAll')}</option>
+              {ageGroups.map((ageGroup) => (
+                <option key={ageGroup} value={ageGroup}>
+                  {ageGroup}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1">
+            <span className="text-[12px] font-medium text-[var(--color-text-muted)]">
+              {tPublic('bracketFilterDivision')}
+            </span>
+            <select
+              value={selectedDivision}
+              onChange={(event) => setSelectedDivision(event.target.value)}
+              className="h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+            >
+              <option value="">{tPublic('bracketFilterAll')}</option>
+              {divisions.map((division) => (
+                <option key={division} value={division}>
+                  {divisionLabel(division)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1">
+            <span className="text-[12px] font-medium text-[var(--color-text-muted)]">
+              {tPublic('bracketFilterFormat')}
+            </span>
+            <select
+              value={selectedFormat}
+              onChange={(event) => setSelectedFormat(event.target.value)}
+              className="h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+            >
+              <option value="">{tPublic('bracketFilterAll')}</option>
+              {formats.map((format) => (
+                <option key={format} value={format}>
+                  {tBracket(`format.${format}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1">
+            <span className="text-[12px] font-medium text-[var(--color-text-muted)]">
+              {tPublic('bracketFilterCategory')}
+            </span>
+            <select
+              value={activeCategoryId}
+              onChange={(event) => setSelectedCategoryId(event.target.value)}
+              className="h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+            >
+              <option value="">{tPublic('bracketFilterSelectCategory')}</option>
+              {categoryOptions.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {categoryLabel(category)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </Card>
+
+      {!categoryOptions.length && (
+        <EmptyState
+          title={tPublic('bracketFiltersNoMatchTitle')}
+          description={tPublic('bracketFiltersNoMatchBody')}
+        />
+      )}
+
+      {categoryOptions.length > 0 && !activeCategoryId && (
+        <EmptyState
+          title={tPublic('bracketFilterSelectTitle')}
+          description={tPublic('bracketFilterSelectBody')}
+        />
+      )}
 
       {detailsQuery.error && (
         <InlineAlert
@@ -108,9 +223,9 @@ export function BracketViewerPanel({
         </InlineAlert>
       )}
 
-      {detailsQuery.isLoading ? (
+      {activeCategoryId && detailsQuery.isLoading ? (
         <SkeletonRows rows={4} cols={4} />
-      ) : (
+      ) : activeCategoryId ? (
         <>
           {detailsQuery.data && (
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -145,6 +260,12 @@ export function BracketViewerPanel({
             />
           )}
         </>
+      ) : null}
+      {activeCategoryId && !detailsQuery.isLoading && !detailsQuery.data && (
+        <EmptyState
+          title={tPublic('bracketFilterUnavailableTitle')}
+          description={tPublic('bracketFilterUnavailableBody')}
+        />
       )}
     </div>
   );
