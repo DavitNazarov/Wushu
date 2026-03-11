@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { getApiUrl } from '@/lib/api';
+import { getServerApiUrl } from '@/lib/api';
 import type { CapabilityCode, UserRole } from '@/domain/auth/capabilities';
 
 const AUTH_COOKIE_NAME = 'gw_auth';
@@ -39,8 +39,8 @@ export async function getAuthContext(): Promise<AuthContext> {
     return { userId: null, organisationId: null, role: null, capabilities: [], needsRefresh: true };
   }
 
-  const fetchMe = () =>
-    fetch(getApiUrl('/api/auth/me'), {
+  const fetchMe = async () =>
+    fetch(await getServerApiUrl('/api/auth/me'), {
       headers: { Cookie: `${AUTH_COOKIE_NAME}=${token}` },
       cache: 'no-store',
     });
