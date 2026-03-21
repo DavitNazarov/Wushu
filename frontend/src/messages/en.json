@@ -22,7 +22,8 @@
     "clubs": "Clubs",
     "athletes": "Athletes",
     "users": "Users",
-    "rulesets": "Rulesets",
+    "rulesets": "Category templates",
+    "categoryTemplates": "Category templates",
     "news": "News",
     "inbox": "Inbox",
     "settings": "Settings",
@@ -282,17 +283,18 @@
     "dashboard": {
       "title": "Dashboard",
       "welcome": "Welcome to the Geo Wushu competition console.",
-      "subtitle": "Start by configuring rulesets and events, then move to registration and live operations.",
+      "subtitle": "Start by configuring category templates and events, then move to registration and live operations.",
       "quickLinks": "Quick access",
-      "linkRulesetsTitle": "Rulesets",
-      "linkRulesetsDescription": "Manage competition rules and categories.",
+      "linkRulesetsTitle": "Category templates",
+      "linkRulesetsDescription": "Manage reusable competition categories and weights.",
       "linkEventsTitle": "Events",
       "linkEventsDescription": "Set up events and prepare for registration."
     },
     "sidebar": {
       "dashboard": "Dashboard",
       "events": "Events",
-      "rulesets": "Rulesets",
+      "rulesets": "Category templates",
+      "categoryTemplates": "Category templates",
       "athletes": "Athletes",
       "users": "Users",
       "settings": "Settings",
@@ -304,22 +306,91 @@
       "status": "Status",
       "noEventSelected": "No event selected"
     },
-    "rulesets": {
-      "title": "Rulesets",
-      "new": "New Ruleset",
+    "categoryTemplates": {
+      "title": "Category Templates",
+      "new": "New Category Template",
+      "createDescription": "Build a reusable category template from the active category option library.",
       "columns": {
         "name": "Name",
         "version": "Version",
         "status": "Status",
-        "updated": "Updated"
+        "type": "Type",
+        "source": "Source",
+        "updated": "Updated",
+        "usage": "Usage",
+        "actions": "Actions"
       },
       "status": {
         "draft": "Draft",
         "active": "Active"
       },
-      "sampleName": "Georgia Wushu Sanda",
-      "emptyTitle": "No rulesets yet",
-      "emptyDescription": "Create your first ruleset to define competition categories and rules."
+      "type": {
+        "system": "System",
+        "custom": "Custom",
+        "official": "Official"
+      },
+      "actions": {
+        "activate": "Mark active",
+        "activateSuccess": "Template marked active.",
+        "activateFailed": "Could not activate the template."
+      },
+      "emptyTitle": "No category templates yet",
+      "emptyDescription": "Create your first reusable category template from backend-managed category options.",
+      "emptyFilteredDescription": "No templates match the current search and filters.",
+      "filters": {
+        "searchPlaceholder": "Search by template name",
+        "status": "Status",
+        "type": "Type",
+        "allStatuses": "All statuses",
+        "allTypes": "All types",
+        "clear": "Clear filters"
+      },
+      "usage": {
+        "unused": "Not used yet",
+        "eventsCount": "{count, plural, one {Used by # event} other {Used by # events}}"
+      },
+      "builder": {
+        "help": "Choose the default competition categories that belong to this template.",
+        "selectedCount": "{count, plural, one {# category selected} other {# categories selected}}",
+        "loadError": "Failed to load category options.",
+        "groupMeta": "Age {minAge}-{maxAge} • {roundMinutes} min rounds"
+      },
+      "details": {
+        "title": "Template details",
+        "createdAt": "Created",
+        "summaryTitle": "Template summary",
+        "usageTitle": "Usage and dependencies",
+        "structureTitle": "Template structure",
+        "openDivision": "Open division",
+        "roundMinutes": "{count, plural, one {# min rounds} other {# min rounds}}",
+        "usageSummary": "Used by {events} events, with {ageGroups} event age groups and {categories} event categories derived from this template.",
+        "noUsage": "This template is not currently attached to any event snapshots.",
+        "kpis": {
+          "ageGroups": "Age groups",
+          "genders": "Genders",
+          "weightCategories": "Weight categories",
+          "events": "Events"
+        }
+      },
+      "edit": {
+        "title": "Edit category template",
+        "description": "Update the template name, status, and category structure where it is safe.",
+        "structureLocked": "This template is already used by events, so its category structure is locked. You can still update safe metadata."
+      },
+      "delete": {
+        "title": "Delete category template",
+        "description": "This permanently deletes the template library record. Templates in use or protected system templates cannot be deleted.",
+        "confirm": "Delete template",
+        "success": "Template deleted.",
+        "failed": "Could not delete the template."
+      },
+      "errors": {
+        "SYSTEM_CATEGORY_TEMPLATE_PROTECTED": "System templates are protected and cannot be edited or deleted.",
+        "CATEGORY_TEMPLATE_IN_USE": "This template is already used by events and cannot be deleted.",
+        "CATEGORY_TEMPLATE_STRUCTURE_LOCKED_BY_USAGE": "This template is already used by events, so its category structure cannot be changed.",
+        "ACTIVE_CATEGORY_TEMPLATE_DELETE_FORBIDDEN": "Active templates must be switched away from active status before deletion.",
+        "systemProtected": "Only organisation-owned custom templates can be edited."
+      }
     },
     "events": {
       "title": "Events",
@@ -386,23 +457,59 @@
         "start": "Event start",
         "end": "Event end"
       },
+      "datePicker": {
+        "eyebrow": "Select date",
+        "emptyMeta": "Pick an operational date",
+        "today": "Today",
+        "clear": "Clear",
+        "min": "Earliest",
+        "max": "Latest",
+        "weekdays": {
+          "sun": "S",
+          "mon": "M",
+          "tue": "T",
+          "wed": "W",
+          "thu": "T",
+          "fri": "F",
+          "sat": "S"
+        },
+        "hints": {
+          "eventStart": "Choose the first official competition day.",
+          "eventEnd": "Choose the final competition day.",
+          "registrationOpens": "Set when online registration becomes available.",
+          "registrationCloses": "Keep this on or before the day before the event starts."
+        }
+      },
       "datesSummary": {
+        "eyebrow": "Day planning",
+        "title": "Assign how each event day is used",
+        "helper": "Mark each competition day as a weigh-in day, a fight day, or both. This helps admins and judges understand the operating plan immediately.",
         "eventDays": "Event days",
-        "regDays": "Registration/Weigh-in days",
+        "regDays": "Weigh-in days",
         "fightDays": "Fight days",
         "date": "Date",
-        "registration": "Registration/Weigh-in",
+        "registration": "Weigh-in",
         "fight": "Fight day",
         "registrationShort": "Weigh-in",
-        "fightShort": "Fight"
+        "fightShort": "Fight",
+        "markAllRegistration": "Mark all as weigh-in",
+        "clearAllRegistration": "Clear weigh-in days",
+        "markAllFight": "Mark all as fight days",
+        "clearAllFight": "Clear fight days",
+        "registrationLegend": "Blue means weigh-in is scheduled",
+        "fightLegend": "Amber means fights are scheduled",
+        "dualRole": "{count, plural, one {# day has both roles} other {# days have both roles}}",
+        "dayLabel": "{day}",
+        "registrationAction": "Weigh-in",
+        "fightAction": "Fight"
       },
       "registrationWindow": {
         "label": "Online registration window",
         "opensAt": "Online registration opens",
         "closesAt": "Online registration closes",
-        "closesAtAuto": "Auto: first weigh-in day ({date})",
+        "closesAtAuto": "Auto: day before event start ({date})",
         "errorOpensAfterCloses": "Opening date must be on or before the closing date.",
-        "errorClosesAfterWeighin": "Closing date must be on or before the first weigh-in day ({date})."
+        "errorClosesAfterEventStart": "Closing date must be on or before the day before event start ({date})."
       },
       "autoAdvanceStage": {
         "label": "Automatically advance event stages",
@@ -425,7 +532,29 @@
         "description": "Update event details. Dates and slug changes take effect immediately."
       },
       "validation": {
-        "summary": "Please fix the highlighted fields."
+        "summary": "Please fix the highlighted fields.",
+        "more": "... {count} more"
+      },
+      "sections": {
+        "basicsEyebrow": "Event identity",
+        "basicsTitle": "Basic information",
+        "basicsDescription": "Define the core event record admins and coaches will see first.",
+        "scheduleEyebrow": "Competition schedule",
+        "scheduleTitle": "Dates and registration window",
+        "scheduleDescription": "Set competition days and the online registration timeline in one place.",
+        "categoriesEyebrow": "Competition setup",
+        "lifecycleEyebrow": "Automation",
+        "lifecycleTitle": "Lifecycle behavior",
+        "lifecycleDescription": "Control whether the event moves through stages automatically."
+      },
+      "categoryTemplates": {
+        "sectionTitle": "Category template",
+        "loading": "Loading category templates...",
+        "loadError": "Failed to load category templates.",
+        "required": "Select at least one competition category to continue.",
+        "selectedCount": "{count, plural, one {# category selected} other {# categories selected}}",
+        "sectionEyebrow": "Category library",
+        "sectionDescription": "Choose a template, then expand only the age groups you want to configure."
       },
       "detail": {
         "published": "Published",
@@ -536,7 +665,7 @@
       "fieldRole": "Role",
       "fieldClub": "Club",
       "linkUsers": "User Management",
-      "linkRulesets": "Rulesets"
+      "linkRulesets": "Category templates"
     },
     "theme": {
       "light": "Switch to light mode",
@@ -727,21 +856,62 @@
   },
   "athletes": {
     "title": "Athletes",
+    "subtitle": "Keep the athlete roster clean, club-linked, and ready for registrations, weigh-in, and draw operations.",
     "searchPlaceholder": "Search by name or document ID…",
     "filters": {
-      "allClubs": "All clubs"
+      "allClubs": "All clubs",
+      "eyebrow": "Find athletes",
+      "title": "Search and narrow the roster"
+    },
+    "overview": {
+      "eyebrow": "Roster control",
+      "title": "Operational view for athlete records",
+      "description": "Review assignments, spot incomplete records, and prepare clean athlete data before event work begins.",
+      "loadedCount": "athletes in view"
+    },
+    "stats": {
+      "total": "Total athletes",
+      "totalHint": "Current roster size in this result set.",
+      "linked": "Club-linked",
+      "linkedHint": "Athletes already attached to a club.",
+      "needsClub": "Need club",
+      "needsClubHint": "Records that still need a visible club assignment.",
+      "duplicates": "Review duplicates",
+      "duplicatesHint": "Athletes that may need merge review."
+    },
+    "selection": {
+      "eyebrow": "Merge queue",
+      "title": "Compare two records",
+      "description": "Select up to two athletes from the list to prepare a controlled merge.",
+      "slotLabel": "Selected {index}",
+      "empty": "Choose two athlete records to enable merge review.",
+      "clear": "Clear"
     },
     "columns": {
+      "select": "Select",
       "name": "Athlete",
-      "dob": "Date of birth",
       "club": "Club",
-      "document": "Document ID",
-      "dedupe": "Possible duplicates"
+      "identity": "Identity",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "details": {
+      "unspecified": "Not specified"
+    },
+    "badges": {
+      "missingClub": "Club missing",
+      "missingDocument": "Document missing",
+      "duplicateCount": "{count} possible matches",
+      "noDuplicates": "No duplicate signal"
+    },
+    "actions": {
+      "viewProfile": "Open profile"
     },
     "merge": {
       "button": "Merge selected",
       "dialogTitle": "Merge athletes",
       "dialogDescription": "You are about to merge two athlete records. This action is irreversible and will be logged.",
+      "selectionTitle": "Selected records",
       "primaryLabel": "Keep as primary",
       "secondaryLabel": "Merge into primary",
       "reasonLabel": "Reason for merge",
@@ -761,12 +931,44 @@
       "coach": "Canonical athlete detail for your club workflow.",
       "public": "Public athlete competition profile."
     },
+    "overview": {
+      "eyebrow": "Athlete command view",
+      "subtitle": {
+        "admin": "Review identity, event activity, and competition status from one operational profile.",
+        "coach": "Track your athlete's registrations, fights, and club context from one place.",
+        "public": "Competition profile with key athlete, event, and fight information."
+      },
+      "unassignedClub": "No club linked",
+      "unspecified": "Not specified",
+      "facts": {
+        "clubBase": "Club base",
+        "coaches": "Coaching team",
+        "latestEvent": "Latest event"
+      },
+      "clubMetaEmpty": "Location not set",
+      "coachCount": "{count, plural, one {# coach linked} other {# coaches linked}}",
+      "noCoach": "No coaches linked",
+      "noEvent": "No event activity yet",
+      "stats": {
+        "registrations": "Registrations",
+        "registrationsHint": "Entries connected to this athlete.",
+        "fights": "Fights",
+        "fightsHint": "Recorded bouts across events.",
+        "record": "Record",
+        "recordHint": "Wins and losses from resolved fights.",
+        "pending": "Pending",
+        "pendingHint": "Bouts not resolved yet."
+      }
+    },
     "identity": {
       "eyebrow": "Identity",
+      "summary": "Core athlete and club information used across registration and competition operations.",
       "club": "Club",
       "sex": "Gender",
       "dateOfBirth": "Date of birth",
       "coaches": "Coaches",
+      "clubMetaEmpty": "Location not set",
+      "noCoaches": "No coaches linked yet.",
       "sexValue": {
         "MALE": "Male",
         "FEMALE": "Female"
@@ -865,6 +1067,104 @@
       "name": "Club name",
       "city": "City",
       "country": "Country"
+    },
+    "detail": {
+      "title": "Club details",
+      "subtitle": "Operational overview for this club, its coaches, and its athletes.",
+      "locationMissing": "Location not set",
+      "contactMissing": "No coach contact emails available",
+      "unknownDivision": "No registration context yet",
+      "overview": {
+        "eyebrow": "Club overview",
+        "facts": {
+          "location": "Location",
+          "created": "Created",
+          "contacts": "Coach contacts"
+        },
+        "stats": {
+          "coaches": "Coaches",
+          "coachesHint": "{count, plural, one {# active account} other {# active accounts}}",
+          "athletes": "Athletes",
+          "athletesHint": "{male} male · {female} female",
+          "activeAthletes": "Active athletes",
+          "activeAthletesHint": "Athletes with live registration activity.",
+          "activeRegistrations": "Active registrations",
+          "activeRegistrationsHint": "Pending, submitted, or approved entries.",
+          "categories": "Categories",
+          "categoriesHint": "{count, plural, one {# code represented} other {# codes represented}}"
+        }
+      },
+      "info": {
+        "title": "Club information",
+        "subtitle": "Core club metadata currently stored in the system.",
+        "fields": {
+          "name": "Club name",
+          "location": "Location",
+          "created": "Created",
+          "updated": "Updated",
+          "contacts": "Coach contacts",
+          "sexSplit": "Roster split",
+          "categories": "Represented categories"
+        },
+        "sexSplitValue": "{male} male · {female} female · {unknown} unspecified"
+      },
+      "coaches": {
+        "title": "Coaches",
+        "subtitle": "Accounts currently linked to this club.",
+        "emptyTitle": "No coaches linked",
+        "emptyDescription": "Add or assign coach accounts to give this club a visible staff list.",
+        "columns": {
+          "created": "Created"
+        }
+      },
+      "athletes": {
+        "title": "Athletes",
+        "subtitle": "Current roster with quick registration context.",
+        "emptyTitle": "No athletes linked",
+        "emptyDescription": "Create athletes and assign them to this club to build the roster.",
+        "columns": {
+          "athlete": "Athlete",
+          "sex": "Gender",
+          "dateOfBirth": "Date of birth",
+          "latestDivision": "Latest division",
+          "status": "Latest registration",
+          "activity": "Activity"
+        },
+        "documentId": "Document ID",
+        "noDocument": "No document ID",
+        "noRegistrations": "No registrations yet",
+        "activity": "{active} active / {total} total",
+        "latestEvent": "Latest event: {event}",
+        "categoryMore": "+{count} more",
+        "viewAthlete": "Open athlete"
+      },
+      "relatedAccounts": {
+        "title": "Related accounts",
+        "subtitle": "Other club-linked user accounts found in the data model.",
+        "columns": {
+          "role": "Role"
+        }
+      },
+      "accountStatus": {
+        "ACTIVE": "Active",
+        "DQ": "Suspended",
+        "ARCHIVED": "Archived",
+        "INACTIVE": "Inactive"
+      },
+      "roles": {
+        "admin": "Admin",
+        "coach": "Coach",
+        "athlete": "Athlete",
+        "judge": "Judge",
+        "timekeeper": "Timekeeper"
+      },
+      "registrationStatus": {
+        "PENDING": "Pending",
+        "SUBMITTED": "Submitted",
+        "APPROVED": "Approved",
+        "REJECTED": "Rejected",
+        "WITHDRAWN": "Withdrawn"
+      }
     }
   },
   "registrations": {
@@ -875,12 +1175,14 @@
     "selectEvent": "Select an event",
     "selectEventSubtitle": "Registrations are managed per event.",
     "selectEventPlaceholder": "Select event",
+    "eventLabel": "Event",
     "noResults": "No registrations found",
     "noResultsHint": "Try adjusting filters or select a different event.",
     "filterStatus": "Status",
     "filterClub": "Club",
     "filterClubAll": "All clubs",
     "filterSearch": "Search athlete…",
+    "filterSearchLabel": "Search",
     "filterCategory": "Category",
     "filterCategoryAll": "All categories",
     "clearFilters": "Clear filters",
@@ -903,7 +1205,10 @@
     "actions": {
       "approve": "Approve",
       "reject": "Reject",
-      "withdraw": "Withdraw"
+      "withdraw": "Withdraw",
+      "approveAll": "Approve all",
+      "rejectAll": "Reject all",
+      "withdrawAll": "Withdraw all"
     },
     "statusUpdated": "Registration status updated.",
     "approveSuccess": "Registration approved",
@@ -913,6 +1218,14 @@
     "confirmApprove": "Approve registration?",
     "confirmReject": "Reject registration?",
     "confirmWithdraw": "Withdraw registration?",
+    "bulk": {
+      "title": "Bulk status actions",
+      "description": "Apply one status to all registrations in the current filtered result.",
+      "scopeFiltered": "Current filters",
+      "confirmDescription": "{count} registrations will be updated.",
+      "successSummary": "{action}: {updated} updated, {skipped} skipped, {failed} failed.",
+      "updateFailed": "Failed to update registrations"
+    },
     "reasonOptional": "Reason (optional)",
     "registrationsLocked": "Registrations are locked for this event.",
     "actionDisabled": {
@@ -1398,6 +1711,10 @@
     "addMatDesc": "Create a new mat for this event.",
     "autoScheduleDesc": "Configure auto-scheduling parameters.",
     "unscheduled": "Unscheduled",
+    "matsLabel": "Mats",
+    "fightReady": "Ready",
+    "fightWaiting": "Waiting",
+    "matPlaceholder": "Mat 1",
     "matAdded": "Mat added",
     "scheduleUpdated": "Schedule updated",
     "errorGeneric": "Could not complete the action."
@@ -1447,6 +1764,51 @@
       "KO": "KO",
       "DQ": "DQ",
       "WO": "Walkover"
+    }
+  },
+  "eventPhaseGate": {
+    "status": {
+      "upcoming": "Upcoming",
+      "locked": "Locked",
+      "readonly": "Read-only"
+    },
+    "currentPhaseLabel": "Current phase",
+    "pages": {
+      "registrations": {
+        "upcomingWithDate": "Registration opens on {date}. This page will unlock then.",
+        "upcomingWithoutDate": "Registration is not open yet for this event.",
+        "lockedWithDate": "Registration closed on {date}. You can review entries, but edits are locked.",
+        "lockedWithoutDate": "Registration is closed for this event. You can review entries, but edits are locked."
+      },
+      "weighin": {
+        "upcomingWithDate": "Weigh-in starts on {date}.",
+        "upcomingWithoutDate": "Weigh-in is not available yet.",
+        "lockedWithDate": "Weigh-in closed on {date}. Recording is locked.",
+        "lockedWithoutDate": "Weigh-in is closed for this event."
+      },
+      "integrity": {
+        "upcomingWithDate": "Integrity checks become available after registration closes on {date}.",
+        "upcomingWithoutDate": "Integrity checks become available later in the event flow.",
+        "readonlyWithDate": "Weigh-in ended on {date}. Integrity checks are now read-only.",
+        "readonlyWithoutDate": "Integrity checks are now read-only for this event."
+      },
+      "draw": {
+        "upcomingWithDate": "Draw control becomes available after registration closes on {date}.",
+        "upcomingWithoutDate": "Draw control becomes available later in the event flow.",
+        "readonlyWithoutDate": "Draw has already been executed. Review the results here."
+      },
+      "schedule": {
+        "upcomingWithDate": "Schedule becomes available after draw execution. Competition starts on {date}.",
+        "upcomingWithoutDate": "Schedule becomes available after draw execution.",
+        "readonlyWithDate": "Competition ended on {date}. Schedule is read-only.",
+        "readonlyWithoutDate": "Competition is completed. Schedule is read-only."
+      },
+      "live": {
+        "upcomingWithDate": "Live control starts on {date}.",
+        "upcomingWithoutDate": "Live control is not available yet.",
+        "readonlyWithDate": "Competition ended on {date}. Live control is read-only.",
+        "readonlyWithoutDate": "Competition is completed. Live control is read-only."
+      }
     }
   },
   "results": {
@@ -1574,7 +1936,9 @@
       "MISSING_CATEGORY": "Missing category code",
       "MISSING_DOB": "Missing date of birth",
       "DUPLICATE_ATHLETE": "Duplicate athletes",
-      "UNRESOLVED_FAIL_WEIGHIN": "Unresolved failed weigh-in"
+      "UNRESOLVED_FAIL_WEIGHIN": "Unresolved failed weigh-in",
+      "WEIGHIN_NOT_FINALIZED": "Weigh-in not finalized",
+      "ONE_HOUR_UNRESOLVED": "One-hour reweigh still unresolved"
     }
   }
 }

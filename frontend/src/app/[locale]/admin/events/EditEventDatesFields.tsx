@@ -1,6 +1,7 @@
 'use client';
 
 import { DayPicker } from './DayPicker';
+import { EventDateField } from './EventDateField';
 
 interface DatesFieldsProps {
   eventDays: string[];
@@ -12,10 +13,8 @@ interface DatesFieldsProps {
   regClosesAt: string;
   regOpensError: string | null;
   regClosesError: string | null;
-  minWeighinDay: string | null;
+  latestRegistrationCloseDay: string | null;
   issuesByPath: Map<string, string[]>;
-  inputCls: string;
-  labelCls: string;
   sectionCls: string;
   onRangeStartChange: (v: string) => void;
   onRangeEndChange: (v: string) => void;
@@ -28,8 +27,8 @@ interface DatesFieldsProps {
 
 export function EditEventDatesFields({
   eventDays, rangeStart, rangeEnd, registrationDays, fightDays,
-  regOpensAt, regClosesAt, regOpensError, regClosesError, minWeighinDay,
-  issuesByPath, inputCls, labelCls, sectionCls,
+  regOpensAt, regClosesAt, regOpensError, regClosesError, latestRegistrationCloseDay,
+  issuesByPath, sectionCls,
   onRangeStartChange, onRangeEndChange, onRegistrationDaysChange, onFightDaysChange,
   onRegOpensAtChange, onRegClosesAtChange, tEvents,
 }: DatesFieldsProps) {
@@ -40,17 +39,27 @@ export function EditEventDatesFields({
         <p className={sectionCls}>Event Dates</p>
         <div className="grid items-end gap-3 sm:grid-cols-2">
           <div>
-            <label className={labelCls}>{tEvents('dates.start')}</label>
-            <input type="date" className={inputCls} value={rangeStart}
-              onChange={(e) => onRangeStartChange(e.target.value)} />
+            <EventDateField
+              label={tEvents('dates.start')}
+              value={rangeStart}
+              max={rangeEnd || undefined}
+              hint={tEvents('datePicker.hints.eventStart')}
+              popoverAlign="start"
+              onChange={onRangeStartChange}
+            />
             {issuesByPath.get('dates.range.startDate')?.map((msg, i) => (
               <p key={i} className="mt-1 text-[12px] text-[var(--color-danger)]">{msg}</p>
             ))}
           </div>
           <div>
-            <label className={labelCls}>{tEvents('dates.end')}</label>
-            <input type="date" className={inputCls} value={rangeEnd}
-              onChange={(e) => onRangeEndChange(e.target.value)} />
+            <EventDateField
+              label={tEvents('dates.end')}
+              value={rangeEnd}
+              min={rangeStart || undefined}
+              hint={tEvents('datePicker.hints.eventEnd')}
+              popoverAlign="end"
+              onChange={onRangeEndChange}
+            />
             {issuesByPath.get('dates.range.endDate')?.map((msg, i) => (
               <p key={i} className="mt-1 text-[12px] text-[var(--color-danger)]">{msg}</p>
             ))}
@@ -74,13 +83,18 @@ export function EditEventDatesFields({
       </div>
 
       {/* Registration window */}
-      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-alt)]/40 p-4">
+      <div className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-alt)]/40 p-4">
         <p className={sectionCls}>{tEvents('registrationWindow.label')}</p>
         <div className="grid items-end gap-3 sm:grid-cols-2">
           <div>
-            <label className={labelCls}>{tEvents('registrationWindow.opensAt')}</label>
-            <input type="date" className={inputCls} value={regOpensAt}
-              onChange={(e) => onRegOpensAtChange(e.target.value)} />
+            <EventDateField
+              label={tEvents('registrationWindow.opensAt')}
+              value={regOpensAt}
+              max={regClosesAt || latestRegistrationCloseDay || undefined}
+              hint={tEvents('datePicker.hints.registrationOpens')}
+              popoverAlign="start"
+              onChange={onRegOpensAtChange}
+            />
             {regOpensError && (
               <p className="mt-1 text-[12px] text-[var(--color-danger)]">{regOpensError}</p>
             )}
@@ -89,16 +103,19 @@ export function EditEventDatesFields({
             ))}
           </div>
           <div>
-            <label className={labelCls}>
-              {tEvents('registrationWindow.closesAt')}
-              <span className="ml-1 text-[11px] font-normal text-[var(--color-text-muted)]">
-                {!regClosesAt && minWeighinDay
-                  ? `— ${tEvents('registrationWindow.closesAtAuto', { date: minWeighinDay })}`
-                  : '(optional)'}
-              </span>
-            </label>
-            <input type="date" className={inputCls} value={regClosesAt}
-              onChange={(e) => onRegClosesAtChange(e.target.value)} />
+            <EventDateField
+              label={tEvents('registrationWindow.closesAt')}
+              value={regClosesAt}
+              min={regOpensAt || undefined}
+              max={latestRegistrationCloseDay || undefined}
+              popoverAlign="end"
+              hint={
+                !regClosesAt && latestRegistrationCloseDay
+                  ? tEvents('registrationWindow.closesAtAuto', { date: latestRegistrationCloseDay })
+                  : tEvents('datePicker.hints.registrationCloses')
+              }
+              onChange={onRegClosesAtChange}
+            />
             {regClosesError && (
               <p className="mt-1 text-[12px] text-[var(--color-danger)]">{regClosesError}</p>
             )}

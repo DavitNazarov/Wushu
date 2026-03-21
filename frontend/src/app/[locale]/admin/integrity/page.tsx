@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, AlertTriangle } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -14,8 +14,10 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost, ApiError } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
-import type { EventRow } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
+import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
+import { resolveEventControlGate } from '@/domain/events/controlPageGate';
+import { useAdminEventSelection } from '@/hooks/useAdminEventSelection';
 
 type IntegrityIssue = {
   code: string;
@@ -28,27 +30,43 @@ const SEL =
 const INPUT =
   'h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
 
+function formatIntegrityCodeLabel(
+  t: ReturnType<typeof useTranslations<'integrity'>>,
+  code: string,
+): string {
+  const key = `codes.${code}` as const;
+  const translated = t(key);
+  if (translated !== key) return translated;
+
+  return code
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 export default function IntegrityPage() {
   const t = useTranslations('integrity');
   const tCommon = useTranslations('common');
+  const tGate = useTranslations('eventPhaseGate');
+  const tEvents = useTranslations('admin.events');
+  const locale = useLocale();
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const [eventId, setEventId] = useState('');
   const [lockOpen, setLockOpen] = useState(false);
   const [reason, setReason] = useState('');
 
-  const { data: events } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => apiGet<EventRow[]>('/api/events'),
-  });
-
-  const eid = eventId || events?.[0]?.id || '';
+  const { currentEventId, events, selectedEvent, setSelectedEventId } = useAdminEventSelection();
+  const eid = currentEventId;
+  const gate = resolveEventControlGate('integrity', selectedEvent);
+  const showContent = gate.mode === 'active' || gate.mode === 'readonly';
+  const canLockEvent = gate.mode === 'active' && selectedEvent?.lifecycle === 'WEIGHIN';
 
   const { data: issues, isLoading, error, refetch } = useQuery({
     queryKey: ['integrity', eid],
     queryFn: () => apiGet<IntegrityIssue[]>(`/api/integrity?eventId=${eid}`),
-    enabled: !!eid,
+    enabled: !!eid && showContent,
   });
 
   const lockMut = useMutation({
@@ -84,25 +102,41 @@ export default function IntegrityPage() {
         subtitle={t('subtitle')}
         actions={
           <div className="flex items-center gap-3">
-            <select className={SEL} value={eid} onChange={(e) => setEventId(e.target.value)}>
+            <select className={SEL} value={eid} onChange={(e) => setSelectedEventId(e.target.value)}>
               {events?.map((ev) => (
                 <option key={ev.id} value={ev.id}>
                   {ev.name}
                 </option>
               ))}
             </select>
-            <PrimaryButton
-              disabled={!eid || isLoading}
-              onClick={() => {
-                setReason('');
-                setLockOpen(true);
-              }}
-            >
-              {t('lock')}
-            </PrimaryButton>
+            {canLockEvent && (
+              <PrimaryButton
+                disabled={!eid || isLoading}
+                onClick={() => {
+                  setReason('');
+                  setLockOpen(true);
+                }}
+              >
+                {t('lock')}
+              </PrimaryButton>
+            )}
           </div>
         }
       />
+
+      {eid && gate.mode !== 'active' && (
+        <EventPhaseGate
+          gate={gate}
+          locale={locale}
+          t={(key, values) =>
+            tGate(
+              key as Parameters<typeof tGate>[0],
+              values as Record<string, string | number | Date> | undefined,
+            )
+          }
+          tEvents={(key) => tEvents(key as Parameters<typeof tEvents>[0])}
+        />
+      )}
 
       {error && (
         <AdminErrorAlert
@@ -115,9 +149,9 @@ export default function IntegrityPage() {
 
       {!eid ? (
         <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
-      ) : isLoading ? (
+      ) : showContent && isLoading ? (
         <SkeletonRows rows={4} cols={3} />
-      ) : hasIssues ? (
+      ) : showContent && hasIssues ? (
         <div className="space-y-3">
           {issues!.map((issue) => (
             <div
@@ -127,7 +161,7 @@ export default function IntegrityPage() {
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-warning)]" />
               <div className="flex-1">
                 <p className="text-[13px] font-semibold text-[var(--color-text)]">
-                  {t(`codes.${issue.code}` as `codes.${string}`)}
+                  {formatIntegrityCodeLabel(t, issue.code)}
                 </p>
                 <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
                   {issue.count} {t('issueCount')}
@@ -142,7 +176,7 @@ export default function IntegrityPage() {
             </div>
           ))}
         </div>
-      ) : (
+      ) : showContent ? (
         <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-[var(--color-success)]/40 bg-[var(--color-surface)] p-5">
           <CheckCircle className="h-5 w-5 text-[var(--color-success)]" />
           <div>
@@ -150,44 +184,46 @@ export default function IntegrityPage() {
             <p className="text-[12px] text-[var(--color-text-muted)]">{t('noIssuesDescription')}</p>
           </div>
         </div>
-      )}
+      ) : null}
 
-      <Modal
-        open={lockOpen}
-        onClose={() => setLockOpen(false)}
-        title={t('lockModal.title')}
-        description={t('lockModal.description')}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setLockOpen(false)}>{tCommon('cancel')}</SecondaryButton>
-            <PrimaryButton
-              disabled={lockMut.isPending || !canLock}
-              onClick={() => lockMut.mutate()}
-            >
-              {lockMut.isPending ? tCommon('loading') : t('lockModal.confirm')}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          {hasIssues && (
-            <InlineAlert variant="warning">{t('lockModal.issueWarning')}</InlineAlert>
-          )}
-          {hasIssues && (
-            <div>
-              <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">
-                {t('lockModal.reason')}
-              </label>
-              <input
-                className={INPUT}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder={tCommon('reasonRequired')}
-              />
-            </div>
-          )}
-        </div>
-      </Modal>
+      {canLockEvent && (
+        <Modal
+          open={lockOpen}
+          onClose={() => setLockOpen(false)}
+          title={t('lockModal.title')}
+          description={t('lockModal.description')}
+          footer={
+            <>
+              <SecondaryButton onClick={() => setLockOpen(false)}>{tCommon('cancel')}</SecondaryButton>
+              <PrimaryButton
+                disabled={lockMut.isPending || !canLock}
+                onClick={() => lockMut.mutate()}
+              >
+                {lockMut.isPending ? tCommon('loading') : t('lockModal.confirm')}
+              </PrimaryButton>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            {hasIssues && (
+              <InlineAlert variant="warning">{t('lockModal.issueWarning')}</InlineAlert>
+            )}
+            {hasIssues && (
+              <div>
+                <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">
+                  {t('lockModal.reason')}
+                </label>
+                <input
+                  className={INPUT}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder={tCommon('reasonRequired')}
+                />
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

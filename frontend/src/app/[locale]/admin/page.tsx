@@ -52,7 +52,13 @@ export default function AdminDashboardPage() {
   type QuickAction = { key: string; href: string; icon: typeof Calendar; label: string; desc: string };
   const quickActions: QuickAction[] = [
     { key: 'events', href: '/admin/events', icon: Calendar, label: tNav('events'), desc: t('linkEventsDescription') },
-    { key: 'rulesets', href: '/admin/rulesets', icon: FileText, label: tNav('rulesets'), desc: t('linkRulesetsDescription') },
+    {
+      key: 'categoryTemplates',
+      href: '/admin/category-templates',
+      icon: FileText,
+      label: tNav('categoryTemplates'),
+      desc: t('linkRulesetsDescription'),
+    },
     { key: 'weighin', href: '/admin/weighin', icon: Scale, label: tNav('weighin'), desc: tNav('weighin') },
     { key: 'draw', href: '/admin/draw', icon: Shuffle, label: tNav('draw'), desc: tNav('draw') },
   ];

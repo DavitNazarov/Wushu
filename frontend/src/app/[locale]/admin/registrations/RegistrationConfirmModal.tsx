@@ -4,13 +4,14 @@ import { Modal } from '@/components/ui/Modal';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import type { RegistrationRow } from '@/types/api';
 import { athleteName } from './RegistrationTable';
-
-type RowAction = 'APPROVED' | 'REJECTED' | 'WITHDRAWN';
+import type { RowAction } from './registrationStatusActions';
 
 export interface ConfirmModalState {
-  reg: RegistrationRow;
   action: RowAction;
   reason: string;
+  description: string;
+  scope: 'single' | 'bulk';
+  reg?: RegistrationRow;
 }
 
 interface Props {
@@ -41,7 +42,7 @@ export function RegistrationConfirmModal({ state, isPending, t, tC, onChange, on
       open={!!state}
       onClose={onClose}
       title={title}
-      description={`${athleteName(state.reg)} · ${state.reg.club?.name ?? '—'} · ${state.reg.categoryCode}`}
+      description={state.description}
     >
       <div className="space-y-4">
         {(state.action === 'REJECTED' || state.action === 'WITHDRAWN') && (

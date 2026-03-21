@@ -148,4 +148,22 @@ describe('CreateEventSchema (date-only event model)', () => {
     );
     expect(result.success).toBe(true);
   });
+
+  it('rejects registration close date on event start day', () => {
+    const result = CreateEventSchema.safeParse(
+      validPayload({
+        registrationWindow: {
+          opensAt: '2026-02-20',
+          closesAt: '2026-03-02',
+        },
+      }),
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const issue = result.error.issues.find(
+        (i) => i.path.join('.') === 'registrationWindow.closesAt',
+      );
+      expect(issue).toBeDefined();
+    }
+  });
 });

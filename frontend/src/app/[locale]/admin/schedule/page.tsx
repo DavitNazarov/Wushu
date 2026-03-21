@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -13,8 +13,11 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
-import type { EventRow, MatRow, ScheduleFightRow } from '@/types/api';
+import type { MatRow, ScheduleFightRow } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
+import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
+import { resolveEventControlGate } from '@/domain/events/controlPageGate';
+import { useAdminEventSelection } from '@/hooks/useAdminEventSelection';
 
 const SEL =
   'h-10 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
@@ -37,10 +40,12 @@ function statusTone(status: ScheduleFightRow['liveStatus']) {
 export default function SchedulePage() {
   const t = useTranslations('schedule');
   const tCommon = useTranslations('common');
+  const tGate = useTranslations('eventPhaseGate');
+  const tEvents = useTranslations('admin.events');
+  const locale = useLocale();
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const [eventId, setEventId] = useState('');
   const [addMatOpen, setAddMatOpen] = useState(false);
   const [matName, setMatName] = useState('');
   const [autoOpen, setAutoOpen] = useState(false);
@@ -52,26 +57,26 @@ export default function SchedulePage() {
     return { startTimeIso: defaultStart, avgBoutSeconds: 180, bufferSeconds: 60, restMinutes: 30 };
   });
 
-  const { data: events } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => apiGet<EventRow[]>('/api/events'),
-  });
-  const eid = eventId || events?.[0]?.id || '';
+  const { currentEventId, events, selectedEvent, setSelectedEventId } = useAdminEventSelection();
+  const eid = currentEventId;
+  const gate = resolveEventControlGate('schedule', selectedEvent);
+  const showContent = gate.mode === 'active' || gate.mode === 'readonly';
+  const isEditable = gate.mode === 'active';
 
   const { data: mats } = useQuery({
     queryKey: ['mats', eid],
     queryFn: () => apiGet<MatRow[]>(`/api/mats?eventId=${eid}`),
-    enabled: !!eid,
+    enabled: !!eid && showContent,
   });
 
   const { data: fights, isLoading, error, refetch } = useQuery({
     queryKey: ['schedule', eid],
     queryFn: () => apiGet<ScheduleFightRow[]>(`/api/schedule?eventId=${eid}`),
-    enabled: !!eid,
+    enabled: !!eid && showContent,
   });
 
   useEffect(() => {
-    if (!eid) return;
+    if (!eid || !showContent) return;
     const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? window.location.origin;
     const socket = io(baseUrl, {
       transports: ['websocket', 'polling'],
@@ -96,7 +101,7 @@ export default function SchedulePage() {
       socket.off('fight:update', onUpdate);
       socket.close();
     };
-  }, [eid, qc]);
+  }, [eid, qc, showContent]);
 
   const addMatMut = useMutation({
     mutationFn: () =>
@@ -141,20 +146,38 @@ export default function SchedulePage() {
         title={t('title')}
         actions={
           <div className="flex gap-2">
-            <select className={SEL} value={eid} onChange={(e) => setEventId(e.target.value)}>
+            <select className={SEL} value={eid} onChange={(e) => setSelectedEventId(e.target.value)}>
               {events?.map((ev) => (
                 <option key={ev.id} value={ev.id}>{ev.name}</option>
               ))}
             </select>
-            <SecondaryButton onClick={() => { setMatName(''); setAddMatOpen(true); }}>
-              {t('addMat')}
-            </SecondaryButton>
-            <PrimaryButton onClick={() => setAutoOpen(true)}>
-              {t('autoSchedule')}
-            </PrimaryButton>
+            {isEditable && (
+              <>
+                <SecondaryButton onClick={() => { setMatName(''); setAddMatOpen(true); }}>
+                  {t('addMat')}
+                </SecondaryButton>
+                <PrimaryButton onClick={() => setAutoOpen(true)}>
+                  {t('autoSchedule')}
+                </PrimaryButton>
+              </>
+            )}
           </div>
         }
       />
+
+      {eid && gate.mode !== 'active' && (
+        <EventPhaseGate
+          gate={gate}
+          locale={locale}
+          t={(key, values) =>
+            tGate(
+              key as Parameters<typeof tGate>[0],
+              values as Record<string, string | number | Date> | undefined,
+            )
+          }
+          tEvents={(key) => tEvents(key as Parameters<typeof tEvents>[0])}
+        />
+      )}
 
       {error && (
         <AdminErrorAlert
@@ -165,9 +188,11 @@ export default function SchedulePage() {
         />
       )}
 
-      {mats && mats.length > 0 && (
+      {showContent && mats && mats.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[13px] font-medium text-[var(--color-text-muted)]">Mats:</span>
+          <span className="text-[13px] font-medium text-[var(--color-text-muted)]">
+            {t('matsLabel')}:
+          </span>
           {mats.map((m) => (
             <span
               key={m.id}
@@ -184,11 +209,11 @@ export default function SchedulePage() {
         </div>
       )}
 
-      {isLoading ? (
+      {showContent && isLoading ? (
         <SkeletonRows rows={4} cols={3} />
-      ) : !scheduleFlow.length ? (
+      ) : showContent && !scheduleFlow.length ? (
         <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
-      ) : (
+      ) : showContent ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {scheduleFlow.map((f) => (
             <div
@@ -217,7 +242,7 @@ export default function SchedulePage() {
               <div className="text-[13px] font-medium text-blue-400">{f.blueDisplayName}</div>
 
               <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-text-muted)]">
-                <span>{f.isPlayable ? 'ready' : 'waiting'}</span>
+                <span>{f.isPlayable ? t('fightReady') : t('fightWaiting')}</span>
                 {f.matName && <span>• {f.matName}</span>}
                 {f.scheduledAt && (
                   <span>
@@ -232,64 +257,73 @@ export default function SchedulePage() {
             </div>
           ))}
         </div>
-      )}
+      ) : null}
 
-      <Modal
-        open={addMatOpen}
-        onClose={() => setAddMatOpen(false)}
-        title={t('addMat')}
-        description={t('addMatDesc')}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setAddMatOpen(false)}>{tCommon('cancel')}</SecondaryButton>
-            <PrimaryButton disabled={!matName.trim() || addMatMut.isPending} onClick={() => addMatMut.mutate()}>
-              {addMatMut.isPending ? tCommon('loading') : tCommon('create')}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <label className="block text-[13px] font-medium text-[var(--color-text)]">{t('matName')}</label>
-        <input className={`mt-1 ${INPUT}`} value={matName} onChange={(e) => setMatName(e.target.value)} placeholder="Mat 1" />
-      </Modal>
+      {isEditable && (
+        <>
+          <Modal
+            open={addMatOpen}
+            onClose={() => setAddMatOpen(false)}
+            title={t('addMat')}
+            description={t('addMatDesc')}
+            footer={
+              <>
+                <SecondaryButton onClick={() => setAddMatOpen(false)}>{tCommon('cancel')}</SecondaryButton>
+                <PrimaryButton disabled={!matName.trim() || addMatMut.isPending} onClick={() => addMatMut.mutate()}>
+                  {addMatMut.isPending ? tCommon('loading') : tCommon('create')}
+                </PrimaryButton>
+              </>
+            }
+          >
+            <label className="block text-[13px] font-medium text-[var(--color-text)]">{t('matName')}</label>
+            <input
+              className={`mt-1 ${INPUT}`}
+              value={matName}
+              onChange={(e) => setMatName(e.target.value)}
+              placeholder={t('matPlaceholder')}
+            />
+          </Modal>
 
-      <Modal
-        open={autoOpen}
-        onClose={() => setAutoOpen(false)}
-        title={t('autoSchedule')}
-        description={t('autoScheduleDesc')}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setAutoOpen(false)}>{tCommon('cancel')}</SecondaryButton>
-            <PrimaryButton disabled={autoMut.isPending || !autoForm.startTimeIso} onClick={() => autoMut.mutate()}>
-              {autoMut.isPending ? tCommon('loading') : t('autoSchedule')}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          {([
-            { label: t('startTime'), key: 'startTimeIso', type: 'datetime-local' },
-            { label: t('avgBout'), key: 'avgBoutSeconds', type: 'number' },
-            { label: t('buffer'), key: 'bufferSeconds', type: 'number' },
-            { label: t('restMinutes'), key: 'restMinutes', type: 'number' },
-          ] as const).map(({ label, key, type }) => (
-            <div key={key}>
-              <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">{label}</label>
-              <input
-                type={type}
-                className={INPUT}
-                value={autoForm[key]}
-                onChange={(e) =>
-                  setAutoForm((f) => ({
-                    ...f,
-                    [key]: type === 'number' ? Number(e.target.value) : e.target.value,
-                  }))
-                }
-              />
+          <Modal
+            open={autoOpen}
+            onClose={() => setAutoOpen(false)}
+            title={t('autoSchedule')}
+            description={t('autoScheduleDesc')}
+            footer={
+              <>
+                <SecondaryButton onClick={() => setAutoOpen(false)}>{tCommon('cancel')}</SecondaryButton>
+                <PrimaryButton disabled={autoMut.isPending || !autoForm.startTimeIso} onClick={() => autoMut.mutate()}>
+                  {autoMut.isPending ? tCommon('loading') : t('autoSchedule')}
+                </PrimaryButton>
+              </>
+            }
+          >
+            <div className="space-y-3">
+              {([
+                { label: t('startTime'), key: 'startTimeIso', type: 'datetime-local' },
+                { label: t('avgBout'), key: 'avgBoutSeconds', type: 'number' },
+                { label: t('buffer'), key: 'bufferSeconds', type: 'number' },
+                { label: t('restMinutes'), key: 'restMinutes', type: 'number' },
+              ] as const).map(({ label, key, type }) => (
+                <div key={key}>
+                  <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">{label}</label>
+                  <input
+                    type={type}
+                    className={INPUT}
+                    value={autoForm[key]}
+                    onChange={(e) =>
+                      setAutoForm((f) => ({
+                        ...f,
+                        [key]: type === 'number' ? Number(e.target.value) : e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </Modal>
+          </Modal>
+        </>
+      )}
     </div>
   );
 }

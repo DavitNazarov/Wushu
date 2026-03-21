@@ -11,6 +11,7 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { AthleteProfileActions } from './AthleteProfileActions';
 import { AthleteProfileCompetition } from './AthleteProfileCompetition';
 import { AthleteProfileIdentity } from './AthleteProfileIdentity';
+import { AthleteProfileOverview } from './AthleteProfileOverview';
 import { AthleteProfileRegistrations } from './AthleteProfileRegistrations';
 
 type Props = {
@@ -59,14 +60,23 @@ export function AthleteProfilePage({ athleteId, scope }: Props) {
           <SkeletonRows rows={4} cols={3} />
         </div>
       ) : query.data ? (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_340px]">
-          <div className="space-y-6">
-            <AthleteProfileRegistrations registrations={query.data.registrations} scope={scope} />
-            <AthleteProfileCompetition athleteId={query.data.athlete.id} fights={query.data.fights} scope={scope} />
-          </div>
-          <div className="space-y-6">
-            <AthleteProfileIdentity athlete={query.data.athlete} scope={scope} />
-            {scope !== 'public' && <AthleteProfileActions scope={scope} registrations={query.data.registrations} />}
+        <div className="space-y-6">
+          <AthleteProfileOverview
+            athlete={query.data.athlete}
+            registrations={query.data.registrations}
+            fights={query.data.fights}
+            scope={scope}
+          />
+
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_360px]">
+            <div className="space-y-6">
+              <AthleteProfileRegistrations registrations={query.data.registrations} scope={scope} />
+              <AthleteProfileCompetition athleteId={query.data.athlete.id} fights={query.data.fights} scope={scope} />
+            </div>
+            <div className="space-y-6">
+              <AthleteProfileIdentity athlete={query.data.athlete} scope={scope} />
+              {scope !== 'public' && <AthleteProfileActions scope={scope} registrations={query.data.registrations} />}
+            </div>
           </div>
         </div>
       ) : null}

@@ -27,6 +27,7 @@ type Props = {
   selectedEventId: string;
   search: string;
   filter: WeighInQueueFilter;
+  showFilters?: boolean;
   onEventChange: (eventId: string) => void;
   onSearchChange: (value: string) => void;
   onFilterChange: (value: WeighInQueueFilter) => void;
@@ -38,6 +39,7 @@ export function WeighInToolbar({
   selectedEventId,
   search,
   filter,
+  showFilters = true,
   onEventChange,
   onSearchChange,
   onFilterChange,
@@ -57,32 +59,36 @@ export function WeighInToolbar({
             </option>
           ))}
         </select>
-        <input
-          className={`${INPUT_CLASS} w-full`}
-          value={search}
-          placeholder={t('searchPlaceholder')}
-          onChange={(event) => onSearchChange(event.target.value)}
-        />
+        {showFilters && (
+          <input
+            className={`${INPUT_CLASS} w-full`}
+            value={search}
+            placeholder={t('searchPlaceholder')}
+            onChange={(event) => onSearchChange(event.target.value)}
+          />
+        )}
       </div>
-      <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {FILTERS.map((item) => {
-          const active = item === filter;
-          return (
-            <button
-              key={item}
-              type="button"
-              onClick={() => onFilterChange(item)}
-              className={`min-h-[36px] shrink-0 rounded-[var(--radius-pill)] border px-3 py-1.5 text-[12px] font-medium transition ${
-                active
-                  ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary)]/20 text-[var(--color-text)]'
-                  : 'border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
-              }`}
-            >
-              {t(FILTER_LABEL_KEY[item])}
-            </button>
-          );
-        })}
-      </div>
+      {showFilters && (
+        <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {FILTERS.map((item) => {
+            const active = item === filter;
+            return (
+              <button
+                key={item}
+                type="button"
+                onClick={() => onFilterChange(item)}
+                className={`min-h-[36px] shrink-0 rounded-[var(--radius-pill)] border px-3 py-1.5 text-[12px] font-medium transition ${
+                  active
+                    ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary)]/20 text-[var(--color-text)]'
+                    : 'border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                }`}
+              >
+                {t(FILTER_LABEL_KEY[item])}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

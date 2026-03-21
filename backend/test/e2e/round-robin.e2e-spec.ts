@@ -9,13 +9,13 @@ import {
 
 const describeIfDb = process.env.DATABASE_URL ? describe : describe.skip;
 
-function buildEventPayload(rulesetId: string, slug: string) {
+function buildEventPayload(categoryTemplateId: string, slug: string) {
   return {
     name: `Round Robin Event ${slug}`,
     slug,
     location: 'Tbilisi',
     timezone: 'Asia/Tbilisi',
-    rulesetId,
+    categoryTemplateId,
     dates: {
       registrationStartDate: isoOffset({ days: -3 }),
       registrationEndDate: isoOffset({ days: -2 }),
@@ -70,7 +70,7 @@ describeIfDb('Round robin (e2e)', () => {
 
   it('creates 3 round-robin fights and resolves standings without elimination propagation', async () => {
     const club = await ctx.createClub();
-    const ruleset = await ctx.createRuleset({
+    const categoryTemplate = await ctx.createCategoryTemplate({
       weights: [
         {
           name: '65kg',
@@ -83,18 +83,21 @@ describeIfDb('Round robin (e2e)', () => {
     const client = request(ctx.app.getHttpServer());
     const slug = uniqueSuffix('rr-event');
     const event = await expectOk(
-      client.post('/api/events').send(buildEventPayload(ruleset.rulesetId, slug)),
+      client
+        .post('/api/events')
+        .send(buildEventPayload(categoryTemplate.categoryTemplateId, slug)),
     );
     const eventId = event.body.id as string;
     ctx.trackEvent(eventId);
 
     const categories = await expectOk(
       client.post(`/api/events/${eventId}/categories`).send({
-        rulesetId: ruleset.rulesetId,
+        categoryTemplateId: categoryTemplate.categoryTemplateId,
         ageGroups: [
           {
-            rulesetAgeGroupId: ruleset.ageGroupId,
-            weightCategoryIds: ruleset.weightCategoryIds,
+            categoryTemplateGroupId:
+              categoryTemplate.categoryTemplateAgeGroupId,
+            weightCategoryIds: categoryTemplate.categoryTemplateWeightIds,
           },
         ],
       }),

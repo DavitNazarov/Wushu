@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { ArrowRight, CalendarRange, ListChecks, Users } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/Card';
 import type { AthleteProfileRegistrationRow } from '@/types/api';
@@ -57,10 +58,26 @@ export function AthleteProfileActions({ scope, registrations }: Props) {
           <Link
             key={action.id}
             href={action.href}
-            className="block rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/30 px-3 py-3 transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]"
+            className="block rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--color-surface-alt)_55%,transparent),transparent)] px-4 py-3 transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]/60"
           >
-            <p className="text-[13px] font-medium text-[var(--color-text)]">{action.label}</p>
-            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{action.description}</p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--color-primary-subtle)] text-[var(--color-primary)]">
+                  {action.id === 'athletes' ? (
+                    <Users className="h-4 w-4" />
+                  ) : action.id === 'event' ? (
+                    <CalendarRange className="h-4 w-4" />
+                  ) : (
+                    <ListChecks className="h-4 w-4" />
+                  )}
+                </span>
+                <div>
+                  <p className="text-[13px] font-medium text-[var(--color-text)]">{action.label}</p>
+                  <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{action.description}</p>
+                </div>
+              </div>
+              <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
+            </div>
           </Link>
         ))}
       </div>

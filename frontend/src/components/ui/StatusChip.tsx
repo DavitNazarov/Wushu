@@ -1,4 +1,10 @@
-import type { EventLifecycle, RegistrationStatus, FightStatus, SubmissionStatus, RulesetStatus } from '@/types/api';
+import type {
+  CategoryTemplateStatus,
+  EventLifecycle,
+  FightStatus,
+  RegistrationStatus,
+  SubmissionStatus,
+} from '@/types/api';
 
 type ChipVariant = 'default' | 'success' | 'warning' | 'danger' | 'info';
 
@@ -35,7 +41,7 @@ const submissionVariants: Record<SubmissionStatus, ChipVariant> = {
   HANDLED: 'default',
 };
 
-const rulesetVariants: Record<RulesetStatus, ChipVariant> = {
+const categoryTemplateVariants: Record<CategoryTemplateStatus, ChipVariant> = {
   DRAFT: 'default',
   ACTIVE: 'success',
 };
@@ -51,7 +57,7 @@ const variantStyles: Record<ChipVariant, string> = {
 type StatusChipProps = {
   status: string;
   label: string;
-  domain?: 'lifecycle' | 'registration' | 'fight' | 'submission' | 'ruleset';
+  domain?: 'lifecycle' | 'registration' | 'fight' | 'submission' | 'categoryTemplate';
 };
 
 export function StatusChip({ status, label, domain }: StatusChipProps) {
@@ -60,7 +66,9 @@ export function StatusChip({ status, label, domain }: StatusChipProps) {
   else if (domain === 'registration') variant = registrationVariants[status as RegistrationStatus] ?? 'default';
   else if (domain === 'fight') variant = fightVariants[status as FightStatus] ?? 'default';
   else if (domain === 'submission') variant = submissionVariants[status as SubmissionStatus] ?? 'default';
-  else if (domain === 'ruleset') variant = rulesetVariants[status as RulesetStatus] ?? 'default';
+  else if (domain === 'categoryTemplate') {
+    variant = categoryTemplateVariants[status as CategoryTemplateStatus] ?? 'default';
+  }
 
   return (
     <span

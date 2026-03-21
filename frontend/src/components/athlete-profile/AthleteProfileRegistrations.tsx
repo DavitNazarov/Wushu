@@ -45,9 +45,14 @@ export function AthleteProfileRegistrations({ registrations, scope }: Props) {
 
   return (
     <Card className="space-y-4 p-5">
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('title')}</h2>
-        <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{t('subtitle')}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('title')}</h2>
+          <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{t('subtitle')}</p>
+        </div>
+        <span className="rounded-full bg-[var(--color-primary-subtle)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-primary)]">
+          {registrations.length}
+        </span>
       </div>
 
       <div className="space-y-3">
@@ -55,7 +60,7 @@ export function AthleteProfileRegistrations({ registrations, scope }: Props) {
           <Link
             key={row.id}
             href={registrationHref(scope, locale, row)}
-            className="block rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/35 p-4 transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]"
+            className="block rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--color-surface-alt)_60%,transparent),transparent)] p-4 transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]/60"
           >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -94,17 +99,17 @@ export function AthleteProfileRegistrations({ registrations, scope }: Props) {
 
             {scope !== 'public' && (
               <div className="mt-3 grid gap-3 text-[12px] text-[var(--color-text-muted)] sm:grid-cols-3">
-                <div>
+                <div className="rounded-[var(--radius-card)] bg-[var(--color-surface)]/55 px-3 py-2">
                   <span className="block text-[11px] uppercase tracking-wide">{t('columns.weighIn')}</span>
                   <span className="mt-1 block text-[13px] text-[var(--color-text)]">
                     {row.weighInStatus ? tWeighIn(WEIGH_IN_STATUS_LABEL_KEY[row.weighInStatus]) : '—'}
                   </span>
                 </div>
-                <div>
+                <div className="rounded-[var(--radius-card)] bg-[var(--color-surface)]/55 px-3 py-2">
                   <span className="block text-[11px] uppercase tracking-wide">{t('columns.initialCategory')}</span>
                   <span className="mt-1 block text-[13px] text-[var(--color-text)]">{row.initialWeightCategoryName ?? '—'}</span>
                 </div>
-                <div>
+                <div className="rounded-[var(--radius-card)] bg-[var(--color-surface)]/55 px-3 py-2">
                   <span className="block text-[11px] uppercase tracking-wide">{t('columns.latestDecision')}</span>
                   <span className="mt-1 block text-[13px] text-[var(--color-text)]">
                     {row.latestWeighInDecision ? tWeighIn(`decisionOption${row.latestWeighInDecision}`) : '—'}

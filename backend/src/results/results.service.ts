@@ -95,9 +95,9 @@ export class ResultsService {
           eventWeightCategory: {
             select: {
               id: true,
-              rulesetWeightCategory: { select: { name: true } },
+              categoryTemplateWeight: { select: { name: true } },
               eventAgeGroup: {
-                select: { rulesetAgeGroup: { select: { name: true } } },
+                select: { categoryTemplateAgeGroup: { select: { name: true } } },
               },
             },
           },
@@ -153,11 +153,12 @@ export class ResultsService {
       .map(([eventWeightCategoryId, categoryFights]) => {
         const athletes = registrationsByCategory.get(eventWeightCategoryId) ?? [];
         const categoryName =
-          categoryFights[0]?.eventWeightCategory?.rulesetWeightCategory?.name ??
+          categoryFights[0]?.eventWeightCategory?.categoryTemplateWeight?.name ??
           categoryFights[0]?.categoryCode ??
           eventWeightCategoryId;
         const ageGroupName =
-          categoryFights[0]?.eventWeightCategory?.eventAgeGroup?.rulesetAgeGroup?.name ??
+          categoryFights[0]?.eventWeightCategory?.eventAgeGroup
+            ?.categoryTemplateAgeGroup?.name ??
           null;
 
         const competitionFights: CompetitionFight[] = categoryFights.map((fight) => ({

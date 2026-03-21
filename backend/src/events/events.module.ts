@@ -6,10 +6,10 @@ import { EventStageAutomationService } from './event-stage-automation.service';
 import { EventCategoriesService } from './event-categories.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
-import { RulesetsModule } from '../rulesets/rulesets.module';
+import { CategoryTemplatesModule } from '../category-templates/category-templates.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, RulesetsModule],
+  imports: [PrismaModule, AuthModule, CategoryTemplatesModule],
   controllers: [EventsController],
   providers: [
     EventsService,

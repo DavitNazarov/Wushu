@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
@@ -24,6 +25,8 @@ const EMPTY_FORM: FormState = { name: '', city: '', country: '' };
 export default function ClubsPage() {
   const t = useTranslations('clubs');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -54,6 +57,7 @@ export default function ClubsPage() {
       apiPost<ClubRow>('/api/clubs', body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clubs'] });
+      queryClient.invalidateQueries({ queryKey: ['club-details'] });
       toast(tCommon('saveSuccess'));
       closeModal();
     },
@@ -77,6 +81,10 @@ export default function ClubsPage() {
     setModalOpen(false);
     setEditingClub(null);
     setForm(EMPTY_FORM);
+  }
+
+  function goToClubDetails(clubId: string) {
+    router.push(`/${locale}/admin/clubs/${clubId}`);
   }
 
   function handleSave() {
@@ -141,18 +149,38 @@ export default function ClubsPage() {
                   <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.name')}</th>
                   <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.city')}</th>
                   <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.country')}</th>
+                  <th className="px-4 py-3 text-right font-medium text-[var(--color-text-muted)]">{tCommon('actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {filtered.map((club) => (
                   <tr
                     key={club.id}
-                    onClick={() => openEdit(club)}
-                    className="cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]"
+                    tabIndex={0}
+                    onClick={() => goToClubDetails(club.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        goToClubDetails(club.id);
+                      }
+                    }}
+                    className="cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40"
                   >
                     <td className="px-4 py-3 font-medium text-[var(--color-text)]">{club.name}</td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">{club.city || '—'}</td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">{club.country || '—'}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openEdit(club);
+                        }}
+                        className="text-[12px] font-medium text-[var(--color-primary)] hover:underline"
+                      >
+                        {tCommon('edit')}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -161,17 +189,36 @@ export default function ClubsPage() {
 
           <div className="space-y-2 sm:hidden">
             {filtered.map((club) => (
-              <button
+              <div
                 key={club.id}
-                type="button"
-                onClick={() => openEdit(club)}
-                className="w-full rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition hover:bg-[var(--color-surface-alt)]"
+                role="button"
+                tabIndex={0}
+                onClick={() => goToClubDetails(club.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    goToClubDetails(club.id);
+                  }
+                }}
+                className="w-full rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition hover:bg-[var(--color-surface-alt)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40"
               >
-                <p className="text-[13px] font-medium text-[var(--color-text)]">{club.name}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-[13px] font-medium text-[var(--color-text)]">{club.name}</p>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openEdit(club);
+                    }}
+                    className="shrink-0 text-[12px] font-medium text-[var(--color-primary)] hover:underline"
+                  >
+                    {tCommon('edit')}
+                  </button>
+                </div>
                 <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
                   {[club.city, club.country].filter(Boolean).join(', ') || '—'}
                 </p>
-              </button>
+              </div>
             ))}
           </div>
         </>

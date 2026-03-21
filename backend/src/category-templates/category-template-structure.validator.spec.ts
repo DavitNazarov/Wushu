@@ -1,9 +1,9 @@
-import { validateRulesetStructure } from './ruleset-structure.validator';
+import { validateCategoryTemplateStructure } from './category-template-structure.validator';
 
-describe('validateRulesetStructure', () => {
+describe('validateCategoryTemplateStructure', () => {
   it('accepts a valid age/weight structure', () => {
     expect(() =>
-      validateRulesetStructure([
+      validateCategoryTemplateStructure([
         {
           code: 'adult',
           name: 'Adult',
@@ -38,7 +38,7 @@ describe('validateRulesetStructure', () => {
 
   it('rejects open weight category when it is not the last one', () => {
     expect(() =>
-      validateRulesetStructure([
+      validateCategoryTemplateStructure([
         {
           code: 'adult',
           name: 'Adult',

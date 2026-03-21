@@ -1,12 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
+import { ChevronDown, Layers3 } from 'lucide-react';
 import { apiGet } from '@/lib/api/client';
-import type { RulesetRow, RulesetAgeGroupRow, CategorySelection } from '@/types/api';
+import type {
+  CategorySelection,
+  CategoryTemplateGroupRow,
+  CategoryTemplateRow,
+} from '@/types/api';
 
 interface Props {
-  rulesets: RulesetRow[];
+  categoryTemplates: CategoryTemplateRow[];
   value: CategorySelection | null;
   onChange: (v: CategorySelection) => void;
   error?: string | null;
@@ -24,23 +30,29 @@ function AgeGroupSection({
   onToggleAll,
   onToggleWc,
 }: {
-  ag: RulesetAgeGroupRow;
+  ag: CategoryTemplateGroupRow;
   selected: Set<string>;
   onToggleAll: (check: boolean) => void;
   onToggleWc: (id: string, check: boolean) => void;
 }) {
-  const [open, setOpen] = useState(true);
+  const tIdentity = useTranslations('athleteProfile.identity');
+  const [open, setOpen] = useState(false);
   const allSelected = ag.weightCategories.every((wc) => selected.has(wc.id));
   const anySelected = ag.weightCategories.some((wc) => selected.has(wc.id));
+  const selectedCount = ag.weightCategories.filter((wc) => selected.has(wc.id)).length;
+  const divisionLabel = ag.sex ? tIdentity(`sexValue.${ag.sex}`) : 'Open';
+  const ageLabel = ag.minAge
+    ? `${ag.minAge}${ag.maxAge ? `-${ag.maxAge}` : '+'}y`
+    : 'Open';
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+    <div className="overflow-hidden rounded-[20px] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm ring-1 ring-black/5 dark:ring-white/5">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-4 py-3"
+        className="flex w-full items-center justify-between px-4 py-3.5 text-left transition hover:bg-[var(--color-surface-alt)]/70"
       >
-        <div className="flex items-center gap-3">
+        <div className="min-w-0 flex items-center gap-3">
           <label
             className="flex items-center gap-2"
             onClick={(e) => e.stopPropagation()}
@@ -54,36 +66,44 @@ function AgeGroupSection({
             />
             <span className="text-[14px] font-semibold text-[var(--color-text)]">{ag.name}</span>
           </label>
-          <span className="text-[12px] text-[var(--color-text-muted)]">
-            {ag.minAge ? `${ag.minAge}${ag.maxAge ? `–${ag.maxAge}` : '+'}y` : ''}
-            {ag.roundDurationSeconds ? ` · ${ag.roundDurationSeconds / 60}min` : ''}
-          </span>
-          <span className="rounded-full bg-[var(--color-surface-alt)] px-2 py-0.5 text-[11px] text-[var(--color-text-muted)]">
-            {ag.weightCategories.filter((wc) => selected.has(wc.id)).length}/{ag.weightCategories.length}
-          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                {divisionLabel}
+              </span>
+              <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                {ageLabel}
+              </span>
+              <span className="rounded-full border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-primary)]">
+                {selectedCount}/{ag.weightCategories.length}
+              </span>
+            </div>
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+              {ag.roundDurationSeconds ? `${ag.roundDurationSeconds / 60} min rounds` : ''}
+            </p>
+          </div>
         </div>
-        <svg className={`h-4 w-4 text-[var(--color-text-muted)] transition-transform ${open ? 'rotate-180' : ''}`}
-          viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <span className="ml-3 flex h-9 w-9 items-center justify-center rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]">
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </span>
       </button>
 
       {open && (
-        <div className="grid grid-cols-2 gap-2 border-t border-[var(--color-border)] px-4 py-3 sm:grid-cols-3 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 border-t border-[var(--color-border)]/80 bg-[var(--color-surface-alt)]/70 px-4 py-3 sm:grid-cols-2 xl:grid-cols-3">
           {ag.weightCategories.map((wc) => (
             <label key={wc.id}
-              className="flex cursor-pointer items-start gap-2 rounded-[6px] border border-[var(--color-border)] px-2.5 py-2 transition hover:bg-[var(--color-surface-alt)]"
+              className="flex cursor-pointer items-start gap-3 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 transition hover:border-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/5"
               title={weightLabel(wc.minWeightKgExcl, wc.maxWeightKgIncl)}
             >
               <input
                 type="checkbox"
                 checked={selected.has(wc.id)}
                 onChange={(e) => onToggleWc(wc.id, e.target.checked)}
-                className="mt-0.5 h-3.5 w-3.5 rounded border-[var(--color-border)] accent-[var(--color-primary)]"
+                className="mt-0.5 h-4 w-4 rounded border-[var(--color-border)] accent-[var(--color-primary)]"
               />
-              <div>
-                <div className="text-[13px] font-medium text-[var(--color-text)]">{wc.name}</div>
-                <div className="text-[11px] text-[var(--color-text-muted)]">
+              <div className="min-w-0">
+                <div className="text-[13px] font-semibold text-[var(--color-text)]">{wc.name}</div>
+                <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
                   {weightLabel(wc.minWeightKgExcl, wc.maxWeightKgIncl)}
                 </div>
               </div>
@@ -95,13 +115,23 @@ function AgeGroupSection({
   );
 }
 
-export function CategorySelector({ rulesets, value, onChange, error }: Props) {
-  const selectedRulesetId = value?.rulesetId ?? rulesets[0]?.id ?? '';
+export function CategorySelector({
+  categoryTemplates,
+  value,
+  onChange,
+  error,
+}: Props) {
+  const t = useTranslations('admin.events.categoryTemplates');
+  const selectedCategoryTemplateId =
+    value?.categoryTemplateId ?? categoryTemplates[0]?.id ?? '';
 
   const { data: ageGroups, isLoading } = useQuery({
-    queryKey: ['ruleset-age-groups', selectedRulesetId],
-    queryFn: () => apiGet<RulesetAgeGroupRow[]>(`/api/rulesets/${selectedRulesetId}/age-groups`),
-    enabled: !!selectedRulesetId,
+    queryKey: ['category-template-groups', selectedCategoryTemplateId],
+    queryFn: () =>
+      apiGet<CategoryTemplateGroupRow[]>(
+        `/api/category-templates/${selectedCategoryTemplateId}/categories`,
+      ),
+    enabled: !!selectedCategoryTemplateId,
   });
 
   // Build a Set<wcId> for fast lookup
@@ -111,10 +141,10 @@ export function CategorySelector({ rulesets, value, onChange, error }: Props) {
 
   function buildSelection(newWcIds: Set<string>): CategorySelection {
     return {
-      rulesetId: selectedRulesetId,
+      categoryTemplateId: selectedCategoryTemplateId,
       ageGroups: (ageGroups ?? [])
         .map((ag) => ({
-          rulesetAgeGroupId: ag.id,
+          categoryTemplateGroupId: ag.id,
           weightCategoryIds: ag.weightCategories.filter((wc) => newWcIds.has(wc.id)).map((wc) => wc.id),
         }))
         .filter((ag) => ag.weightCategoryIds.length > 0),
@@ -131,35 +161,55 @@ export function CategorySelector({ rulesets, value, onChange, error }: Props) {
     onChange(buildSelection(next));
   }
 
-  function handleToggleAll(ag: RulesetAgeGroupRow, checked: boolean) {
+  function handleToggleAll(ag: CategoryTemplateGroupRow, checked: boolean) {
     const next = new Set(selectedWcIds);
     ag.weightCategories.forEach((wc) => (checked ? next.add(wc.id) : next.delete(wc.id)));
     onChange(buildSelection(next));
   }
 
-  function handleRulesetChange(id: string) {
-    onChange({ rulesetId: id, ageGroups: [] });
+  function handleCategoryTemplateChange(id: string) {
+    onChange({ categoryTemplateId: id, ageGroups: [] });
   }
 
   const totalSelected = selectedWcIds.size;
+  const selectedTemplate = categoryTemplates.find((row) => row.id === selectedCategoryTemplateId);
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="rounded-[20px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm ring-1 ring-black/5 dark:ring-white/5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-primary)]">
+              <Layers3 className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-muted)]">
+                {t('sectionEyebrow')}
+              </p>
+              <p className="mt-1 text-[15px] font-semibold text-[var(--color-text)]">
+                {selectedTemplate?.name ?? t('loading')}
+              </p>
+              <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+                {t('sectionDescription')}
+              </p>
+            </div>
+          </div>
+          <span className="rounded-full border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--color-primary)]">
+            {t('selectedCount', { count: totalSelected })}
+          </span>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
           <select
-            className="h-9 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
-            value={selectedRulesetId}
-            onChange={(e) => handleRulesetChange(e.target.value)}
+            className="h-11 w-full rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+            value={selectedCategoryTemplateId}
+            onChange={(e) => handleCategoryTemplateChange(e.target.value)}
           >
-            {rulesets.map((r) => (
+            {categoryTemplates.map((r) => (
               <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
         </div>
-        <span className="text-[12px] text-[var(--color-text-muted)]">
-          {totalSelected} {totalSelected === 1 ? 'category' : 'categories'} selected
-        </span>
       </div>
 
       {error && (
@@ -173,7 +223,7 @@ export function CategorySelector({ rulesets, value, onChange, error }: Props) {
           ))}
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {(ageGroups ?? []).map((ag) => (
             <AgeGroupSection
               key={ag.id}

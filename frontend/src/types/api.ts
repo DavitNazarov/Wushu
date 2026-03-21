@@ -10,7 +10,8 @@ export type EventLifecycle =
 
 export type RegistrationWindowStatus = 'UPCOMING' | 'OPEN' | 'CLOSED';
 
-export type RulesetStatus = 'DRAFT' | 'ACTIVE';
+export type CategoryTemplateStatus = 'DRAFT' | 'ACTIVE';
+export type CategoryTemplateType = 'SYSTEM' | 'CUSTOM' | 'OFFICIAL';
 export type RegistrationStatus = 'PENDING' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN';
 export type WeighInDecision =
   | 'PASS'
@@ -54,7 +55,7 @@ export interface EventCreateInput {
   location: string;
   timezone: string;
   autoAdvanceStage?: boolean;
-  rulesetId?: string;
+  categoryTemplateId?: string;
   dates: EventDates;
   registrationWindow?: {
     opensAt: string; // YYYY-MM-DD
@@ -84,6 +85,7 @@ export interface EventRow {
   timezone: string;
   published: boolean;
   autoAdvanceStage: boolean;
+  categoryTemplateId: string | null;
   weighInPolicyCode: WeighInPolicyCode;
   bronzePolicyCode: BronzePolicyCode;
   restPolicyCode: RestPolicyCode;
@@ -104,16 +106,24 @@ export interface EventRow {
   updatedAt: string;
 }
 
-export interface RulesetRow {
+export interface CategoryTemplateRow {
   id: string;
   name: string;
   version: number;
-  status: RulesetStatus;
+  status: CategoryTemplateStatus;
+  type?: CategoryTemplateType;
+  sourceLabel?: string | null;
+  discipline?: string | null;
   createdAt: string;
   updatedAt: string;
+  usageCount?: number;
+  ageGroupCount?: number;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  deleteBlockedReason?: string | null;
 }
 
-export interface RulesetWeightCategoryRow {
+export interface CategoryTemplateCategoryRow {
   id: string;
   name: string;
   minWeightKgExcl: number | null;
@@ -121,7 +131,7 @@ export interface RulesetWeightCategoryRow {
   sortOrder: number;
 }
 
-export interface RulesetAgeGroupRow {
+export interface CategoryTemplateGroupRow {
   id: string;
   code: string;
   name: string;
@@ -130,12 +140,65 @@ export interface RulesetAgeGroupRow {
   maxAge: number | null;
   roundDurationSeconds: number;
   sortOrder: number;
-  weightCategories: RulesetWeightCategoryRow[];
+  weightCategories: CategoryTemplateCategoryRow[];
+}
+
+export interface CategoryTemplateUsageEventRow {
+  id: string;
+  name: string;
+  lifecycle: string;
+  competitionStartDate: string;
+}
+
+export interface CategoryTemplateDetailRow extends CategoryTemplateRow {
+  type: CategoryTemplateType;
+  organisationId: string | null;
+  selectedCategoryOptionIds: string[];
+  counts: {
+    ageGroups: number;
+    genders: number;
+    weightCategories: number;
+    roundsConfigured: number;
+  };
+  ageGroups: CategoryTemplateGroupRow[];
+  usage: {
+    snapshotCount: number;
+    eventAgeGroupCount: number;
+    eventWeightCategoryCount: number;
+    recentEvents: CategoryTemplateUsageEventRow[];
+  };
+  permissions: {
+    canEdit: boolean;
+    canEditStructure: boolean;
+    canDelete: boolean;
+    reasonCodes: string[];
+  };
+}
+
+export interface CategoryOptionRow {
+  id: string;
+  code: string;
+  name: string;
+  minWeightKgExcl: number | null;
+  maxWeightKgIncl: number | null;
+  sortOrder: number;
+}
+
+export interface CategoryOptionGroupRow {
+  id: string;
+  code: string;
+  name: string;
+  sex: AthleteSex | null;
+  minAge: number | null;
+  maxAge: number | null;
+  roundDurationSeconds: number;
+  sortOrder: number;
+  options: CategoryOptionRow[];
 }
 
 export interface EventWeightCategoryRow {
   id: string;
-  rulesetWeightCategoryId: string;
+  categoryTemplateCategoryId: string;
   name: string;
   minWeightKgExcl: number | null;
   maxWeightKgIncl: number | null;
@@ -144,7 +207,7 @@ export interface EventWeightCategoryRow {
 
 export interface EventAgeGroupRow {
   id: string;
-  rulesetAgeGroupId: string;
+  categoryTemplateGroupId: string;
   code: string;
   name: string;
   sex: AthleteSex | null;
@@ -156,12 +219,13 @@ export interface EventAgeGroupRow {
 
 export interface EventCategoriesResponse {
   eventId: string;
+  categoryTemplateId: string | null;
   ageGroups: EventAgeGroupRow[];
 }
 
 export type CategorySelection = {
-  rulesetId: string;
-  ageGroups: Array<{ rulesetAgeGroupId: string; weightCategoryIds: string[] }>;
+  categoryTemplateId: string;
+  ageGroups: Array<{ categoryTemplateGroupId: string; weightCategoryIds: string[] }>;
 };
 
 export interface ClubRow {
@@ -180,6 +244,7 @@ export interface AthleteRow {
   documentId: string | null;
   clubId: string | null;
   club?: ClubRow | null;
+  duplicateCount?: number;
   _dedupeCount?: number;
 }
 
@@ -197,6 +262,18 @@ export interface RegistrationRow {
   updatedAt?: string;
   athlete?: { id: string; firstName: string; lastName: string; dateOfBirth: string };
   club?: ClubRow | null;
+}
+
+export interface RegistrationBulkStatusResponse {
+  requestedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  results: Array<{
+    registrationId: string;
+    outcome: 'UPDATED' | 'SKIPPED' | 'FAILED';
+    errorCode?: string;
+  }>;
 }
 
 export interface WeighInResult {

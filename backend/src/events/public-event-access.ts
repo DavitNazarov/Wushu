@@ -3,7 +3,11 @@ import { getRegistrationStatus } from './event-dates.helper';
 
 type EventPublicAccessFields = Pick<
   Event,
-  'published' | 'registrationOpensAt' | 'registrationClosesAt' | 'lifecycle'
+  | 'published'
+  | 'registrationOpensAt'
+  | 'registrationClosesAt'
+  | 'lifecycle'
+  | 'timezone'
 >;
 
 export function canDiscoverEventPublicly(

@@ -35,9 +35,14 @@ export function AthleteProfileCompetition({ athleteId, fights, scope }: Props) {
 
   return (
     <Card className="space-y-4 p-5">
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('title')}</h2>
-        <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{t('subtitle')}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('title')}</h2>
+          <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{t('subtitle')}</p>
+        </div>
+        <span className="rounded-full bg-[var(--color-primary-subtle)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-primary)]">
+          {rows.length}
+        </span>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -62,7 +67,7 @@ export function AthleteProfileCompetition({ athleteId, fights, scope }: Props) {
             <Link
               key={fight.id}
               href={eventHref(scope, locale, fight)}
-              className="block rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/30 p-4 transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]"
+              className="block rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--color-surface-alt)_55%,transparent),transparent)] p-4 transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]/60"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>

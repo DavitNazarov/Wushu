@@ -4,6 +4,7 @@ import { formatInTimeZone, toZonedTime, format } from 'date-fns-tz';
 import type { EventLifecycle, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { getRegistrationStatus } from './event-dates.helper';
 import {
   isFinalWeighInStatus,
   isWeighInComplete,
@@ -22,6 +23,7 @@ type EventCandidate = {
   autoAdvanceStage: boolean;
   organisationId: string;
   dates: unknown;
+  registrationOpensAt: Date | null;
   registrationClosesAt: Date | null;
   registrationEndDate: Date;
   weighInStartDate: Date | null;
@@ -57,6 +59,7 @@ export class EventStageAutomationService {
         autoAdvanceStage: true,
         organisationId: true,
         dates: true,
+        registrationOpensAt: true,
         registrationClosesAt: true,
         registrationEndDate: true,
         weighInStartDate: true,
@@ -95,6 +98,7 @@ export class EventStageAutomationService {
         autoAdvanceStage: true,
         organisationId: true,
         dates: true,
+        registrationOpensAt: true,
         registrationClosesAt: true,
         registrationEndDate: true,
         weighInStartDate: true,
@@ -126,20 +130,16 @@ export class EventStageAutomationService {
       const todayStr = this.getTodayInTimezone(timezone);
       // Assumption: if online registration close is not configured, use
       // registrationEndDate as deterministic fallback lock boundary.
-      const registrationCloseAt =
-        event.registrationClosesAt ?? event.registrationEndDate;
-
       if (
         event.lifecycle === 'REG_OPEN' &&
         event.autoAdvanceStage &&
-        registrationCloseAt &&
-        new Date() > registrationCloseAt
+        getRegistrationStatus(event) === 'CLOSED'
       ) {
         return this.advanceLifecycle({
           event,
           from: 'REG_OPEN',
           to: 'LOCKED',
-          reason: `Auto-advance: registration close passed (${registrationCloseAt.toISOString()})`,
+          reason: 'Auto-advance: registration close day has passed',
         });
       }
 

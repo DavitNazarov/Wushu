@@ -5,7 +5,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
 import { EventsModule } from './events/events.module';
-import { RulesetsModule } from './rulesets/rulesets.module';
+import { CategoryTemplatesModule } from './category-templates/category-templates.module';
 import { ContentModule } from './content/content.module';
 import { PublicModule } from './public/public.module';
 import { FormsModule } from './forms/forms.module';
@@ -35,7 +35,7 @@ import { EventPoliciesModule } from './event-policies/event-policies.module';
     PrismaModule,
     CommonModule,
     AuthModule,
-    RulesetsModule,
+    CategoryTemplatesModule,
     EventsModule,
     ContentModule,
     PublicModule,

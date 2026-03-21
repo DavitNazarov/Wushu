@@ -17,7 +17,6 @@ import { EventOpsService } from './event-ops.service';
 import { EventStageAutomationService } from './event-stage-automation.service';
 import {
   EventCategoriesService,
-  type CategorySelection,
 } from './event-categories.service';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CapabilityGuard } from '../auth/capability.guard';
@@ -25,6 +24,7 @@ import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
 import { CreateEventSchema, UpdateEventSchema } from './event.types';
 import type { EventLifecycle } from '@prisma/client';
+import { EventCategorySelectionSchema } from './event-category-selection.schema';
 
 function hasCode(err: unknown, code: string): boolean {
   if (!err || typeof err !== 'object') return false;
@@ -146,10 +146,10 @@ export class EventsController {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
-      if (msg === 'RULESET_NOT_FOUND') {
+      if (msg === 'CATEGORY_TEMPLATE_NOT_FOUND') {
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
       }
-      if (msg === 'RULESET_SELECTION_REQUIRED') {
+      if (msg === 'CATEGORY_TEMPLATE_SELECTION_REQUIRED') {
         throw new HttpException(msg, HttpStatus.BAD_REQUEST);
       }
       if (
@@ -317,20 +317,38 @@ export class EventsController {
   async setCategories(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
-    @Body() body: CategorySelection,
+    @Body() body: unknown,
   ) {
     const auth = req.auth!;
+    const parsed = EventCategorySelectionSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new HttpException(
+        {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid event category payload',
+          issues: parsed.error.issues.map((issue) => ({
+            path: issue.path.join('.'),
+            message: issue.message,
+          })),
+        },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
     try {
       return await this.eventCategories.setCategories(
         id,
         auth.organisationId,
         auth.sub,
-        body,
+        parsed.data,
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown';
       if (msg === 'EVENT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      if (msg === 'CATEGORY_TEMPLATE_NOT_FOUND') {
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      }
       if (
         msg === 'EVENT_CATEGORIES_LOCKED_AFTER_ACTIVITY' ||
         msg === 'AT_LEAST_ONE_CATEGORY_REQUIRED' ||

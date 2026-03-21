@@ -3,6 +3,7 @@
 import { EmptyState } from '@/components/ui/EmptyState';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { getCompactErrorMessage } from '@/lib/api/error';
+import { toWeighInCategoryList } from '@/lib/weighin/category';
 import type {
   WeighInCategory,
   WeighInDecision,
@@ -17,14 +18,7 @@ import { WeighInActionBar } from './WeighInActionBar';
 import { WeighInHistoryCard } from './WeighInHistoryCard';
 
 function toCategoryList(entry: WeighInListEntry | null): WeighInCategory[] {
-  if (!entry?.eventWeightCategory) return [];
-  return entry.eventWeightCategory.eventAgeGroup.weightCategories.map((item) => ({
-    id: item.id,
-    name: item.rulesetWeightCategory.name,
-    minWeightKgExcl: item.rulesetWeightCategory.minWeightKgExcl,
-    maxWeightKgIncl: item.rulesetWeightCategory.maxWeightKgIncl,
-    sortOrder: item.rulesetWeightCategory.sortOrder,
-  }));
+  return toWeighInCategoryList(entry);
 }
 
 type Props = {

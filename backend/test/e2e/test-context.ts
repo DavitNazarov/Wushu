@@ -26,7 +26,7 @@ type WeightCategorySeed = {
   sortOrder?: number;
 };
 
-type RulesetSeed = {
+type CategoryTemplateSeed = {
   name?: string;
   ageGroupCode?: string;
   ageGroupName?: string;
@@ -44,13 +44,13 @@ export type E2eTestContext = {
   userId: string;
   trackEvent: (eventId: string) => void;
   createClub: (name?: string) => Promise<{ id: string; name: string }>;
-  createRuleset: (
-    input: RulesetSeed,
+  createCategoryTemplate: (
+    input: CategoryTemplateSeed,
   ) => Promise<{
-    rulesetId: string;
-    ageGroupId: string;
-    weightCategoryIds: string[];
-    weightCategoryIdsByName: Map<string, string>;
+    categoryTemplateId: string;
+    categoryTemplateAgeGroupId: string;
+    categoryTemplateWeightIds: string[];
+    categoryTemplateWeightIdsByName: Map<string, string>;
   }>;
   createAthlete: (input: AthleteSeed) => Promise<{ id: string }>;
   destroy: () => Promise<void>;
@@ -139,7 +139,7 @@ export async function createE2eTestContext(): Promise<E2eTestContext> {
   const trackedEventIds: string[] = [];
   const trackedAthleteIds: string[] = [];
   const trackedClubIds: string[] = [];
-  const trackedRulesetIds: string[] = [];
+  const trackedCategoryTemplateIds: string[] = [];
 
   return {
     app,
@@ -161,11 +161,12 @@ export async function createE2eTestContext(): Promise<E2eTestContext> {
       trackedClubIds.push(club.id);
       return { id: club.id, name: club.name };
     },
-    async createRuleset(input: RulesetSeed) {
-      const ruleset = await prisma.ruleset.create({
+    async createCategoryTemplate(input: CategoryTemplateSeed) {
+      const categoryTemplate = await prisma.categoryTemplate.create({
         data: {
           organisationId: authState.organisationId,
-          name: input.name ?? `Ruleset ${uniqueSuffix('ruleset')}`,
+          name:
+            input.name ?? `Category Template ${uniqueSuffix('category-template')}`,
           version: 1,
           status: 'ACTIVE',
           definition: {
@@ -174,11 +175,11 @@ export async function createE2eTestContext(): Promise<E2eTestContext> {
           },
         },
       });
-      trackedRulesetIds.push(ruleset.id);
+      trackedCategoryTemplateIds.push(categoryTemplate.id);
 
-      const ageGroup = await prisma.rulesetAgeGroup.create({
+      const ageGroup = await prisma.categoryTemplateAgeGroup.create({
         data: {
-          rulesetId: ruleset.id,
+          categoryTemplateId: categoryTemplate.id,
           code: input.ageGroupCode ?? 'adult-18-40',
           name: input.ageGroupName ?? 'Adult',
           sex: input.sex ?? 'MALE',
@@ -189,10 +190,10 @@ export async function createE2eTestContext(): Promise<E2eTestContext> {
         },
       });
 
-      const weightCategoryIdsByName = new Map<string, string>();
-      const weightCategoryIds: string[] = [];
+      const categoryTemplateWeightIdsByName = new Map<string, string>();
+      const categoryTemplateWeightIds: string[] = [];
       for (const [index, weight] of input.weights.entries()) {
-        const created = await prisma.rulesetWeightCategory.create({
+        const created = await prisma.categoryTemplateWeight.create({
           data: {
             ageGroupId: ageGroup.id,
             name: weight.name,
@@ -201,15 +202,15 @@ export async function createE2eTestContext(): Promise<E2eTestContext> {
             sortOrder: weight.sortOrder ?? index + 1,
           },
         });
-        weightCategoryIds.push(created.id);
-        weightCategoryIdsByName.set(weight.name, created.id);
+        categoryTemplateWeightIds.push(created.id);
+        categoryTemplateWeightIdsByName.set(weight.name, created.id);
       }
 
       return {
-        rulesetId: ruleset.id,
-        ageGroupId: ageGroup.id,
-        weightCategoryIds,
-        weightCategoryIdsByName,
+        categoryTemplateId: categoryTemplate.id,
+        categoryTemplateAgeGroupId: ageGroup.id,
+        categoryTemplateWeightIds,
+        categoryTemplateWeightIdsByName,
       };
     },
     async createAthlete(input: AthleteSeed) {
@@ -252,7 +253,7 @@ export async function createE2eTestContext(): Promise<E2eTestContext> {
         await prisma.auditLog.deleteMany({
           where: { eventId: { in: trackedEventIds } },
         });
-        await prisma.eventRulesetSnapshot.deleteMany({
+        await prisma.eventCategoryTemplateSnapshot.deleteMany({
           where: { eventId: { in: trackedEventIds } },
         });
         await prisma.event.deleteMany({
@@ -280,15 +281,17 @@ export async function createE2eTestContext(): Promise<E2eTestContext> {
         });
       }
 
-      if (trackedRulesetIds.length > 0) {
-        await prisma.rulesetWeightCategory.deleteMany({
-          where: { ageGroup: { rulesetId: { in: trackedRulesetIds } } },
+      if (trackedCategoryTemplateIds.length > 0) {
+        await prisma.categoryTemplateWeight.deleteMany({
+          where: {
+            ageGroup: { categoryTemplateId: { in: trackedCategoryTemplateIds } },
+          },
         });
-        await prisma.rulesetAgeGroup.deleteMany({
-          where: { rulesetId: { in: trackedRulesetIds } },
+        await prisma.categoryTemplateAgeGroup.deleteMany({
+          where: { categoryTemplateId: { in: trackedCategoryTemplateIds } },
         });
-        await prisma.ruleset.deleteMany({
-          where: { id: { in: trackedRulesetIds } },
+        await prisma.categoryTemplate.deleteMany({
+          where: { id: { in: trackedCategoryTemplateIds } },
         });
       }
 

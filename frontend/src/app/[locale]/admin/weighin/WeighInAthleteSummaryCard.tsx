@@ -1,5 +1,6 @@
 'use client';
 
+import { getResolvedAgeGroup, getResolvedWeightDefinition } from '@/lib/weighin/category';
 import { Badge } from '@/components/ui/Badge';
 import type { WeighInListEntry, WeighInPreviewResponse } from '@/types/weighin';
 
@@ -10,13 +11,16 @@ type Props = {
 };
 
 export function WeighInAthleteSummaryCard({ entry, preview, t }: Props) {
+  const currentWeight = getResolvedWeightDefinition(entry.eventWeightCategory);
+  const registeredWeight = getResolvedWeightDefinition(entry.registeredEventWeightCategory);
+  const ageGroup = getResolvedAgeGroup(entry.eventWeightCategory?.eventAgeGroup);
   const currentCategory =
-    entry.eventWeightCategory?.rulesetWeightCategory.name ??
+    currentWeight?.name ??
     entry.categoryLabel ??
     entry.categoryCode ??
     '—';
   const registeredCategory =
-    entry.registeredEventWeightCategory?.rulesetWeightCategory.name ??
+    registeredWeight?.name ??
     entry.categoryLabel ??
     entry.categoryCode ??
     '—';
@@ -45,7 +49,7 @@ export function WeighInAthleteSummaryCard({ entry, preview, t }: Props) {
       <div className="mt-3 grid grid-cols-1 gap-2 text-[12px] text-[var(--color-text-muted)] sm:grid-cols-2">
         <p>{t('athleteCodeLabel')}: {entry.athlete.documentId ?? entry.athlete.id}</p>
         <p>{t('divisionLabel')}: {entry.athlete.sex ?? '—'}</p>
-        <p>{t('ageGroupLabel')}: {entry.eventWeightCategory?.eventAgeGroup.rulesetAgeGroup.name ?? '—'}</p>
+        <p>{t('ageGroupLabel')}: {ageGroup?.name ?? '—'}</p>
         <p>{t('registeredCategoryLabel')}: {registeredCategory}</p>
         <p>{t('finalCategoryLabel')}: {finalCategory}</p>
         <p>{t('policyLabel')}: {policyLabel}</p>

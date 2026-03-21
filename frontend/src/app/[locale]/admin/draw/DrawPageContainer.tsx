@@ -1,17 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonKpiRow, SkeletonRows } from '@/components/ui/Skeleton';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
+import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
+import { resolveEventControlGate } from '@/domain/events/controlPageGate';
+import { useAdminEventSelection } from '@/hooks/useAdminEventSelection';
 import { useToast } from '@/components/ui/Toast';
-import { apiGet, ApiError } from '@/lib/api/client';
+import { ApiError } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
-import type { EventRow } from '@/types/api';
 import { useDrawOverview } from './useDrawOverview';
 import { useDrawCategoryDetails } from './useDrawCategoryDetails';
 import { useGenerateDraw } from './useGenerateDraw';
@@ -34,13 +35,14 @@ import { RegenerateDrawDialog } from './RegenerateDrawDialog';
 export function DrawPageContainer() {
   const t = useTranslations('draw');
   const tC = useTranslations('common');
+  const tGate = useTranslations('eventPhaseGate');
+  const tEvents = useTranslations('admin.events');
   const tNav = useTranslations('nav');
   const tPublic = useTranslations('public');
   const locale = useLocale();
   const pathname = usePathname();
   const { toast } = useToast();
 
-  const [eventId, setEventId] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [filter, setFilter] = useState<DrawCategoryFilter>('ALL');
   const [onlyWithAthletes, setOnlyWithAthletes] = useState(false);
@@ -49,20 +51,12 @@ export function DrawPageContainer() {
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<'categories' | 'selected'>('categories');
 
-  const { data: events = [] } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => apiGet<EventRow[]>('/api/events'),
-  });
+  const { currentEventId, events, selectedEvent, setSelectedEventId } = useAdminEventSelection();
+  const gate = resolveEventControlGate('draw', selectedEvent);
+  const showContent = gate.mode === 'active' || gate.mode === 'readonly';
+  const isEditable = gate.mode === 'active';
 
-  const currentEventId = eventId || events[0]?.id || '';
-
-  useEffect(() => {
-    if (!currentEventId && events[0]?.id) {
-      setEventId(events[0].id);
-    }
-  }, [currentEventId, events]);
-
-  const overviewQuery = useDrawOverview(currentEventId);
+  const overviewQuery = useDrawOverview(showContent ? currentEventId : '');
 
   const filteredCategories = useMemo(
     () =>
@@ -75,19 +69,17 @@ export function DrawPageContainer() {
     [overviewQuery.data?.categories, filter, onlyWithAthletes, sort],
   );
 
-  useEffect(() => {
-    if (!filteredCategories.length) {
-      setSelectedCategoryId('');
-      return;
+  const resolvedSelectedCategoryId = useMemo(() => {
+    if (!filteredCategories.length) return '';
+    if (selectedCategoryId && filteredCategories.some((row) => row.id === selectedCategoryId)) {
+      return selectedCategoryId;
     }
-    if (!selectedCategoryId || !filteredCategories.some((row) => row.id === selectedCategoryId)) {
-      setSelectedCategoryId(filteredCategories[0].id);
-    }
+    return filteredCategories[0].id;
   }, [filteredCategories, selectedCategoryId]);
 
   const categoryDetailsQuery = useDrawCategoryDetails({
-    eventId: currentEventId,
-    eventWeightCategoryId: selectedCategoryId,
+    eventId: showContent ? currentEventId : '',
+    eventWeightCategoryId: showContent ? resolvedSelectedCategoryId : '',
   });
 
   const generateMutation = useGenerateDraw();
@@ -101,7 +93,7 @@ export function DrawPageContainer() {
   }
 
   function handleGenerate(input: { seed?: number; sameClubSeparation: boolean }) {
-    if (!currentEventId) return;
+    if (!currentEventId || !isEditable) return;
     generateMutation.mutate(
       {
         eventId: currentEventId,
@@ -123,7 +115,7 @@ export function DrawPageContainer() {
     seed?: number;
     sameClubSeparation: boolean;
   }) {
-    if (!currentEventId) return;
+    if (!currentEventId || !isEditable) return;
     generateMutation.mutate(
       {
         eventId: currentEventId,
@@ -151,7 +143,7 @@ export function DrawPageContainer() {
           <select
             value={currentEventId}
             onChange={(event) => {
-              setEventId(event.target.value);
+              setSelectedEventId(event.target.value);
               setSelectedCategoryId('');
             }}
             className="h-10 min-w-[220px] rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
@@ -169,6 +161,20 @@ export function DrawPageContainer() {
         <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
       )}
 
+      {currentEventId && gate.mode !== 'active' && (
+        <EventPhaseGate
+          gate={gate}
+          locale={locale}
+          t={(key, values) =>
+            tGate(
+              key as Parameters<typeof tGate>[0],
+              values as Record<string, string | number | Date> | undefined,
+            )
+          }
+          tEvents={(key) => tEvents(key as Parameters<typeof tEvents>[0])}
+        />
+      )}
+
       {overviewQuery.error && (
         <AdminErrorAlert
           error={overviewQuery.error}
@@ -178,18 +184,19 @@ export function DrawPageContainer() {
         />
       )}
 
-      {overviewQuery.isLoading && (
+      {showContent && overviewQuery.isLoading && (
         <div className="space-y-4">
           <SkeletonKpiRow count={4} />
           <SkeletonRows rows={5} cols={4} />
         </div>
       )}
 
-      {overviewQuery.data && (
+      {showContent && overviewQuery.data && (
         <>
           <DrawHeaderSummary
             locale={locale}
             overview={overviewQuery.data}
+            editable={isEditable}
             generating={generateMutation.isPending && !regenerateOpen}
             regenerating={generateMutation.isPending && regenerateOpen}
             onGenerate={() => setGenerateOpen(true)}
@@ -231,7 +238,7 @@ export function DrawPageContainer() {
               />
               <DrawCategoryList
                 rows={filteredCategories}
-                selectedId={selectedCategoryId}
+                selectedId={resolvedSelectedCategoryId}
                 onSelect={(id) => {
                   setSelectedCategoryId(id);
                   setMobileTab('selected');
@@ -268,11 +275,15 @@ export function DrawPageContainer() {
         </>
       )}
 
-      <GenerateDrawDialog open={generateOpen} overview={overviewQuery.data ?? null} pending={generateMutation.isPending} onClose={() => setGenerateOpen(false)} onConfirm={handleGenerate} t={t} />
+      {isEditable && (
+        <>
+          <GenerateDrawDialog open={generateOpen} overview={overviewQuery.data ?? null} pending={generateMutation.isPending} onClose={() => setGenerateOpen(false)} onConfirm={handleGenerate} t={t} />
 
-      <RegenerateDrawDialog open={regenerateOpen} overview={overviewQuery.data ?? null} pending={generateMutation.isPending} onClose={() => setRegenerateOpen(false)} onConfirm={handleRegenerate} t={t} />
+          <RegenerateDrawDialog open={regenerateOpen} overview={overviewQuery.data ?? null} pending={generateMutation.isPending} onClose={() => setRegenerateOpen(false)} onConfirm={handleRegenerate} t={t} />
+        </>
+      )}
 
-      <DrawMobileBottomBars overview={overviewQuery.data ?? null} currentEventId={currentEventId} locale={locale} pathname={pathname} onGenerate={() => setGenerateOpen(true)} onRegenerate={() => setRegenerateOpen(true)} t={t} tNav={(key) => tNav(key as Parameters<typeof tNav>[0])} tPublic={(key) => tPublic(key as Parameters<typeof tPublic>[0])} />
+      <DrawMobileBottomBars overview={overviewQuery.data ?? null} editable={isEditable} currentEventId={currentEventId} locale={locale} pathname={pathname} onGenerate={() => setGenerateOpen(true)} onRegenerate={() => setRegenerateOpen(true)} t={t} tNav={(key) => tNav(key as Parameters<typeof tNav>[0])} tPublic={(key) => tPublic(key as Parameters<typeof tPublic>[0])} />
     </div>
   );
 }

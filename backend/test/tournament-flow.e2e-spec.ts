@@ -33,9 +33,9 @@ describeIfDb('Tournament flow (e2e)', () => {
   let organisationId = '';
   let userId = '';
   let clubId = '';
-  let rulesetId = '';
-  let rulesetAgeGroupId = '';
-  let rulesetWeightCategoryId = '';
+  let categoryTemplateId = '';
+  let categoryTemplateAgeGroupId = '';
+  let categoryTemplateWeightId = '';
   const createdEventIds: string[] = [];
   const createdAthleteIds: string[] = [];
 
@@ -88,10 +88,10 @@ describeIfDb('Tournament flow (e2e)', () => {
     });
     clubId = club.id;
 
-    const ruleset = await prisma.ruleset.create({
+    const categoryTemplate = await prisma.categoryTemplate.create({
       data: {
         organisationId,
-        name: `Flow Ruleset ${suffix}`,
+        name: `Flow Category Template ${suffix}`,
         version: 1,
         status: 'ACTIVE',
         definition: {
@@ -100,11 +100,11 @@ describeIfDb('Tournament flow (e2e)', () => {
         },
       },
     });
-    rulesetId = ruleset.id;
+    categoryTemplateId = categoryTemplate.id;
 
-    const ageGroup = await prisma.rulesetAgeGroup.create({
+    const ageGroup = await prisma.categoryTemplateAgeGroup.create({
       data: {
-        rulesetId,
+        categoryTemplateId,
         code: 'adult-18-40',
         name: 'Adult',
         sex: 'MALE',
@@ -114,9 +114,9 @@ describeIfDb('Tournament flow (e2e)', () => {
         sortOrder: 1,
       },
     });
-    rulesetAgeGroupId = ageGroup.id;
+    categoryTemplateAgeGroupId = ageGroup.id;
 
-    const weightCategory = await prisma.rulesetWeightCategory.create({
+    const weightCategory = await prisma.categoryTemplateWeight.create({
       data: {
         ageGroupId: ageGroup.id,
         name: '65kg',
@@ -125,7 +125,7 @@ describeIfDb('Tournament flow (e2e)', () => {
         sortOrder: 1,
       },
     });
-    rulesetWeightCategoryId = weightCategory.id;
+    categoryTemplateWeightId = weightCategory.id;
   });
 
   afterAll(async () => {
@@ -147,7 +147,7 @@ describeIfDb('Tournament flow (e2e)', () => {
       await prisma.auditLog.deleteMany({
         where: { eventId: { in: createdEventIds } },
       });
-      await prisma.eventRulesetSnapshot.deleteMany({
+      await prisma.eventCategoryTemplateSnapshot.deleteMany({
         where: { eventId: { in: createdEventIds } },
       });
       await prisma.event.deleteMany({ where: { id: { in: createdEventIds } } });
@@ -168,12 +168,16 @@ describeIfDb('Tournament flow (e2e)', () => {
     if (clubId) {
       await prisma.club.deleteMany({ where: { id: clubId } });
     }
-    if (rulesetId) {
-      await prisma.rulesetWeightCategory.deleteMany({
-        where: { ageGroup: { rulesetId } },
+    if (categoryTemplateId) {
+      await prisma.categoryTemplateWeight.deleteMany({
+        where: { ageGroup: { categoryTemplateId } },
       });
-      await prisma.rulesetAgeGroup.deleteMany({ where: { rulesetId } });
-      await prisma.ruleset.deleteMany({ where: { id: rulesetId } });
+      await prisma.categoryTemplateAgeGroup.deleteMany({
+        where: { categoryTemplateId },
+      });
+      await prisma.categoryTemplate.deleteMany({
+        where: { id: categoryTemplateId },
+      });
     }
 
     await app.close();
@@ -188,7 +192,7 @@ describeIfDb('Tournament flow (e2e)', () => {
         slug: `tournament-flow-open-${suffix}`,
         location: 'Tbilisi',
         timezone: 'Asia/Tbilisi',
-        rulesetId,
+        categoryTemplateId,
         dates: {
           registrationStartDate: isoOffset({ days: -3 }),
           registrationEndDate: isoOffset({ days: -2 }),
@@ -207,11 +211,11 @@ describeIfDb('Tournament flow (e2e)', () => {
       request(app.getHttpServer())
         .post(`/api/events/${eventId}/categories`)
         .send({
-          rulesetId,
+          categoryTemplateId,
           ageGroups: [
             {
-              rulesetAgeGroupId,
-              weightCategoryIds: [rulesetWeightCategoryId],
+              categoryTemplateGroupId: categoryTemplateAgeGroupId,
+              weightCategoryIds: [categoryTemplateWeightId],
             },
           ],
         }),

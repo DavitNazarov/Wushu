@@ -148,10 +148,10 @@ export class DrawService {
         athlete: { select: { id: true, clubId: true } },
         eventWeightCategory: {
           include: {
-            rulesetWeightCategory: { select: { name: true } },
+            categoryTemplateWeight: { select: { name: true } },
             eventAgeGroup: {
               include: {
-                rulesetAgeGroup: {
+                categoryTemplateAgeGroup: {
                   select: {
                     code: true,
                     sex: true,
@@ -187,13 +187,13 @@ export class DrawService {
         byCat.set(key, {
           eventWeightCategoryId: key,
           categoryCode: toBracketCategoryCode({
-            ageGroupCode: r.eventWeightCategory.eventAgeGroup.rulesetAgeGroup.code,
-            sex: r.eventWeightCategory.eventAgeGroup.rulesetAgeGroup.sex,
-            weightName: r.eventWeightCategory.rulesetWeightCategory.name,
+            ageGroupCode: r.eventWeightCategory.eventAgeGroup.categoryTemplateAgeGroup.code,
+            sex: r.eventWeightCategory.eventAgeGroup.categoryTemplateAgeGroup.sex,
+            weightName: r.eventWeightCategory.categoryTemplateWeight.name,
             eventWeightCategoryId: key,
           }),
           roundDurationSeconds:
-            r.eventWeightCategory.eventAgeGroup.rulesetAgeGroup
+            r.eventWeightCategory.eventAgeGroup.categoryTemplateAgeGroup
               .roundDurationSeconds ?? 120,
           regs: [],
         });

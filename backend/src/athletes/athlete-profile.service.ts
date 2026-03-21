@@ -103,10 +103,10 @@ export class AthleteProfileService {
           event: true,
           eventWeightCategory: {
             include: {
-              rulesetWeightCategory: { select: { name: true } },
+              categoryTemplateWeight: { select: { name: true } },
               eventAgeGroup: {
                 include: {
-                  rulesetAgeGroup: {
+                  categoryTemplateAgeGroup: {
                     select: { name: true, sex: true },
                   },
                 },
@@ -115,7 +115,7 @@ export class AthleteProfileService {
           },
           registeredEventWeightCategory: {
             include: {
-              rulesetWeightCategory: { select: { name: true } },
+              categoryTemplateWeight: { select: { name: true } },
             },
           },
           weighIns: {
@@ -155,8 +155,9 @@ export class AthleteProfileService {
       athlete: input.identity,
       registrations: visibleRegistrations.map((registration): AthleteProfileRegistrationRow => {
         const initialName =
-          registration.registeredEventWeightCategory?.rulesetWeightCategory.name ?? null;
-        const finalName = registration.eventWeightCategory?.rulesetWeightCategory.name ?? null;
+          registration.registeredEventWeightCategory?.categoryTemplateWeight.name ?? null;
+        const finalName =
+          registration.eventWeightCategory?.categoryTemplateWeight.name ?? null;
         const latestWeighIn = registration.weighIns[0] ?? null;
 
         return {
@@ -169,10 +170,12 @@ export class AthleteProfileService {
           competitionStartDate: registration.event.competitionStartDate.toISOString(),
           competitionEndDate: registration.event.competitionEndDate.toISOString(),
           categoryCode: registration.categoryCode,
-          ageGroupName: registration.eventWeightCategory?.eventAgeGroup.rulesetAgeGroup.name ?? null,
+          ageGroupName:
+            registration.eventWeightCategory?.eventAgeGroup.categoryTemplateAgeGroup
+              .name ?? null,
           division:
-            (registration.eventWeightCategory?.eventAgeGroup.rulesetAgeGroup.sex as AthleteSex | null) ??
-            null,
+            (registration.eventWeightCategory?.eventAgeGroup.categoryTemplateAgeGroup
+              .sex as AthleteSex | null) ?? null,
           ...(input.visibility === 'private'
             ? {
                 registrationStatus: registration.status,

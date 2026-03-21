@@ -15,12 +15,12 @@ function makeBaseContext(): DrawReadinessContext {
     categories: [
       {
         id: 'cat1',
-        rulesetWeightCategory: {
+        categoryTemplateWeight: {
           name: '60kg',
           sortOrder: 1,
         },
         eventAgeGroup: {
-          rulesetAgeGroup: {
+          categoryTemplateAgeGroup: {
             code: 'ADULT',
             name: 'Adult',
             sex: 'MALE',
@@ -55,10 +55,10 @@ describe('draw readiness compute', () => {
         },
         club: { name: 'Top Team' },
         eventWeightCategory: {
-          rulesetWeightCategory: { name: '60kg' },
+          categoryTemplateWeight: { name: '60kg' },
         },
         registeredEventWeightCategory: {
-          rulesetWeightCategory: { name: '60kg' },
+          categoryTemplateWeight: { name: '60kg' },
         },
         weighIns: [{ id: 'w1', override: false }],
       },
@@ -89,10 +89,10 @@ describe('draw readiness compute', () => {
         },
         club: { name: 'Top Team' },
         eventWeightCategory: {
-          rulesetWeightCategory: { name: '60kg' },
+          categoryTemplateWeight: { name: '60kg' },
         },
         registeredEventWeightCategory: {
-          rulesetWeightCategory: { name: '60kg' },
+          categoryTemplateWeight: { name: '60kg' },
         },
         weighIns: [],
       },

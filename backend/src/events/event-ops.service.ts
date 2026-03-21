@@ -6,6 +6,7 @@ import {
   getNextLifecycle,
   isForwardLifecycleTransition,
 } from './lifecycle-rules';
+import { getRegistrationStatus } from './event-dates.helper';
 
 /** Handles admin write-ops and summary reads for events (split from EventsService for size). */
 @Injectable()
@@ -118,7 +119,7 @@ export class EventOpsService {
       await tx.mat.deleteMany({ where: { eventId } });
       await tx.weighInAttempt.deleteMany({ where: { eventId } });
       await tx.registration.deleteMany({ where: { eventId } });
-      await tx.eventRulesetSnapshot.deleteMany({ where: { eventId } });
+      await tx.eventCategoryTemplateSnapshot.deleteMany({ where: { eventId } });
 
       await this.audit.write(
         {
@@ -171,7 +172,7 @@ export class EventOpsService {
       existing.lifecycle === 'REG_OPEN' &&
       input.targetState === 'LOCKED' &&
       !input.allowOverride &&
-      now <= (existing.registrationClosesAt ?? existing.registrationEndDate)
+      getRegistrationStatus(existing, now) !== 'CLOSED'
     ) {
       throw new Error('REGISTRATION_STILL_OPEN');
     }

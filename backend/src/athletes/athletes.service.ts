@@ -1,5 +1,5 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import type { Athlete, AthleteSex, Prisma } from '@prisma/client';
+import type { Athlete, AthleteSex, Club, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 
@@ -10,7 +10,10 @@ export type AthleteFilters = {
   documentId?: string;
 };
 
-export type AthleteWithDuplicates = Athlete & { duplicateCount: number };
+export type AthleteWithDuplicates = Athlete & {
+  duplicateCount: number;
+  club: Pick<Club, 'id' | 'name' | 'city' | 'country'> | null;
+};
 
 @Injectable()
 export class AthletesService {
@@ -40,6 +43,16 @@ export class AthletesService {
 
     const athletes = await this.prisma.athlete.findMany({
       where,
+      include: {
+        club: {
+          select: {
+            id: true,
+            name: true,
+            city: true,
+            country: true,
+          },
+        },
+      },
       orderBy: [
         { lastName: 'asc' },
         { firstName: 'asc' },

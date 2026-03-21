@@ -1,20 +1,23 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
+import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useToast } from '@/components/ui/Toast';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
-import { apiGet, apiPost } from '@/lib/api/client';
+import { resolveEventControlGate } from '@/domain/events/controlPageGate';
+import { useAdminEventSelection } from '@/hooks/useAdminEventSelection';
+import { apiPost } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
+import { toWeighInCategoryList } from '@/lib/weighin/category';
 import { Link } from '@/i18n/navigation';
 import {
   buildWeighInQueueGroups,
   formatWeighInQueueGroupHeading,
 } from '@/lib/weighin/queue';
-import type { EventRow } from '@/types/api';
 import type { WeighInDecision, WeighInListEntry, WeighInQueueFilter } from '@/types/weighin';
 import { WeighInToolbar } from './WeighInToolbar';
 import { WeighInAthleteList } from './WeighInAthleteList';
@@ -32,19 +35,14 @@ function normalizeWeight(value: string): number | null {
 }
 
 function toCategories(entry: WeighInListEntry | null) {
-  if (!entry?.eventWeightCategory) return [];
-  return entry.eventWeightCategory.eventAgeGroup.weightCategories.map((row) => ({
-    id: row.id,
-    name: row.rulesetWeightCategory.name,
-    minWeightKgExcl: row.rulesetWeightCategory.minWeightKgExcl,
-    maxWeightKgIncl: row.rulesetWeightCategory.maxWeightKgIncl,
-    sortOrder: row.rulesetWeightCategory.sortOrder,
-  }));
+  return toWeighInCategoryList(entry);
 }
 
 export function WeighInPageContainer() {
   const t = useTranslations('weighin');
   const tC = useTranslations('common');
+  const tGate = useTranslations('eventPhaseGate');
+  const tEventsGate = useTranslations('admin.events');
   const tNav = useTranslations('nav');
   const tPublic = useTranslations('public');
   const tEvents = useTranslations('admin.events');
@@ -52,30 +50,20 @@ export function WeighInPageContainer() {
   const pathname = usePathname();
   const { toast } = useToast();
 
-  const [selectedEventId, setSelectedEventId] = useState('');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<WeighInQueueFilter>('ALL');
   const [mobileTab, setMobileTab] = useState<'queue' | 'active'>('queue');
   const [selectedRegistrationId, setSelectedRegistrationId] = useState<string | null>(null);
-  const [weightInput, setWeightInput] = useState('');
+  const [weightDraft, setWeightDraft] = useState<{ scopeKey: string; value: string }>({
+    scopeKey: '',
+    value: '',
+  });
   const [overrideOpen, setOverrideOpen] = useState(false);
 
-  const eventsQuery = useQuery({
-    queryKey: ['events'],
-    queryFn: () => apiGet<EventRow[]>('/api/events'),
-  });
-
-  useEffect(() => {
-    if (!selectedEventId && eventsQuery.data?.length) {
-      setSelectedEventId(eventsQuery.data[0].id);
-    }
-  }, [eventsQuery.data, selectedEventId]);
-
-  const eventId = selectedEventId;
-  const selectedEvent = useMemo(
-    () => (eventsQuery.data ?? []).find((row) => row.id === eventId) ?? null,
-    [eventsQuery.data, eventId],
-  );
+  const { currentEventId, events, eventsQuery, selectedEvent, setSelectedEventId } = useAdminEventSelection();
+  const gate = resolveEventControlGate('weighin', selectedEvent);
+  const showContent = gate.mode === 'active';
+  const eventId = showContent ? currentEventId : '';
   const athletesQuery = useWeighInAthletes({ eventId, search });
   const recordMutation = useRecordWeighIn(eventId);
   const reconcileMutation = useMutation({
@@ -132,24 +120,24 @@ export function WeighInPageContainer() {
     );
   }, [athletesQuery.data]);
 
-  useEffect(() => {
-    if (!orderedEntries.length) {
-      setSelectedRegistrationId(null);
-      return;
+  const resolvedSelectedRegistrationId = useMemo(() => {
+    if (!orderedEntries.length) return null;
+    if (
+      selectedRegistrationId &&
+      orderedEntries.some((row) => row.id === selectedRegistrationId)
+    ) {
+      return selectedRegistrationId;
     }
-    if (!selectedRegistrationId || !orderedEntries.some((row) => row.id === selectedRegistrationId)) {
-      setSelectedRegistrationId(orderedEntries[0].id);
-    }
+    return orderedEntries[0].id;
   }, [orderedEntries, selectedRegistrationId]);
 
   const selectedEntry = useMemo(
-    () => orderedEntries.find((entry) => entry.id === selectedRegistrationId) ?? null,
-    [orderedEntries, selectedRegistrationId],
+    () => orderedEntries.find((entry) => entry.id === resolvedSelectedRegistrationId) ?? null,
+    [orderedEntries, resolvedSelectedRegistrationId],
   );
 
-  useEffect(() => {
-    setWeightInput('');
-  }, [selectedRegistrationId, eventId]);
+  const weightScopeKey = `${eventId}:${resolvedSelectedRegistrationId ?? ''}`;
+  const weightInput = weightDraft.scopeKey === weightScopeKey ? weightDraft.value : '';
 
   const previewQuery = useWeighInDecisionPreview({
     registrationId: selectedEntry?.eventWeightCategory ? selectedEntry.id : null,
@@ -257,55 +245,72 @@ export function WeighInPageContainer() {
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
 
       <WeighInToolbar
-        events={eventsQuery.data ?? []}
-        selectedEventId={eventId}
+        events={events}
+        selectedEventId={currentEventId}
         search={search}
         filter={filter}
+        showFilters={showContent}
         onEventChange={(nextId) => {
           setSelectedEventId(nextId);
           setSelectedRegistrationId(null);
-          setWeightInput('');
+          setWeightDraft({ scopeKey: '', value: '' });
         }}
         onSearchChange={setSearch}
         onFilterChange={setFilter}
         t={(key) => t(key as Parameters<typeof t>[0])}
       />
 
-      <section className="space-y-2 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {lifecycleSteps.map((step, index) => (
-            <div
-              key={step.key}
-              className={`shrink-0 rounded-[var(--radius-pill)] border px-2.5 py-1 text-[11px] font-semibold ${
-                index === lifecycleIndex
-                  ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary)]/20 text-[var(--color-text)]'
-                  : index < lifecycleIndex
-                  ? 'border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-text)]'
-                  : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)]'
-              }`}
-            >
-              {step.label}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-2 text-[12px] sm:grid-cols-5">
-          <p className="rounded-[var(--radius-pill)] bg-[var(--color-surface-alt)] px-2.5 py-1 text-[var(--color-text)]">
-            {t('filterAll')}: <span className="font-semibold">{stats.total}</span>
-          </p>
-          <p className="rounded-[var(--radius-pill)] bg-[var(--color-surface-alt)] px-2.5 py-1 text-[var(--color-success)]">
-            {t('filterPassed')}: <span className="font-semibold">{stats.passed}</span>
-          </p>
-          <p className="rounded-[var(--radius-pill)] bg-[var(--color-surface-alt)] px-2.5 py-1 text-amber-300">
-            {t('filterNeedsAction')}: <span className="font-semibold">{stats.pending}</span>
-          </p>
-          <p className="rounded-[var(--radius-pill)] bg-[var(--color-surface-alt)] px-2.5 py-1 text-[var(--color-primary)]">
-            {t('filterMoved')}: <span className="font-semibold">{stats.moved}</span>
-          </p>
-          <p className="rounded-[var(--radius-pill)] bg-[var(--color-surface-alt)] px-2.5 py-1 text-[var(--color-danger)]">
-            {t('filterFailed')}: <span className="font-semibold">{stats.failed}</span>
-          </p>
-        </div>
-      </section>
+      {currentEventId && gate.mode !== 'active' && (
+        <EventPhaseGate
+          gate={gate}
+          locale={locale}
+          t={(key, values) =>
+            tGate(
+              key as Parameters<typeof tGate>[0],
+              values as Record<string, string | number | Date> | undefined,
+            )
+          }
+          tEvents={(key) => tEventsGate(key as Parameters<typeof tEventsGate>[0])}
+        />
+      )}
+
+      {showContent && (
+        <section className="space-y-2 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {lifecycleSteps.map((step, index) => (
+              <div
+                key={step.key}
+                className={`shrink-0 rounded-[var(--radius-pill)] border px-2.5 py-1 text-[11px] font-semibold ${
+                  index === lifecycleIndex
+                    ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary)]/20 text-[var(--color-text)]'
+                    : index < lifecycleIndex
+                    ? 'border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-text)]'
+                    : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)]'
+                }`}
+              >
+                {step.label}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-[12px] sm:grid-cols-5">
+            <p className="rounded-[var(--radius-pill)] bg-[var(--color-surface-alt)] px-2.5 py-1 text-[var(--color-text)]">
+              {t('filterAll')}: <span className="font-semibold">{stats.total}</span>
+            </p>
+            <p className="rounded-[var(--radius-pill)] bg-[var(--color-surface-alt)] px-2.5 py-1 text-[var(--color-success)]">
+              {t('filterPassed')}: <span className="font-semibold">{stats.passed}</span>
+            </p>
+            <p className="rounded-[var(--radius-pill)] bg-[var(--color-surface-alt)] px-2.5 py-1 text-amber-300">
+              {t('filterNeedsAction')}: <span className="font-semibold">{stats.pending}</span>
+            </p>
+            <p className="rounded-[var(--radius-pill)] bg-[var(--color-surface-alt)] px-2.5 py-1 text-[var(--color-primary)]">
+              {t('filterMoved')}: <span className="font-semibold">{stats.moved}</span>
+            </p>
+            <p className="rounded-[var(--radius-pill)] bg-[var(--color-surface-alt)] px-2.5 py-1 text-[var(--color-danger)]">
+              {t('filterFailed')}: <span className="font-semibold">{stats.failed}</span>
+            </p>
+          </div>
+        </section>
+      )}
 
       {eventsQuery.error && (
         <AdminErrorAlert
@@ -315,7 +320,7 @@ export function WeighInPageContainer() {
           onRetry={() => eventsQuery.refetch()}
         />
       )}
-      {athletesQuery.error && (
+      {showContent && athletesQuery.error && (
         <AdminErrorAlert
           error={athletesQuery.error}
           fallbackMessage={tC('loadError')}
@@ -324,44 +329,48 @@ export function WeighInPageContainer() {
         />
       )}
 
-      <div className="md:hidden">
-        <div className="mb-3 grid grid-cols-2 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
-          <button
-            type="button"
-            onClick={() => setMobileTab('queue')}
-            className={`min-h-[44px] rounded-[var(--radius-pill)] px-3 text-[13px] font-semibold ${
-              mobileTab === 'queue'
-                ? 'bg-[var(--color-primary)]/20 text-[var(--color-text)]'
-                : 'text-[var(--color-text-muted)]'
-            }`}
-          >
-            {t('queueTitle')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobileTab('active')}
-            className={`min-h-[44px] rounded-[var(--radius-pill)] px-3 text-[13px] font-semibold ${
-              mobileTab === 'active'
-                ? 'bg-[var(--color-primary)]/20 text-[var(--color-text)]'
-                : 'text-[var(--color-text-muted)]'
-            }`}
-          >
-            {t('detailsTitle')}
-          </button>
+      {showContent && (
+        <div className="md:hidden">
+          <div className="mb-3 grid grid-cols-2 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
+            <button
+              type="button"
+              onClick={() => setMobileTab('queue')}
+              className={`min-h-[44px] rounded-[var(--radius-pill)] px-3 text-[13px] font-semibold ${
+                mobileTab === 'queue'
+                  ? 'bg-[var(--color-primary)]/20 text-[var(--color-text)]'
+                  : 'text-[var(--color-text-muted)]'
+              }`}
+            >
+              {t('queueTitle')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab('active')}
+              className={`min-h-[44px] rounded-[var(--radius-pill)] px-3 text-[13px] font-semibold ${
+                mobileTab === 'active'
+                  ? 'bg-[var(--color-primary)]/20 text-[var(--color-text)]'
+                  : 'text-[var(--color-text-muted)]'
+              }`}
+            >
+              {t('detailsTitle')}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(300px,40%)_minmax(0,60%)] lg:items-start">
+      {showContent && (
+        <div className="grid gap-4 lg:grid-cols-[minmax(300px,40%)_minmax(0,60%)] lg:items-start">
         <section className={`min-w-0 space-y-3 ${mobileTab === 'active' ? 'hidden md:block' : ''}`}>
           <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             {t('queueTitle')}
           </h2>
           <WeighInAthleteList
             groups={groupedQueue}
-            selectedId={selectedRegistrationId}
+            selectedId={resolvedSelectedRegistrationId}
             isLoading={athletesQuery.isLoading}
             onSelect={(id) => {
               setSelectedRegistrationId(id);
+              setWeightDraft({ scopeKey: '', value: '' });
               setMobileTab('active');
             }}
             t={(key) => t(key as Parameters<typeof t>[0])}
@@ -393,7 +402,12 @@ export function WeighInPageContainer() {
             weightInput={weightInput}
             recordError={recordMutation.error}
             isRecordPending={recordMutation.isPending}
-            onWeightInputChange={setWeightInput}
+            onWeightInputChange={(value) =>
+              setWeightDraft({
+                scopeKey: weightScopeKey,
+                value,
+              })
+            }
             onRecord={(payload) => submitRecord(payload)}
             isReconcilingCategory={reconcileMutation.isPending}
             onReconcileCategory={() => {
@@ -410,7 +424,8 @@ export function WeighInPageContainer() {
             tC={(key) => tC(key as Parameters<typeof tC>[0])}
           />
         </section>
-      </div>
+        </div>
+      )}
 
       <WeighInOverrideDialog
         open={overrideOpen}
@@ -442,9 +457,9 @@ export function WeighInPageContainer() {
           ].map((item) => {
             const active = pathname === `/${locale}${item.href}`;
             const href =
-              eventId && item.href !== '/admin'
-                ? `${item.href}?eventId=${encodeURIComponent(eventId)}`
-                : item.href;
+                  currentEventId && item.href !== '/admin'
+                    ? `${item.href}?eventId=${encodeURIComponent(currentEventId)}`
+                    : item.href;
             return (
               <li key={item.href}>
                 <Link

@@ -8,6 +8,7 @@ import { statusBadgeClasses } from './drawReadinessMapper';
 type Props = {
   locale: string;
   overview: DrawOverviewResponse;
+  editable: boolean;
   generating: boolean;
   regenerating: boolean;
   onGenerate: () => void;
@@ -29,6 +30,7 @@ function StatTile({ label, value }: { label: string; value: string | number }) {
 export function DrawHeaderSummary({
   locale,
   overview,
+  editable,
   generating,
   regenerating,
   onGenerate,
@@ -65,21 +67,25 @@ export function DrawHeaderSummary({
         </div>
 
         <div className="hidden flex-wrap gap-2 md:flex">
-          {overview.event.drawStatus === 'NOT_GENERATED' ? (
-            <PrimaryButton
-              onClick={onGenerate}
-              disabled={!overview.actions.canGenerate || generating}
-            >
-              {generating ? t('actionGenerating') : t('actionGenerate')}
-            </PrimaryButton>
-          ) : (
-            <PrimaryButton
-              onClick={onRegenerate}
-              disabled={!overview.actions.canRegenerate || regenerating}
-              className="!bg-[var(--color-danger)] hover:!opacity-90"
-            >
-              {regenerating ? t('actionRegenerating') : t('actionRegenerate')}
-            </PrimaryButton>
+          {editable && (
+            <>
+              {overview.event.drawStatus === 'NOT_GENERATED' ? (
+                <PrimaryButton
+                  onClick={onGenerate}
+                  disabled={!overview.actions.canGenerate || generating}
+                >
+                  {generating ? t('actionGenerating') : t('actionGenerate')}
+                </PrimaryButton>
+              ) : (
+                <PrimaryButton
+                  onClick={onRegenerate}
+                  disabled={!overview.actions.canRegenerate || regenerating}
+                  className="!bg-[var(--color-danger)] hover:!opacity-90"
+                >
+                  {regenerating ? t('actionRegenerating') : t('actionRegenerate')}
+                </PrimaryButton>
+              )}
+            </>
           )}
           <Link
             href={`/${locale}/admin/brackets`}

@@ -1,5 +1,6 @@
 import type { AthleteSex } from '@/types/api';
 import type { WeighInListEntry } from '@/types/weighin';
+import { getResolvedAgeGroup, getResolvedWeightDefinition } from './category';
 
 export type WeighInQueueGroup = {
   key: string;
@@ -50,8 +51,8 @@ function parseWeightFromLabel(value: string | null | undefined): number | null {
 }
 
 function getWeightSortValue(entry: WeighInListEntry): number | null {
-  const current = entry.eventWeightCategory?.rulesetWeightCategory;
-  const registered = entry.registeredEventWeightCategory?.rulesetWeightCategory;
+  const current = getResolvedWeightDefinition(entry.eventWeightCategory);
+  const registered = getResolvedWeightDefinition(entry.registeredEventWeightCategory);
 
   if (current?.maxWeightKgIncl != null) return current.maxWeightKgIncl;
   if (current?.minWeightKgExcl != null) return current.minWeightKgExcl + 0.001;
@@ -68,8 +69,8 @@ function getWeightSortValue(entry: WeighInListEntry): number | null {
 
 function getWeightLabel(entry: WeighInListEntry): string | null {
   return (
-    entry.eventWeightCategory?.rulesetWeightCategory.name ??
-    entry.registeredEventWeightCategory?.rulesetWeightCategory.name ??
+    getResolvedWeightDefinition(entry.eventWeightCategory)?.name ??
+    getResolvedWeightDefinition(entry.registeredEventWeightCategory)?.name ??
     null
   );
 }
@@ -109,7 +110,7 @@ function normalizeDivisionLabel(value: string): keyof typeof DIVISION_PRIORITY |
 }
 
 function getDivisionPriority(entry: WeighInListEntry): number {
-  const ageGroup = entry.eventWeightCategory?.eventAgeGroup.rulesetAgeGroup;
+  const ageGroup = getResolvedAgeGroup(entry.eventWeightCategory?.eventAgeGroup);
   const normalizedFromLabels = normalizeDivisionLabel(
     `${ageGroup?.name ?? ''} ${entry.categoryLabel ?? ''} ${entry.categoryCode ?? ''}`,
   );
@@ -215,7 +216,7 @@ export function buildWeighInQueueGroups(entries: WeighInListEntry[]): WeighInQue
       continue;
     }
 
-    const ageGroup = entry.eventWeightCategory?.eventAgeGroup.rulesetAgeGroup;
+    const ageGroup = getResolvedAgeGroup(entry.eventWeightCategory?.eventAgeGroup);
     const sex = ageGroup?.sex ?? entry.athlete.sex ?? null;
 
     groups.set(key, {

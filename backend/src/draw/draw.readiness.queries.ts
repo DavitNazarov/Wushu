@@ -31,12 +31,12 @@ export type DrawReadinessContext = {
   };
   categories: Array<{
     id: string;
-    rulesetWeightCategory: {
+    categoryTemplateWeight: {
       name: string;
       sortOrder: number;
     };
     eventAgeGroup: {
-      rulesetAgeGroup: {
+      categoryTemplateAgeGroup: {
         code: string;
         name: string;
         sex: 'MALE' | 'FEMALE' | null;
@@ -69,12 +69,12 @@ export type DrawReadinessContext = {
       name: string;
     } | null;
     eventWeightCategory: {
-      rulesetWeightCategory: {
+      categoryTemplateWeight: {
         name: string;
       };
     } | null;
     registeredEventWeightCategory: {
-      rulesetWeightCategory: {
+      categoryTemplateWeight: {
         name: string;
       };
     } | null;
@@ -132,12 +132,12 @@ export class DrawReadinessQueryService {
           where: { eventAgeGroup: { eventId: input.eventId } },
           select: {
             id: true,
-            rulesetWeightCategory: {
+            categoryTemplateWeight: {
               select: { name: true, sortOrder: true },
             },
             eventAgeGroup: {
               select: {
-                rulesetAgeGroup: {
+                categoryTemplateAgeGroup: {
                   select: {
                     code: true,
                     name: true,
@@ -149,8 +149,8 @@ export class DrawReadinessQueryService {
             },
           },
           orderBy: [
-            { eventAgeGroup: { rulesetAgeGroup: { sortOrder: 'asc' } } },
-            { rulesetWeightCategory: { sortOrder: 'asc' } },
+            { eventAgeGroup: { categoryTemplateAgeGroup: { sortOrder: 'asc' } } },
+            { categoryTemplateWeight: { sortOrder: 'asc' } },
           ],
         }),
         this.prisma.bracket.count({
@@ -192,14 +192,14 @@ export class DrawReadinessQueryService {
             },
             eventWeightCategory: {
               select: {
-                rulesetWeightCategory: {
+                categoryTemplateWeight: {
                   select: { name: true },
                 },
               },
             },
             registeredEventWeightCategory: {
               select: {
-                rulesetWeightCategory: {
+                categoryTemplateWeight: {
                   select: { name: true },
                 },
               },

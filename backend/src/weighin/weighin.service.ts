@@ -37,7 +37,7 @@ type RegistrationWithWeighInContext = Registration & {
   }>;
   eventWeightCategory: {
     id: string;
-    rulesetWeightCategory: {
+    categoryTemplateWeight: {
       name: string;
       minWeightKgExcl: number | null;
       maxWeightKgIncl: number | null;
@@ -46,7 +46,7 @@ type RegistrationWithWeighInContext = Registration & {
     eventAgeGroup: {
       weightCategories: Array<{
         id: string;
-        rulesetWeightCategory: {
+        categoryTemplateWeight: {
           name: string;
           minWeightKgExcl: number | null;
           maxWeightKgIncl: number | null;
@@ -71,10 +71,10 @@ export class WeighinService {
     if (!cat) return [];
     return cat.eventAgeGroup.weightCategories.map((entry) => ({
       id: entry.id,
-      name: entry.rulesetWeightCategory.name,
-      minWeightKgExcl: entry.rulesetWeightCategory.minWeightKgExcl,
-      maxWeightKgIncl: entry.rulesetWeightCategory.maxWeightKgIncl,
-      sortOrder: entry.rulesetWeightCategory.sortOrder,
+      name: entry.categoryTemplateWeight.name,
+      minWeightKgExcl: entry.categoryTemplateWeight.minWeightKgExcl,
+      maxWeightKgIncl: entry.categoryTemplateWeight.maxWeightKgIncl,
+      sortOrder: entry.categoryTemplateWeight.sortOrder,
     }));
   }
 
@@ -104,7 +104,7 @@ export class WeighinService {
         },
         eventWeightCategory: {
           include: {
-            rulesetWeightCategory: {
+            categoryTemplateWeight: {
               select: {
                 name: true,
                 minWeightKgExcl: true,
@@ -116,7 +116,7 @@ export class WeighinService {
               include: {
                 weightCategories: {
                   include: {
-                    rulesetWeightCategory: {
+                    categoryTemplateWeight: {
                       select: {
                         name: true,
                         minWeightKgExcl: true,
@@ -125,7 +125,7 @@ export class WeighinService {
                       },
                     },
                   },
-                  orderBy: { rulesetWeightCategory: { sortOrder: 'asc' } },
+                  orderBy: { categoryTemplateWeight: { sortOrder: 'asc' } },
                 },
               },
             },
@@ -147,7 +147,7 @@ export class WeighinService {
         eventAgeGroup: { eventId: input.eventId },
       },
       include: {
-        rulesetWeightCategory: { select: { name: true } },
+        categoryTemplateWeight: { select: { name: true } },
       },
     });
     if (!targetCategory) throw new Error('INVALID_MOVE_UP_CATEGORY');
@@ -261,7 +261,7 @@ export class WeighinService {
           },
           eventWeightCategory: {
             include: {
-              rulesetWeightCategory: {
+              categoryTemplateWeight: {
                 select: {
                   name: true,
                   minWeightKgExcl: true,
@@ -271,7 +271,7 @@ export class WeighinService {
               },
               eventAgeGroup: {
                 include: {
-                  rulesetAgeGroup: {
+                  categoryTemplateAgeGroup: {
                     select: {
                       code: true,
                       name: true,
@@ -284,7 +284,7 @@ export class WeighinService {
                   },
                   weightCategories: {
                     include: {
-                      rulesetWeightCategory: {
+                      categoryTemplateWeight: {
                         select: {
                           name: true,
                           minWeightKgExcl: true,
@@ -293,7 +293,7 @@ export class WeighinService {
                         },
                       },
                     },
-                    orderBy: { rulesetWeightCategory: { sortOrder: 'asc' } },
+                    orderBy: { categoryTemplateWeight: { sortOrder: 'asc' } },
                   },
                 },
               },
@@ -301,7 +301,7 @@ export class WeighinService {
           },
           registeredEventWeightCategory: {
             include: {
-              rulesetWeightCategory: {
+              categoryTemplateWeight: {
                 select: {
                   name: true,
                   minWeightKgExcl: true,
@@ -366,13 +366,13 @@ export class WeighinService {
       include: {
         eventWeightCategory: {
           include: {
-            rulesetWeightCategory: true,
+            categoryTemplateWeight: true,
             eventAgeGroup: {
               include: {
-                rulesetAgeGroup: true,
+                categoryTemplateAgeGroup: true,
                 weightCategories: {
                   include: {
-                    rulesetWeightCategory: {
+                    categoryTemplateWeight: {
                       select: {
                         minWeightKgExcl: true,
                         maxWeightKgIncl: true,
@@ -381,7 +381,7 @@ export class WeighinService {
                       },
                     },
                   },
-                  orderBy: { rulesetWeightCategory: { sortOrder: 'asc' } },
+                  orderBy: { categoryTemplateWeight: { sortOrder: 'asc' } },
                 },
               },
             },
@@ -428,12 +428,12 @@ export class WeighinService {
 
     const currentCategory = {
       id: registration.eventWeightCategory.id,
-      name: registration.eventWeightCategory.rulesetWeightCategory.name,
+      name: registration.eventWeightCategory.categoryTemplateWeight.name,
       minWeightKgExcl:
-        registration.eventWeightCategory.rulesetWeightCategory.minWeightKgExcl,
+        registration.eventWeightCategory.categoryTemplateWeight.minWeightKgExcl,
       maxWeightKgIncl:
-        registration.eventWeightCategory.rulesetWeightCategory.maxWeightKgIncl,
-      sortOrder: registration.eventWeightCategory.rulesetWeightCategory.sortOrder,
+        registration.eventWeightCategory.categoryTemplateWeight.maxWeightKgIncl,
+      sortOrder: registration.eventWeightCategory.categoryTemplateWeight.sortOrder,
     };
     const categoriesInAgeGroup = this.toBounds(registration.eventWeightCategory);
 
@@ -480,7 +480,7 @@ export class WeighinService {
     let moveToCategory:
       | {
           id: string;
-          rulesetWeightCategory: { name: string };
+          categoryTemplateWeight: { name: string };
         }
       | null = null;
 
@@ -522,7 +522,7 @@ export class WeighinService {
         registrationUpdate.eventWeightCategory = {
           connect: { id: moveToCategory.id },
         };
-        registrationUpdate.categoryCode = moveToCategory.rulesetWeightCategory.name;
+        registrationUpdate.categoryCode = moveToCategory.categoryTemplateWeight.name;
       }
       if (outcome.decision === 'DISQUALIFIED') {
         registrationUpdate.status = 'REJECTED';
@@ -624,12 +624,12 @@ export class WeighinService {
           include: {
             eventWeightCategory: {
               include: {
-                rulesetWeightCategory: true,
+                categoryTemplateWeight: true,
                 eventAgeGroup: {
                   include: {
                     weightCategories: {
-                      include: { rulesetWeightCategory: true },
-                      orderBy: { rulesetWeightCategory: { sortOrder: 'asc' } },
+                      include: { categoryTemplateWeight: true },
+                      orderBy: { categoryTemplateWeight: { sortOrder: 'asc' } },
                     },
                   },
                 },
@@ -652,21 +652,21 @@ export class WeighinService {
             id: nextEventWeightCategoryId,
             eventAgeGroup: { eventId: attempt.eventId },
           },
-          include: { rulesetWeightCategory: true },
+          include: { categoryTemplateWeight: true },
         });
         if (!targetCat) throw new Error('INVALID_MOVE_UP_CATEGORY');
-        newCategoryCode = targetCat.rulesetWeightCategory.name;
+        newCategoryCode = targetCat.categoryTemplateWeight.name;
       } else if (attempt.registration.eventWeightCategory) {
         const currentSortOrder =
-          attempt.registration.eventWeightCategory.rulesetWeightCategory.sortOrder;
+          attempt.registration.eventWeightCategory.categoryTemplateWeight.sortOrder;
         const candidates =
           attempt.registration.eventWeightCategory.eventAgeGroup.weightCategories;
         const next = candidates.find(
-          (wc) => wc.rulesetWeightCategory.sortOrder > currentSortOrder,
+          (wc) => wc.categoryTemplateWeight.sortOrder > currentSortOrder,
         );
         if (!next) throw new Error('NO_HIGHER_CATEGORY_AVAILABLE');
         nextEventWeightCategoryId = next.id;
-        newCategoryCode = next.rulesetWeightCategory.name;
+        newCategoryCode = next.categoryTemplateWeight.name;
       } else if (!newCategoryCode) {
         throw new Error('MOVE_UP_CATEGORY_REQUIRED');
       }
@@ -777,17 +777,17 @@ export class WeighinService {
         eventAgeGroup: {
           eventId: registration.eventId,
         },
-        rulesetWeightCategory: {
+        categoryTemplateWeight: {
           name: { equals: normalizedCategoryCode, mode: 'insensitive' },
         },
       },
       include: {
-        rulesetWeightCategory: {
+        categoryTemplateWeight: {
           select: { name: true },
         },
         eventAgeGroup: {
           include: {
-            rulesetAgeGroup: {
+            categoryTemplateAgeGroup: {
               select: {
                 minAge: true,
                 maxAge: true,
@@ -804,7 +804,7 @@ export class WeighinService {
         athleteDob: registration.athlete.dateOfBirth,
         athleteSex: registration.athlete.sex,
         competitionStartDate: registration.event.competitionStartDate,
-        ageGroup: candidate.eventAgeGroup.rulesetAgeGroup,
+        ageGroup: candidate.eventAgeGroup.categoryTemplateAgeGroup,
       }),
     );
 

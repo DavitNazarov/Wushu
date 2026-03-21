@@ -78,7 +78,7 @@ export class RegistrationsService {
     event: Event,
     category: {
       eventAgeGroup: {
-        rulesetAgeGroup: {
+        categoryTemplateAgeGroup: {
           minAge: number | null;
           maxAge: number | null;
           sex: Athlete['sex'];
@@ -86,7 +86,7 @@ export class RegistrationsService {
       };
     },
   ): void {
-    const ageGroup = category.eventAgeGroup.rulesetAgeGroup;
+    const ageGroup = category.eventAgeGroup.categoryTemplateAgeGroup;
     const athleteAge = this.computeAgeOnDate(
       athlete.dateOfBirth,
       event.competitionStartDate,
@@ -129,9 +129,9 @@ export class RegistrationsService {
           eventAgeGroup: { eventId: input.eventId },
         },
         include: {
-          rulesetWeightCategory: true,
+          categoryTemplateWeight: true,
           eventAgeGroup: {
-            include: { rulesetAgeGroup: true },
+            include: { categoryTemplateAgeGroup: true },
           },
         },
       });
@@ -140,7 +140,7 @@ export class RegistrationsService {
       this.assertAthleteEligibleForCategory(input.athlete, input.event, category);
       return {
         eventWeightCategoryId: category.id,
-        categoryCode: category.rulesetWeightCategory.name,
+        categoryCode: category.categoryTemplateWeight.name,
       };
     }
 
@@ -192,12 +192,12 @@ export class RegistrationsService {
         club: { select: { id: true, name: true } },
         eventWeightCategory: {
           include: {
-            rulesetWeightCategory: {
+            categoryTemplateWeight: {
               select: { name: true, minWeightKgExcl: true, maxWeightKgIncl: true },
             },
             eventAgeGroup: {
               include: {
-                rulesetAgeGroup: {
+                categoryTemplateAgeGroup: {
                   select: { id: true, name: true, minAge: true, maxAge: true, sex: true },
                 },
               },
@@ -206,7 +206,7 @@ export class RegistrationsService {
         },
         registeredEventWeightCategory: {
           include: {
-            rulesetWeightCategory: {
+            categoryTemplateWeight: {
               select: { name: true, minWeightKgExcl: true, maxWeightKgIncl: true },
             },
           },

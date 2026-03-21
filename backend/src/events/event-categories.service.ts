@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 export type CategorySelection = {
-  rulesetId: string;
+  categoryTemplateId: string;
   ageGroups: Array<{
-    rulesetAgeGroupId: string;
+    categoryTemplateGroupId: string;
     weightCategoryIds: string[];
   }>;
 };
@@ -18,51 +18,51 @@ export class EventCategoriesService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Returns the event's enabled age groups with their enabled weight categories
-   *  and denormalized ruleset data (names, limits, round duration). */
   async getCategories(eventId: string, organisationId: string) {
     const event = await this.prisma.event.findFirst({
       where: { id: eventId, organisationId },
+      include: {
+        categoryTemplateSnapshot: { select: { categoryTemplateId: true } },
+      },
     });
     if (!event) throw new Error('EVENT_NOT_FOUND');
 
     const ageGroups = await this.prisma.eventAgeGroup.findMany({
       where: { eventId },
       include: {
-        rulesetAgeGroup: true,
+        categoryTemplateAgeGroup: true,
         weightCategories: {
-          include: { rulesetWeightCategory: true },
-          orderBy: { rulesetWeightCategory: { sortOrder: 'asc' } },
+          include: { categoryTemplateWeight: true },
+          orderBy: { categoryTemplateWeight: { sortOrder: 'asc' } },
         },
       },
-      orderBy: { rulesetAgeGroup: { sortOrder: 'asc' } },
+      orderBy: { categoryTemplateAgeGroup: { sortOrder: 'asc' } },
     });
 
     return {
       eventId,
-      ageGroups: ageGroups.map((ag) => ({
-        id: ag.id,
-        rulesetAgeGroupId: ag.rulesetAgeGroupId,
-        code: ag.rulesetAgeGroup.code,
-        name: ag.rulesetAgeGroup.name,
-        sex: ag.rulesetAgeGroup.sex,
-        minAge: ag.rulesetAgeGroup.minAge,
-        maxAge: ag.rulesetAgeGroup.maxAge,
-        roundDurationSeconds: ag.rulesetAgeGroup.roundDurationSeconds,
-        weightCategories: ag.weightCategories.map((wc) => ({
-          id: wc.id,
-          rulesetWeightCategoryId: wc.rulesetWeightCategoryId,
-          name: wc.rulesetWeightCategory.name,
-          minWeightKgExcl: wc.rulesetWeightCategory.minWeightKgExcl,
-          maxWeightKgIncl: wc.rulesetWeightCategory.maxWeightKgIncl,
-          sortOrder: wc.rulesetWeightCategory.sortOrder,
+      categoryTemplateId: event.categoryTemplateSnapshot?.categoryTemplateId ?? null,
+      ageGroups: ageGroups.map((ageGroup) => ({
+        id: ageGroup.id,
+        categoryTemplateGroupId: ageGroup.categoryTemplateAgeGroupId,
+        code: ageGroup.categoryTemplateAgeGroup.code,
+        name: ageGroup.categoryTemplateAgeGroup.name,
+        sex: ageGroup.categoryTemplateAgeGroup.sex,
+        minAge: ageGroup.categoryTemplateAgeGroup.minAge,
+        maxAge: ageGroup.categoryTemplateAgeGroup.maxAge,
+        roundDurationSeconds: ageGroup.categoryTemplateAgeGroup.roundDurationSeconds,
+        weightCategories: ageGroup.weightCategories.map((weightCategory) => ({
+          id: weightCategory.id,
+          categoryTemplateCategoryId: weightCategory.categoryTemplateWeightId,
+          name: weightCategory.categoryTemplateWeight.name,
+          minWeightKgExcl: weightCategory.categoryTemplateWeight.minWeightKgExcl,
+          maxWeightKgIncl: weightCategory.categoryTemplateWeight.maxWeightKgIncl,
+          sortOrder: weightCategory.categoryTemplateWeight.sortOrder,
         })),
       })),
     };
   }
 
-  /** Replaces all event category selections (upsert age groups, replace weight categories).
-   *  Requires at least one weight category. */
   async setCategories(
     eventId: string,
     organisationId: string,
@@ -73,6 +73,14 @@ export class EventCategoriesService {
       where: { id: eventId, organisationId },
     });
     if (!event) throw new Error('EVENT_NOT_FOUND');
+
+    const template = await this.prisma.categoryTemplate.findFirst({
+      where: {
+        id: selection.categoryTemplateId,
+        OR: [{ organisationId }, { organisationId: null }],
+      },
+    });
+    if (!template) throw new Error('CATEGORY_TEMPLATE_NOT_FOUND');
 
     const [registrationCount, weighInCount, bracketCount, fightCount] =
       await Promise.all([
@@ -90,22 +98,19 @@ export class EventCategoriesService {
       throw new Error('EVENT_CATEGORIES_LOCKED_AFTER_ACTIVITY');
     }
 
-    const totalCats = selection.ageGroups.reduce(
-      (s, ag) => s + ag.weightCategoryIds.length,
+    const totalCategories = selection.ageGroups.reduce(
+      (sum, ageGroup) => sum + ageGroup.weightCategoryIds.length,
       0,
     );
-    if (totalCats === 0) throw new Error('AT_LEAST_ONE_CATEGORY_REQUIRED');
+    if (totalCategories === 0) throw new Error('AT_LEAST_ONE_CATEGORY_REQUIRED');
 
-    const before = await this.getCategories(eventId, organisationId).catch(
-      () => null,
-    );
+    const before = await this.getCategories(eventId, organisationId).catch(() => null);
 
     await this.prisma.$transaction(async (tx) => {
-      // Remove all existing event weight categories + age groups for this event
       const existingAgeGroups = await tx.eventAgeGroup.findMany({
         where: { eventId },
       });
-      const existingAgeGroupIds = existingAgeGroups.map((ag) => ag.id);
+      const existingAgeGroupIds = existingAgeGroups.map((ageGroup) => ageGroup.id);
 
       if (existingAgeGroupIds.length > 0) {
         await tx.eventWeightCategory.deleteMany({
@@ -114,35 +119,58 @@ export class EventCategoriesService {
         await tx.eventAgeGroup.deleteMany({ where: { eventId } });
       }
 
-      // Re-create from selection
-      for (const agSel of selection.ageGroups) {
-        if (agSel.weightCategoryIds.length === 0) continue;
+      await tx.eventCategoryTemplateSnapshot.upsert({
+        where: { eventId },
+        update: {
+          categoryTemplateId: template.id,
+          version: template.version,
+          snapshot: template.definition as Prisma.InputJsonValue,
+        },
+        create: {
+          eventId,
+          categoryTemplateId: template.id,
+          version: template.version,
+          snapshot: template.definition as Prisma.InputJsonValue,
+        },
+      });
 
-        // Validate age group belongs to correct ruleset
-        const rulesetAg = await tx.rulesetAgeGroup.findFirst({
+      for (const ageGroupSelection of selection.ageGroups) {
+        if (ageGroupSelection.weightCategoryIds.length === 0) continue;
+
+        const templateAgeGroup = await tx.categoryTemplateAgeGroup.findFirst({
           where: {
-            id: agSel.rulesetAgeGroupId,
-            rulesetId: selection.rulesetId,
+            id: ageGroupSelection.categoryTemplateGroupId,
+            categoryTemplateId: selection.categoryTemplateId,
           },
         });
-        if (!rulesetAg)
-          throw new Error(`INVALID_AGE_GROUP: ${agSel.rulesetAgeGroupId}`);
+        if (!templateAgeGroup) {
+          throw new Error(
+            `INVALID_AGE_GROUP: ${ageGroupSelection.categoryTemplateGroupId}`,
+          );
+        }
 
-        const eventAg = await tx.eventAgeGroup.create({
-          data: { eventId, rulesetAgeGroupId: agSel.rulesetAgeGroupId },
+        const eventAgeGroup = await tx.eventAgeGroup.create({
+          data: {
+            eventId,
+            categoryTemplateAgeGroupId: ageGroupSelection.categoryTemplateGroupId,
+          },
         });
 
-        // Validate + create each weight category
-        for (const wcId of agSel.weightCategoryIds) {
-          const rwc = await tx.rulesetWeightCategory.findFirst({
-            where: { id: wcId, ageGroupId: agSel.rulesetAgeGroupId },
+        for (const weightCategoryId of ageGroupSelection.weightCategoryIds) {
+          const templateWeightCategory = await tx.categoryTemplateWeight.findFirst({
+            where: {
+              id: weightCategoryId,
+              ageGroupId: ageGroupSelection.categoryTemplateGroupId,
+            },
           });
-          if (!rwc) throw new Error(`INVALID_WEIGHT_CATEGORY: ${wcId}`);
+          if (!templateWeightCategory) {
+            throw new Error(`INVALID_WEIGHT_CATEGORY: ${weightCategoryId}`);
+          }
 
           await tx.eventWeightCategory.create({
             data: {
-              eventAgeGroupId: eventAg.id,
-              rulesetWeightCategoryId: wcId,
+              eventAgeGroupId: eventAgeGroup.id,
+              categoryTemplateWeightId: weightCategoryId,
             },
           });
         }

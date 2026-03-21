@@ -20,7 +20,7 @@ export type RegistrationPreviewContext = {
   weighInStatus: WeighInStatus;
   eventWeightCategory: {
     id: string;
-    rulesetWeightCategory: {
+    categoryTemplateWeight: {
       name: string;
       minWeightKgExcl: number | null;
       maxWeightKgIncl: number | null;
@@ -29,7 +29,7 @@ export type RegistrationPreviewContext = {
     eventAgeGroup: {
       weightCategories: Array<{
         id: string;
-        rulesetWeightCategory: {
+        categoryTemplateWeight: {
           name: string;
           minWeightKgExcl: number | null;
           maxWeightKgIncl: number | null;
@@ -40,7 +40,7 @@ export type RegistrationPreviewContext = {
   } | null;
   registeredEventWeightCategory: {
     id: string;
-    rulesetWeightCategory: {
+    categoryTemplateWeight: {
       name: string;
       minWeightKgExcl: number | null;
       maxWeightKgIncl: number | null;
@@ -78,10 +78,10 @@ export function toBounds(
   if (!category) return [];
   return category.eventAgeGroup.weightCategories.map((entry) => ({
     id: entry.id,
-    name: entry.rulesetWeightCategory.name,
-    minWeightKgExcl: entry.rulesetWeightCategory.minWeightKgExcl,
-    maxWeightKgIncl: entry.rulesetWeightCategory.maxWeightKgIncl,
-    sortOrder: entry.rulesetWeightCategory.sortOrder,
+    name: entry.categoryTemplateWeight.name,
+    minWeightKgExcl: entry.categoryTemplateWeight.minWeightKgExcl,
+    maxWeightKgIncl: entry.categoryTemplateWeight.maxWeightKgIncl,
+    sortOrder: entry.categoryTemplateWeight.sortOrder,
   }));
 }
 

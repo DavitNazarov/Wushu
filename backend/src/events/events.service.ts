@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
-import { RulesetsService } from '../rulesets/rulesets.service';
+import { CategoryTemplatesService } from '../category-templates/category-templates.service';
 import { EventStageAutomationService } from './event-stage-automation.service';
 import {
   readEventPolicies,
@@ -19,6 +19,16 @@ import {
 } from './event.types';
 import { canDiscoverEventPublicly } from './public-event-access';
 
+function addDays(date: string, days: number): string {
+  const next = new Date(`${date}T00:00:00.000Z`);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
+}
+
+type EventWithCategoryTemplateId = Event & {
+  categoryTemplateId: string | null;
+};
+
 @Injectable()
 export class EventsService {
   private readonly logger = new Logger(EventsService.name);
@@ -26,14 +36,14 @@ export class EventsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly rulesets: RulesetsService,
+    private readonly categoryTemplates: CategoryTemplatesService,
     private readonly automation: EventStageAutomationService,
   ) {}
 
   async getById(
     eventId: string,
     organisationId: string,
-  ): Promise<Event | null> {
+  ): Promise<EventWithCategoryTemplateId | null> {
     try {
       await this.automation.maybeAutoAdvanceById(eventId);
     } catch (error) {
@@ -41,40 +51,65 @@ export class EventsService {
         `Auto-advance check failed for event ${eventId}: ${String(error)}`,
       );
     }
-    return this.prisma.event.findFirst({
+    const event = await this.prisma.event.findFirst({
       where: { id: eventId, organisationId },
+      include: {
+        categoryTemplateSnapshot: { select: { categoryTemplateId: true } },
+      },
     });
+    return event ? this.attachCategoryTemplateId(event) : null;
   }
 
-  async list(organisationId: string): Promise<Event[]> {
-    return this.prisma.event.findMany({
+  async list(organisationId: string): Promise<EventWithCategoryTemplateId[]> {
+    const events = await this.prisma.event.findMany({
       where: { organisationId },
       orderBy: { competitionStartDate: 'desc' },
+      include: {
+        categoryTemplateSnapshot: { select: { categoryTemplateId: true } },
+      },
     });
+    return events.map((event) => this.attachCategoryTemplateId(event));
   }
 
-  async listPublished(): Promise<Event[]> {
-    return this.prisma.event.findMany({
+  async listPublished(): Promise<EventWithCategoryTemplateId[]> {
+    const events = await this.prisma.event.findMany({
       where: { published: true },
       orderBy: { competitionStartDate: 'desc' },
+      include: {
+        categoryTemplateSnapshot: { select: { categoryTemplateId: true } },
+      },
     });
+    return events.map((event) => this.attachCategoryTemplateId(event));
   }
 
-  async listPublicAndRegistrable(): Promise<Event[]> {
+  async listPublicAndRegistrable(): Promise<EventWithCategoryTemplateId[]> {
     const events = await this.prisma.event.findMany({
       orderBy: { competitionStartDate: 'desc' },
+      include: {
+        categoryTemplateSnapshot: { select: { categoryTemplateId: true } },
+      },
     });
 
-    return events.filter((event) => canDiscoverEventPublicly(event));
+    return events
+      .map((event) => this.attachCategoryTemplateId(event))
+      .filter((event) => canDiscoverEventPublicly(event));
   }
 
-  async getPublishedBySlug(slug: string): Promise<Event | null> {
-    return this.prisma.event.findFirst({
+  async getPublishedBySlug(
+    slug: string,
+  ): Promise<EventWithCategoryTemplateId | null> {
+    const event = await this.prisma.event.findFirst({
       where: { slug, published: true },
+      include: {
+        categoryTemplateSnapshot: { select: { categoryTemplateId: true } },
+      },
     });
+    return event ? this.attachCategoryTemplateId(event) : null;
   }
 
-  async getPublicOrRegistrableBySlug(slug: string): Promise<Event | null> {
+  async getPublicOrRegistrableBySlug(
+    slug: string,
+  ): Promise<EventWithCategoryTemplateId | null> {
     const found = await this.prisma.event.findFirst({
       where: { slug },
       select: { id: true },
@@ -91,29 +126,39 @@ export class EventsService {
 
     const event = await this.prisma.event.findFirst({
       where: { id: found.id },
+      include: {
+        categoryTemplateSnapshot: { select: { categoryTemplateId: true } },
+      },
     });
 
     if (!event) {
       return null;
     }
 
-    return canDiscoverEventPublicly(event) ? event : null;
+    const mapped = this.attachCategoryTemplateId(event);
+    return canDiscoverEventPublicly(mapped) ? mapped : null;
   }
 
   async create(
     organisationId: string,
     actorUserId: string,
     dto: CreateEventDto,
-  ): Promise<Event> {
+  ): Promise<EventWithCategoryTemplateId> {
     const { name, slug, location, timezone, autoAdvanceStage, policies } = dto;
     const normalized = this.normalizeDates(dto, timezone);
     const resolvedPolicies = resolveEventPolicies(policies);
-    const selectedRuleset = dto.rulesetId
-      ? await this.rulesets.getForEventSelection(organisationId, dto.rulesetId)
-      : await this.rulesets.getActive(organisationId);
-    if (!selectedRuleset) {
+    const requestedCategoryTemplateId = dto.categoryTemplateId ?? dto.rulesetId;
+    const selectedCategoryTemplate = requestedCategoryTemplateId
+      ? await this.categoryTemplates.getForEventSelection(
+          organisationId,
+          requestedCategoryTemplateId,
+        )
+      : await this.categoryTemplates.getActive(organisationId);
+    if (!selectedCategoryTemplate) {
       throw new Error(
-        dto.rulesetId ? 'RULESET_NOT_FOUND' : 'RULESET_SELECTION_REQUIRED',
+        requestedCategoryTemplateId
+          ? 'CATEGORY_TEMPLATE_NOT_FOUND'
+          : 'CATEGORY_TEMPLATE_SELECTION_REQUIRED',
       );
     }
 
@@ -144,12 +189,12 @@ export class EventsService {
         },
       });
 
-      await tx.eventRulesetSnapshot.create({
+      await tx.eventCategoryTemplateSnapshot.create({
         data: {
           eventId: event.id,
-          rulesetId: selectedRuleset.id,
-          version: selectedRuleset.version,
-          snapshot: selectedRuleset.definition as Prisma.InputJsonValue,
+          categoryTemplateId: selectedCategoryTemplate.id,
+          version: selectedCategoryTemplate.version,
+          snapshot: selectedCategoryTemplate.definition as Prisma.InputJsonValue,
         },
       });
 
@@ -169,7 +214,10 @@ export class EventsService {
         tx,
       );
 
-      return event;
+      return {
+        ...event,
+        categoryTemplateId: selectedCategoryTemplate.id,
+      };
     });
   }
 
@@ -178,7 +226,7 @@ export class EventsService {
     organisationId: string,
     actorUserId: string,
     dto: UpdateEventDto,
-  ): Promise<Event> {
+  ): Promise<EventWithCategoryTemplateId> {
     const existing = await this.getById(eventId, organisationId);
     if (!existing) throw new Error('EVENT_NOT_FOUND');
 
@@ -232,8 +280,23 @@ export class EventsService {
         tx,
       );
 
-      return updated;
+      return {
+        ...updated,
+        categoryTemplateId: existing.categoryTemplateId,
+      };
     });
+  }
+
+  private attachCategoryTemplateId(
+    event: Event & {
+      categoryTemplateSnapshot?: { categoryTemplateId: string } | null;
+    },
+  ): EventWithCategoryTemplateId {
+    const { categoryTemplateSnapshot, ...rest } = event;
+    return {
+      ...rest,
+      categoryTemplateId: categoryTemplateSnapshot?.categoryTemplateId ?? null,
+    };
   }
 
   private normalizeDates(dto: CreateEventDto, timezone: string) {
@@ -281,7 +344,7 @@ export class EventsService {
 
     const registrationClosesAt = registrationWindow?.closesAt
       ? toStartOfDayUtc(registrationWindow.closesAt)
-      : toStartOfDayUtc(registrationStart);
+      : toStartOfDayUtc(addDays(competitionStart, -1));
 
     return {
       registrationStartDate: toStartOfDayUtc(registrationStart),
@@ -298,7 +361,7 @@ export class EventsService {
         fightDays: dates.fightDays,
         registrationWindow: {
           opensAt: registrationWindow?.opensAt ?? competitionStart,
-          closesAt: registrationWindow?.closesAt ?? registrationStart,
+          closesAt: registrationWindow?.closesAt ?? addDays(competitionStart, -1),
         },
       } as Prisma.InputJsonValue,
     };

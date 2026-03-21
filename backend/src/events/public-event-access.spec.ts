@@ -8,12 +8,14 @@ function makeEvent(overrides: Partial<{
   registrationOpensAt: Date | null;
   registrationClosesAt: Date | null;
   lifecycle: string;
+  timezone: string;
 }> = {}) {
   return {
     published: false,
     registrationOpensAt: null,
     registrationClosesAt: null,
     lifecycle: 'LOCKED',
+    timezone: 'Asia/Tbilisi',
     ...overrides,
   };
 }
@@ -67,6 +69,20 @@ describe('public-event-access', () => {
         now,
       ),
     ).toBe(false);
+  });
+
+  it('keeps registration discoverable through the full closing day', () => {
+    expect(
+      canDiscoverEventPublicly(
+        makeEvent({
+          registrationOpensAt: new Date('2026-03-10T00:00:00.000Z'),
+          registrationClosesAt: new Date('2026-03-20T00:00:00.000Z'),
+          lifecycle: 'REG_OPEN',
+          timezone: 'Asia/Tbilisi',
+        }),
+        new Date('2026-03-20T12:00:00.000Z'),
+      ),
+    ).toBe(true);
   });
 
   it('exposes competition data only after publish', () => {

@@ -1,6 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/Badge';
+import { getResolvedAgeGroup, getResolvedWeightDefinition } from '@/lib/weighin/category';
 import type { WeighInListEntry } from '@/types/weighin';
 import {
   getQueueStatusMeta,
@@ -27,8 +28,9 @@ type Props = {
 export function WeighInAthleteRow({ entry, selected, onSelect, t }: Props) {
   const status = getQueueStatusMeta(entry);
   const lastAttempt = entry.weighIns[entry.weighIns.length - 1] ?? null;
+  const ageGroup = getResolvedAgeGroup(entry.eventWeightCategory?.eventAgeGroup);
   const registeredCategory =
-    entry.registeredEventWeightCategory?.rulesetWeightCategory.name ??
+    getResolvedWeightDefinition(entry.registeredEventWeightCategory)?.name ??
     entry.categoryLabel ??
     entry.categoryCode ??
     '—';
@@ -51,7 +53,7 @@ export function WeighInAthleteRow({ entry, selected, onSelect, t }: Props) {
           <p className="truncate text-[12px] text-[var(--color-text-muted)]">
             {entry.athlete.documentId ?? entry.athlete.id.slice(0, 8)} •{' '}
             {entry.club?.name ?? t('unknownClub')} •{' '}
-            {entry.eventWeightCategory?.eventAgeGroup.rulesetAgeGroup.name ?? '—'} •{' '}
+            {ageGroup?.name ?? '—'} •{' '}
             {t('attemptShortLabel')}: {lastAttempt?.attemptNo ?? 0}
             {status.requiresAction ? ' • !' : ''}
           </p>

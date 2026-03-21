@@ -66,7 +66,7 @@ export function CategoryPicker({
   if (!ageGroups.length) {
     return (
       <p className="text-[12px] text-[var(--color-warning)]">
-        No categories configured for this event. Admin must set up competition rules first.
+        No categories configured for this event. Admin must set up a category template first.
       </p>
     );
   }

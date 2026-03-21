@@ -16,6 +16,13 @@ function parseDateTime(value: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function addDays(dateStr: string, days: number): string {
+  const date = parseDateOnly(dateStr);
+  if (!date) return dateStr;
+  date.setDate(date.getDate() + days);
+  return format(date, 'yyyy-MM-dd');
+}
+
 function isIanaTimeZone(value: string): boolean {
   try {
     Intl.DateTimeFormat('en-US', { timeZone: value });
@@ -88,6 +95,7 @@ export const CreateEventSchema = z
       )
       .default('Asia/Tbilisi'),
     autoAdvanceStage: z.boolean().optional().default(false),
+    categoryTemplateId: z.string().min(1).optional(),
     rulesetId: z.string().min(1).optional(),
     dates: z.union([LegacyDatesSchema, CanonicalDatesSchema]),
     registrationWindow: z
@@ -207,15 +215,13 @@ export const CreateEventSchema = z
           });
         }
 
-        if (registrationDays.length) {
-          const minRegistrationDay = [...registrationDays].sort().at(0)!;
-          if (rw.closesAt > minRegistrationDay) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ['registrationWindow', 'closesAt'],
-              message: `Registration must close on or before the first weigh-in day (${minRegistrationDay}).`,
-            });
-          }
+        const latestRegistrationCloseDay = addDays(range.startDate, -1);
+        if (rw.closesAt > latestRegistrationCloseDay) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['registrationWindow', 'closesAt'],
+            message: `Registration must close on or before the day before event start (${latestRegistrationCloseDay}).`,
+          });
         }
       }
 

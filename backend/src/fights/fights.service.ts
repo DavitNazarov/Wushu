@@ -178,10 +178,10 @@ export class FightsService {
         eventWeightCategory: {
           select: {
             id: true,
-            rulesetWeightCategory: { select: { name: true } },
+            categoryTemplateWeight: { select: { name: true } },
             eventAgeGroup: {
               select: {
-                rulesetAgeGroup: {
+                categoryTemplateAgeGroup: {
                   select: { name: true },
                 },
               },
@@ -460,12 +460,12 @@ export class FightsService {
           eventWeightCategoryId,
           categoryCode: categoryFights[0]?.categoryCode ?? eventWeightCategoryId,
           categoryName:
-            categoryFights[0]?.eventWeightCategory?.rulesetWeightCategory?.name ??
+            categoryFights[0]?.eventWeightCategory?.categoryTemplateWeight?.name ??
             categoryFights[0]?.categoryCode ??
             eventWeightCategoryId,
           ageGroupName:
-            categoryFights[0]?.eventWeightCategory?.eventAgeGroup?.rulesetAgeGroup
-              ?.name ?? null,
+            categoryFights[0]?.eventWeightCategory?.eventAgeGroup
+              ?.categoryTemplateAgeGroup?.name ?? null,
           competitionFormat,
           athleteCount: athleteById.size,
           totalFights: totalVisibleFights,

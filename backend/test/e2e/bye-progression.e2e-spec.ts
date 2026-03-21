@@ -9,13 +9,13 @@ import {
 
 const describeIfDb = process.env.DATABASE_URL ? describe : describe.skip;
 
-function buildEventPayload(rulesetId: string, slug: string) {
+function buildEventPayload(categoryTemplateId: string, slug: string) {
   return {
     name: `BYE Event ${slug}`,
     slug,
     location: 'Tbilisi',
     timezone: 'Asia/Tbilisi',
-    rulesetId,
+    categoryTemplateId,
     dates: {
       registrationStartDate: isoOffset({ days: -3 }),
       registrationEndDate: isoOffset({ days: -2 }),
@@ -62,7 +62,7 @@ describeIfDb('BYE progression (e2e)', () => {
 
   it('auto-confirms a single-elimination BYE and propagates the athlete downstream', async () => {
     const club = await ctx.createClub();
-    const ruleset = await ctx.createRuleset({
+    const categoryTemplate = await ctx.createCategoryTemplate({
       weights: [
         {
           name: '65kg',
@@ -75,18 +75,21 @@ describeIfDb('BYE progression (e2e)', () => {
     const client = request(ctx.app.getHttpServer());
     const slug = uniqueSuffix('bye-event');
     const event = await expectOk(
-      client.post('/api/events').send(buildEventPayload(ruleset.rulesetId, slug)),
+      client
+        .post('/api/events')
+        .send(buildEventPayload(categoryTemplate.categoryTemplateId, slug)),
     );
     const eventId = event.body.id as string;
     ctx.trackEvent(eventId);
 
     const categories = await expectOk(
       client.post(`/api/events/${eventId}/categories`).send({
-        rulesetId: ruleset.rulesetId,
+        categoryTemplateId: categoryTemplate.categoryTemplateId,
         ageGroups: [
           {
-            rulesetAgeGroupId: ruleset.ageGroupId,
-            weightCategoryIds: ruleset.weightCategoryIds,
+            categoryTemplateGroupId:
+              categoryTemplate.categoryTemplateAgeGroupId,
+            weightCategoryIds: categoryTemplate.categoryTemplateWeightIds,
           },
         ],
       }),

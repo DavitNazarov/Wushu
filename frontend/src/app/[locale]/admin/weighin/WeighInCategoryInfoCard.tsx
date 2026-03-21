@@ -1,5 +1,6 @@
 'use client';
 
+import { getResolvedWeightDefinition } from '@/lib/weighin/category';
 import type { WeighInListEntry, WeighInPreviewResponse } from '@/types/weighin';
 
 function formatRange(min: number | null, max: number | null): string {
@@ -17,14 +18,15 @@ type Props = {
 };
 
 export function WeighInCategoryInfoCard({ entry, preview, weightInput, t }: Props) {
-  const registered = entry.registeredEventWeightCategory?.rulesetWeightCategory;
+  const registered = getResolvedWeightDefinition(entry.registeredEventWeightCategory);
+  const currentWeight = getResolvedWeightDefinition(entry.eventWeightCategory);
   const current = preview?.currentCategory ?? (entry.eventWeightCategory
     ? {
         id: entry.eventWeightCategory.id,
-        name: entry.eventWeightCategory.rulesetWeightCategory.name,
-        minWeightKgExcl: entry.eventWeightCategory.rulesetWeightCategory.minWeightKgExcl,
-        maxWeightKgIncl: entry.eventWeightCategory.rulesetWeightCategory.maxWeightKgIncl,
-        sortOrder: 0,
+        name: currentWeight?.name ?? entry.categoryLabel ?? entry.categoryCode,
+        minWeightKgExcl: currentWeight?.minWeightKgExcl ?? null,
+        maxWeightKgIncl: currentWeight?.maxWeightKgIncl ?? null,
+        sortOrder: currentWeight?.sortOrder ?? 0,
       }
     : null);
   const measured = weightInput.trim() ? `${weightInput} kg` : '—';

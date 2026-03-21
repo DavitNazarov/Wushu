@@ -41,6 +41,38 @@ export type WeighInCategory = {
   sortOrder: number;
 };
 
+export type WeighInWeightDefinition = {
+  name: string;
+  minWeightKgExcl: number | null;
+  maxWeightKgIncl: number | null;
+  sortOrder?: number | null;
+};
+
+export type WeighInWeightCategoryRef = {
+  categoryTemplateWeight?: WeighInWeightDefinition | null;
+  rulesetWeightCategory?: WeighInWeightDefinition | null;
+};
+
+export type WeighInAgeGroupDefinition = {
+  code: string;
+  name: string;
+  sex: 'MALE' | 'FEMALE' | null;
+  minAge: number | null;
+  maxAge: number | null;
+  roundDurationSeconds: number;
+  sortOrder: number;
+};
+
+export type WeighInEventAgeGroupRef = {
+  categoryTemplateAgeGroup?: WeighInAgeGroupDefinition | null;
+  rulesetAgeGroup?: WeighInAgeGroupDefinition | null;
+  weightCategories: Array<
+    {
+      id: string;
+    } & WeighInWeightCategoryRef
+  >;
+};
+
 export type WeighInAttempt = {
   id: string;
   attemptNo: number;
@@ -82,43 +114,13 @@ export type WeighInListEntry = {
     id: string;
     name: string;
   } | null;
-  eventWeightCategory: {
+  eventWeightCategory: ({
     id: string;
-    rulesetWeightCategory: {
-      name: string;
-      minWeightKgExcl: number | null;
-      maxWeightKgIncl: number | null;
-      sortOrder: number;
-    };
-    eventAgeGroup: {
-      rulesetAgeGroup: {
-        code: string;
-        name: string;
-        sex: 'MALE' | 'FEMALE' | null;
-        minAge: number | null;
-        maxAge: number | null;
-        roundDurationSeconds: number;
-        sortOrder: number;
-      };
-      weightCategories: Array<{
-        id: string;
-        rulesetWeightCategory: {
-          name: string;
-          minWeightKgExcl: number | null;
-          maxWeightKgIncl: number | null;
-          sortOrder: number;
-        };
-      }>;
-    };
-  } | null;
-  registeredEventWeightCategory: {
+    eventAgeGroup: WeighInEventAgeGroupRef;
+  } & WeighInWeightCategoryRef) | null;
+  registeredEventWeightCategory: ({
     id: string;
-    rulesetWeightCategory: {
-      name: string;
-      minWeightKgExcl: number | null;
-      maxWeightKgIncl: number | null;
-    };
-  } | null;
+  } & WeighInWeightCategoryRef) | null;
   event: {
     id: string;
     name: string;

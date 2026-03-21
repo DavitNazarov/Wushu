@@ -2,6 +2,10 @@
 
 import { StatusChip } from '@/components/ui/StatusChip';
 import type { RegistrationRow } from '@/types/api';
+import {
+  canApplyRegistrationAction,
+  type RowAction,
+} from './registrationStatusActions';
 
 const TD = 'px-4 py-3';
 const TH = 'px-4 py-3 text-left font-medium text-[var(--color-text-muted)]';
@@ -23,8 +27,6 @@ export function formatRelative(dateStr: string): string {
   if (diffDays < 7) return `${diffDays}d ago`;
   return d.toLocaleDateString();
 }
-
-type RowAction = 'APPROVED' | 'REJECTED' | 'WITHDRAWN';
 
 interface ActionButtonProps {
   label: string;
@@ -102,13 +104,13 @@ export function RegistrationTable({ rows, isLocked, t, onAction }: RegistrationT
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       <ActionButton label={t('actions.approve')} variant="default"
-                        disabled={!!isLocked || !['PENDING', 'SUBMITTED', 'REJECTED'].includes(reg.status)}
+                        disabled={!!isLocked || !canApplyRegistrationAction('APPROVED', reg.status)}
                         onClick={() => onAction(reg, 'APPROVED')} />
                       <ActionButton label={t('actions.reject')} variant="danger"
-                        disabled={!!isLocked || !['PENDING', 'SUBMITTED', 'APPROVED'].includes(reg.status)}
+                        disabled={!!isLocked || !canApplyRegistrationAction('REJECTED', reg.status)}
                         onClick={() => onAction(reg, 'REJECTED')} />
                       <ActionButton label={t('actions.withdraw')} variant="danger"
-                        disabled={!!isLocked}
+                        disabled={!!isLocked || !canApplyRegistrationAction('WITHDRAWN', reg.status)}
                         onClick={() => onAction(reg, 'WITHDRAWN')} />
                     </div>
                   )}
@@ -139,13 +141,13 @@ export function RegistrationTable({ rows, isLocked, t, onAction }: RegistrationT
             {reg.status !== 'WITHDRAWN' && (
               <div className="mt-3 flex flex-wrap gap-1">
                 <ActionButton label={t('actions.approve')} variant="default"
-                  disabled={!!isLocked || !['PENDING', 'SUBMITTED', 'REJECTED'].includes(reg.status)}
+                  disabled={!!isLocked || !canApplyRegistrationAction('APPROVED', reg.status)}
                   onClick={() => onAction(reg, 'APPROVED')} />
                 <ActionButton label={t('actions.reject')} variant="danger"
-                  disabled={!!isLocked || !['PENDING', 'SUBMITTED', 'APPROVED'].includes(reg.status)}
+                  disabled={!!isLocked || !canApplyRegistrationAction('REJECTED', reg.status)}
                   onClick={() => onAction(reg, 'REJECTED')} />
                 <ActionButton label={t('actions.withdraw')} variant="danger"
-                  disabled={!!isLocked}
+                  disabled={!!isLocked || !canApplyRegistrationAction('WITHDRAWN', reg.status)}
                   onClick={() => onAction(reg, 'WITHDRAWN')} />
               </div>
             )}

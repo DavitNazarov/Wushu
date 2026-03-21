@@ -34,7 +34,7 @@ export class WeighinPreviewService {
         eventWeightCategory: {
           select: {
             id: true,
-            rulesetWeightCategory: {
+            categoryTemplateWeight: {
               select: {
                 name: true,
                 minWeightKgExcl: true,
@@ -47,7 +47,7 @@ export class WeighinPreviewService {
                 weightCategories: {
                   select: {
                     id: true,
-                    rulesetWeightCategory: {
+                    categoryTemplateWeight: {
                       select: {
                         name: true,
                         minWeightKgExcl: true,
@@ -57,7 +57,7 @@ export class WeighinPreviewService {
                     },
                   },
                   orderBy: {
-                    rulesetWeightCategory: { sortOrder: 'asc' },
+                    categoryTemplateWeight: { sortOrder: 'asc' },
                   },
                 },
               },
@@ -67,7 +67,7 @@ export class WeighinPreviewService {
         registeredEventWeightCategory: {
           select: {
             id: true,
-            rulesetWeightCategory: {
+            categoryTemplateWeight: {
               select: {
                 name: true,
                 minWeightKgExcl: true,
@@ -134,12 +134,12 @@ export class WeighinPreviewService {
 
     const currentCategory: WeightCategoryBounds = {
       id: registration.eventWeightCategory.id,
-      name: registration.eventWeightCategory.rulesetWeightCategory.name,
+      name: registration.eventWeightCategory.categoryTemplateWeight.name,
       minWeightKgExcl:
-        registration.eventWeightCategory.rulesetWeightCategory.minWeightKgExcl,
+        registration.eventWeightCategory.categoryTemplateWeight.minWeightKgExcl,
       maxWeightKgIncl:
-        registration.eventWeightCategory.rulesetWeightCategory.maxWeightKgIncl,
-      sortOrder: registration.eventWeightCategory.rulesetWeightCategory.sortOrder,
+        registration.eventWeightCategory.categoryTemplateWeight.maxWeightKgIncl,
+      sortOrder: registration.eventWeightCategory.categoryTemplateWeight.sortOrder,
     };
     const categories = toBounds(registration.eventWeightCategory);
     const openOneHourWindow = extractOpenOneHourWindow(registration, now);
@@ -203,12 +203,12 @@ export class WeighinPreviewService {
       registeredCategory: registeredCategory
         ? toCategorySummary({
             id: registeredCategory.id,
-            name: registeredCategory.rulesetWeightCategory.name,
+            name: registeredCategory.categoryTemplateWeight.name,
             minWeightKgExcl:
-              registeredCategory.rulesetWeightCategory.minWeightKgExcl,
+              registeredCategory.categoryTemplateWeight.minWeightKgExcl,
             maxWeightKgIncl:
-              registeredCategory.rulesetWeightCategory.maxWeightKgIncl,
-            sortOrder: registeredCategory.rulesetWeightCategory.sortOrder,
+              registeredCategory.categoryTemplateWeight.maxWeightKgIncl,
+            sortOrder: registeredCategory.categoryTemplateWeight.sortOrder,
           })
         : null,
       finalCategory: toCategorySummary(currentCategory),

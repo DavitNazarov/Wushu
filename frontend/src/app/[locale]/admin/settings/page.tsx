@@ -49,7 +49,7 @@ export default function SettingsPage() {
 
   const quickLinks: { label: string; href: string }[] = [
     { label: t('linkUsers'), href: `/${locale}/admin/users` },
-    { label: t('linkRulesets'), href: `/${locale}/admin/rulesets` },
+    { label: t('linkRulesets'), href: `/${locale}/admin/category-templates` },
   ];
 
   return (

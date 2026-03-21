@@ -19,7 +19,7 @@ async function setupSingleElimEvent(input: {
   const { ctx } = input;
   const client = request(ctx.app.getHttpServer());
   const club = await ctx.createClub();
-  const ruleset = await ctx.createRuleset({
+  const categoryTemplate = await ctx.createCategoryTemplate({
     weights: [{ name: '65kg', minWeightKgExcl: 60, maxWeightKgIncl: 65 }],
   });
   const slug = uniqueSuffix('safety-event');
@@ -29,7 +29,7 @@ async function setupSingleElimEvent(input: {
       slug,
       location: 'Tbilisi',
       timezone: 'Asia/Tbilisi',
-      rulesetId: ruleset.rulesetId,
+      categoryTemplateId: categoryTemplate.categoryTemplateId,
       policies: input.publishTimingPolicyCode
         ? { publishTimingPolicyCode: input.publishTimingPolicyCode }
         : undefined,
@@ -47,8 +47,14 @@ async function setupSingleElimEvent(input: {
   ctx.trackEvent(eventId);
   const categories = await expectOk(
     client.post(`/api/events/${eventId}/categories`).send({
-      rulesetId: ruleset.rulesetId,
-      ageGroups: [{ rulesetAgeGroupId: ruleset.ageGroupId, weightCategoryIds: ruleset.weightCategoryIds }],
+      categoryTemplateId: categoryTemplate.categoryTemplateId,
+      ageGroups: [
+        {
+          categoryTemplateGroupId:
+            categoryTemplate.categoryTemplateAgeGroupId,
+          weightCategoryIds: categoryTemplate.categoryTemplateWeightIds,
+        },
+      ],
     }),
   );
   const eventWeightCategoryId = categories.body.ageGroups[0].weightCategories[0]

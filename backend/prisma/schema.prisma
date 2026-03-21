@@ -125,7 +125,7 @@ model Organisation {
 
   users         User[]
   events        Event[]
-  rulesets      Ruleset[]
+  categoryTemplates CategoryTemplate[]
   auditLogs     AuditLog[]
   newsPosts     NewsPost[]
   documents     DocumentLink[]
@@ -250,7 +250,7 @@ model Event {
   updatedAt DateTime @updatedAt
 
   organisation    Organisation          @relation(fields: [organisationId], references: [id])
-  rulesetSnapshot EventRulesetSnapshot?
+  categoryTemplateSnapshot EventCategoryTemplateSnapshot?
   auditLogs       AuditLog[]            @relation("AuditEvent")
   registrations   Registration[]
   weighIns        WeighInAttempt[]
@@ -263,7 +263,7 @@ model Event {
   @@unique([organisationId, slug])
 }
 
-model Ruleset {
+model CategoryTemplate {
   id             String        @id @default(cuid())
   organisationId String?
   name           String
@@ -273,16 +273,16 @@ model Ruleset {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  organisation Organisation?          @relation(fields: [organisationId], references: [id])
-  snapshots    EventRulesetSnapshot[]
-  ageGroups    RulesetAgeGroup[]
+  organisation Organisation?              @relation(fields: [organisationId], references: [id])
+  snapshots    EventCategoryTemplateSnapshot[]
+  ageGroups    CategoryTemplateAgeGroup[]
 
   @@unique([organisationId, name, version])
 }
 
-model RulesetAgeGroup {
+model CategoryTemplateAgeGroup {
   id                   String     @id @default(cuid())
-  rulesetId            String
+  categoryTemplateId   String     @map("rulesetId")
   code                 String
   name                 String
   sex                  AthleteSex?
@@ -291,15 +291,15 @@ model RulesetAgeGroup {
   roundDurationSeconds Int        @default(120)
   sortOrder            Int        @default(0)
 
-  ruleset          Ruleset                @relation(fields: [rulesetId], references: [id], onDelete: Cascade)
-  weightCategories RulesetWeightCategory[]
+  categoryTemplate CategoryTemplate       @relation(fields: [categoryTemplateId], references: [id], onDelete: Cascade)
+  weights          CategoryTemplateWeight[]
   eventAgeGroups   EventAgeGroup[]
 
-  @@unique([rulesetId, code])
-  @@index([rulesetId])
+  @@unique([categoryTemplateId, code])
+  @@index([categoryTemplateId])
 }
 
-model RulesetWeightCategory {
+model CategoryTemplateWeight {
   id                String  @id @default(cuid())
   ageGroupId        String
   name              String
@@ -307,50 +307,87 @@ model RulesetWeightCategory {
   maxWeightKgIncl   Float?
   sortOrder         Int     @default(0)
 
-  ageGroup        RulesetAgeGroup    @relation(fields: [ageGroupId], references: [id], onDelete: Cascade)
+  ageGroup        CategoryTemplateAgeGroup @relation(fields: [ageGroupId], references: [id], onDelete: Cascade)
   eventCategories EventWeightCategory[]
 
   @@index([ageGroupId])
 }
 
-model EventAgeGroup {
-  id                String @id @default(cuid())
-  eventId           String
-  rulesetAgeGroupId String
+model CategoryOptionGroup {
+  id                   String     @id @default(cuid())
+  code                 String     @unique
+  name                 String
+  sex                  AthleteSex?
+  minAge               Int?
+  maxAge               Int?
+  roundDurationSeconds Int        @default(120)
+  sortOrder            Int        @default(0)
+  isActive             Boolean    @default(true)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 
-  event           Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  rulesetAgeGroup RulesetAgeGroup   @relation(fields: [rulesetAgeGroupId], references: [id])
+  options CategoryOption[]
+
+  @@index([isActive, sortOrder])
+}
+
+model CategoryOption {
+  id              String   @id @default(cuid())
+  groupId         String
+  code            String   @unique
+  name            String
+  minWeightKgExcl Float?
+  maxWeightKgIncl Float?
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  group CategoryOptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, isActive, sortOrder])
+}
+
+model EventAgeGroup {
+  id                         String @id @default(cuid())
+  eventId                    String
+  categoryTemplateAgeGroupId String @map("rulesetAgeGroupId")
+
+  event                Event                    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  categoryTemplateAgeGroup CategoryTemplateAgeGroup @relation(fields: [categoryTemplateAgeGroupId], references: [id])
   weightCategories EventWeightCategory[]
 
-  @@unique([eventId, rulesetAgeGroupId])
+  @@unique([eventId, categoryTemplateAgeGroupId])
   @@index([eventId])
 }
 
 model EventWeightCategory {
-  id                      String @id @default(cuid())
-  eventAgeGroupId         String
-  rulesetWeightCategoryId String
+  id                       String @id @default(cuid())
+  eventAgeGroupId          String
+  categoryTemplateWeightId String @map("rulesetWeightCategoryId")
 
-  eventAgeGroup         EventAgeGroup         @relation(fields: [eventAgeGroupId], references: [id], onDelete: Cascade)
-  rulesetWeightCategory RulesetWeightCategory @relation(fields: [rulesetWeightCategoryId], references: [id])
-  registrations         Registration[]        @relation("RegistrationFinalWeightCategory")
-  initialRegistrations  Registration[]        @relation("RegistrationInitialWeightCategory")
+  eventAgeGroup         EventAgeGroup           @relation(fields: [eventAgeGroupId], references: [id], onDelete: Cascade)
+  categoryTemplateWeight CategoryTemplateWeight @relation(fields: [categoryTemplateWeightId], references: [id])
+  registrations         Registration[]          @relation("RegistrationFinalWeightCategory")
+  initialRegistrations  Registration[]          @relation("RegistrationInitialWeightCategory")
   fights                Fight[]
 
-  @@unique([eventAgeGroupId, rulesetWeightCategoryId])
+  @@unique([eventAgeGroupId, categoryTemplateWeightId])
   @@index([eventAgeGroupId])
 }
 
-model EventRulesetSnapshot {
+model EventCategoryTemplateSnapshot {
   id        String   @id @default(cuid())
   eventId   String   @unique
-  rulesetId String
+  categoryTemplateId String @map("rulesetId")
   version   Int
   snapshot  Json
   createdAt DateTime @default(now())
 
-  event   Event   @relation(fields: [eventId], references: [id])
-  ruleset Ruleset @relation(fields: [rulesetId], references: [id])
+  event            Event            @relation(fields: [eventId], references: [id])
+  categoryTemplate CategoryTemplate @relation(fields: [categoryTemplateId], references: [id])
+
+  @@map("EventRulesetSnapshot")
 }
 
 model AuditLog {

@@ -86,7 +86,7 @@ const navSections: NavSection[] = [
     labelKey: 'admin',
     items: [
       { key: 'users', href: '/admin/users', icon: Users },
-      { key: 'rulesets', href: '/admin/rulesets', icon: FileText },
+      { key: 'categoryTemplates', href: '/admin/category-templates', icon: FileText },
       { key: 'news', href: '/admin/news', icon: Newspaper },
       { key: 'inbox', href: '/admin/inbox', icon: Inbox },
       { key: 'settings', href: '/admin/settings', icon: Settings },

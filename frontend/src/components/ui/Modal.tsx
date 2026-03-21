@@ -10,9 +10,18 @@ type ModalProps = {
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
+  widthClassName?: string;
 };
 
-export function Modal({ open, onClose, title, description, children, footer }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  footer,
+  widthClassName = 'max-w-md',
+}: ModalProps) {
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -36,7 +45,7 @@ export function Modal({ open, onClose, title, description, children, footer }: M
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative flex w-full max-w-md flex-col rounded-[var(--radius-modal)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
+      <div className={`relative flex w-full ${widthClassName} flex-col rounded-[var(--radius-modal)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl`} style={{ maxHeight: 'calc(100vh - 2rem)' }}>
         {/* Header — fixed */}
         <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-6 pb-4">
           <div>

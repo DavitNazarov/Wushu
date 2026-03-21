@@ -22,7 +22,8 @@
     "clubs": "კლუბები",
     "athletes": "სპორტსმენები",
     "users": "მომხმარებლები",
-    "rulesets": "წესები",
+    "rulesets": "კატეგორიების შაბლონები",
+    "categoryTemplates": "კატეგორიების შაბლონები",
     "news": "სიახლეები",
     "inbox": "შეტყობინებები",
     "settings": "პარამეტრები",
@@ -282,17 +283,18 @@
     "dashboard": {
       "title": "Dashboard",
       "welcome": "Welcome to the Geo Wushu competition console.",
-      "subtitle": "Start by configuring rulesets and events, then move to registration and live operations.",
+      "subtitle": "ჯერ მოამზადეთ კატეგორიების შაბლონები და ღონისძიებები, შემდეგ გადადით რეგისტრაციასა და საოპერაციო პროცესებზე.",
       "quickLinks": "Quick access",
-      "linkRulesetsTitle": "Rulesets",
-      "linkRulesetsDescription": "Manage competition rules and categories.",
+      "linkRulesetsTitle": "კატეგორიების შაბლონები",
+      "linkRulesetsDescription": "მართეთ მრავალჯერადი გამოყენების შეჯიბრის კატეგორიები და წონები.",
       "linkEventsTitle": "Events",
       "linkEventsDescription": "Set up events and prepare for registration."
     },
     "sidebar": {
       "dashboard": "Dashboard",
       "events": "Events",
-      "rulesets": "Rulesets",
+      "rulesets": "კატეგორიების შაბლონები",
+      "categoryTemplates": "კატეგორიების შაბლონები",
       "athletes": "Athletes",
       "users": "Users",
       "settings": "Settings",
@@ -304,22 +306,91 @@
       "status": "Status",
       "noEventSelected": "No event selected"
     },
-    "rulesets": {
-      "title": "Rulesets",
-      "new": "New Ruleset",
+    "categoryTemplates": {
+      "title": "კატეგორიების შაბლონები",
+      "new": "ახალი კატეგორიების შაბლონი",
+      "createDescription": "შექმენით მრავალჯერადი გამოყენების კატეგორიების შაბლონი აქტიური კატეგორიების ბიბლიოთეკიდან.",
       "columns": {
-        "name": "Name",
-        "version": "Version",
-        "status": "Status",
-        "updated": "Updated"
+        "name": "სახელი",
+        "version": "ვერსია",
+        "status": "სტატუსი",
+        "type": "ტიპი",
+        "source": "წყარო",
+        "updated": "განახლდა",
+        "usage": "გამოყენება",
+        "actions": "ქმედებები"
       },
       "status": {
-        "draft": "Draft",
-        "active": "Active"
+        "draft": "დრაფტი",
+        "active": "აქტიური"
       },
-      "sampleName": "Georgia Wushu Sanda",
-      "emptyTitle": "No rulesets yet",
-      "emptyDescription": "Create your first ruleset to define competition categories and rules."
+      "type": {
+        "system": "სისტემური",
+        "custom": "მორგებული",
+        "official": "ოფიციალური"
+      },
+      "actions": {
+        "activate": "აქტიურად მონიშვნა",
+        "activateSuccess": "შაბლონი აქტიურად მოინიშნა.",
+        "activateFailed": "შაბლონის აქტიურად მონიშვნა ვერ მოხერხდა."
+      },
+      "emptyTitle": "კატეგორიების შაბლონები ჯერ არ არის",
+      "emptyDescription": "შექმენით პირველი მრავალჯერადი გამოყენების კატეგორიების შაბლონი backend-იდან მოწოდებული ვარიანტებით.",
+      "emptyFilteredDescription": "მიმდინარე ძებნითა და ფილტრებით არცერთი შაბლონი არ მოიძებნა.",
+      "filters": {
+        "searchPlaceholder": "ძებნა შაბლონის სახელით",
+        "status": "სტატუსი",
+        "type": "ტიპი",
+        "allStatuses": "ყველა სტატუსი",
+        "allTypes": "ყველა ტიპი",
+        "clear": "ფილტრების გასუფთავება"
+      },
+      "usage": {
+        "unused": "ჯერ არ გამოიყენება",
+        "eventsCount": "{count, plural, one {გამოიყენება # ღონისძიებაში} other {გამოიყენება # ღონისძიებაში}}"
+      },
+      "builder": {
+        "help": "აირჩიეთ ამ შაბლონში შემავალი სტანდარტული შეჯიბრის კატეგორიები.",
+        "selectedCount": "{count, plural, one {# კატეგორია არჩეულია} other {# კატეგორია არჩეულია}}",
+        "loadError": "კატეგორიების ვარიანტების ჩატვირთვა ვერ მოხერხდა.",
+        "groupMeta": "ასაკი {minAge}-{maxAge} • {roundMinutes} წთ რაუნდი"
+      },
+      "details": {
+        "title": "შაბლონის დეტალები",
+        "createdAt": "შეიქმნა",
+        "summaryTitle": "შაბლონის შეჯამება",
+        "usageTitle": "გამოყენება და დამოკიდებულებები",
+        "structureTitle": "შაბლონის სტრუქტურა",
+        "openDivision": "ღია დივიზიონი",
+        "roundMinutes": "{count, plural, one {# წთ რაუნდები} other {# წთ რაუნდები}}",
+        "usageSummary": "ეს შაბლონი გამოიყენება {events} ღონისძიებაში; შექმნილია {ageGroups} ღონისძიების ასაკობრივი ჯგუფი და {categories} ღონისძიების კატეგორია.",
+        "noUsage": "ეს შაბლონი ჯერ არცერთ ღონისძიების snapshot-ს არ არის მიბმული.",
+        "kpis": {
+          "ageGroups": "ასაკობრივი ჯგუფები",
+          "genders": "სქესები",
+          "weightCategories": "წონითი კატეგორიები",
+          "events": "ღონისძიებები"
+        }
+      },
+      "edit": {
+        "title": "კატეგორიების შაბლონის რედაქტირება",
+        "description": "განაახლეთ შაბლონის სახელი, სტატუსი და სტრუქტურა მხოლოდ მაშინ, როცა ეს უსაფრთხოა.",
+        "structureLocked": "ეს შაბლონი უკვე გამოიყენება ღონისძიებებში, ამიტომ მისი კატეგორიების სტრუქტურა დაბლოკილია. შეგიძლიათ შეცვალოთ მხოლოდ უსაფრთხო მეტამონაცემები."
+      },
+      "delete": {
+        "title": "კატეგორიების შაბლონის წაშლა",
+        "description": "ეს სამუდამოდ წაშლის შაბლონის ბიბლიოთეკის ჩანაწერს. გამოყენებული ან სისტემური შაბლონების წაშლა დაუშვებელია.",
+        "confirm": "შაბლონის წაშლა",
+        "success": "შაბლონი წაიშალა.",
+        "failed": "შაბლონის წაშლა ვერ მოხერხდა."
+      },
+      "errors": {
+        "SYSTEM_CATEGORY_TEMPLATE_PROTECTED": "სისტემური შაბლონები დაცულია და მათი რედაქტირება ან წაშლა შეუძლებელია.",
+        "CATEGORY_TEMPLATE_IN_USE": "ეს შაბლონი უკვე გამოიყენება ღონისძიებებში და მისი წაშლა შეუძლებელია.",
+        "CATEGORY_TEMPLATE_STRUCTURE_LOCKED_BY_USAGE": "ეს შაბლონი უკვე გამოიყენება ღონისძიებებში, ამიტომ მისი კატეგორიების სტრუქტურის შეცვლა შეუძლებელია.",
+        "ACTIVE_CATEGORY_TEMPLATE_DELETE_FORBIDDEN": "აქტიური შაბლონის წასაშლელად ჯერ აქტიური სტატუსი უნდა მოეხსნას.",
+        "systemProtected": "რედაქტირება შესაძლებელია მხოლოდ ორგანიზაციის მორგებული შაბლონებისთვის."
+      }
     },
     "events": {
       "title": "Events",
@@ -386,23 +457,59 @@
         "start": "Event start",
         "end": "Event end"
       },
+      "datePicker": {
+        "eyebrow": "თარიღის არჩევა",
+        "emptyMeta": "აირჩიეთ საოპერაციო თარიღი",
+        "today": "დღეს",
+        "clear": "გასუფთავება",
+        "min": "ყველაზე ადრე",
+        "max": "ყველაზე გვიან",
+        "weekdays": {
+          "sun": "კ",
+          "mon": "ო",
+          "tue": "ს",
+          "wed": "ო",
+          "thu": "ხ",
+          "fri": "პ",
+          "sat": "შ"
+        },
+        "hints": {
+          "eventStart": "აირჩიეთ შეჯიბრის პირველი ოფიციალური დღე.",
+          "eventEnd": "აირჩიეთ შეჯიბრის ბოლო ოფიციალური დღე.",
+          "registrationOpens": "მიუთითეთ, როდის გაიხსნას ონლაინ რეგისტრაცია.",
+          "registrationCloses": "ეს თარიღი უნდა იყოს ღონისძიების დაწყებამდე ერთი დღით ადრე ან უფრო ადრე."
+        }
+      },
       "datesSummary": {
+        "eyebrow": "დღეების დაგეგმვა",
+        "title": "მიუთითეთ, როგორ გამოიყენება ღონისძიების თითოეული დღე",
+        "helper": "მონიშნეთ შეჯიბრის თითოეული დღე როგორც weigh-in დღე, საბრძოლო დღე ან ორივე. ასე ადმინისტრატორი და მსაჯები ოპერაციულ გეგმას სწრაფად გაიგებენ.",
         "eventDays": "Event days",
-        "regDays": "Registration/Weigh-in days",
+        "regDays": "Weigh-in days",
         "fightDays": "Fight days",
         "date": "Date",
-        "registration": "Registration/Weigh-in",
+        "registration": "Weigh-in",
         "fight": "Fight day",
         "registrationShort": "Weigh-in",
-        "fightShort": "Fight"
+        "fightShort": "Fight",
+        "markAllRegistration": "ყველა მონიშნე weigh-in დღედ",
+        "clearAllRegistration": "წაშალე weigh-in დღეები",
+        "markAllFight": "ყველა მონიშნე საბრძოლო დღედ",
+        "clearAllFight": "წაშალე საბრძოლო დღეები",
+        "registrationLegend": "ლურჯი ნიშნავს, რომ დაგეგმილია weigh-in",
+        "fightLegend": "ქარვისფერი ნიშნავს, რომ დაგეგმილია ბრძოლები",
+        "dualRole": "{count, plural, one {# დღეს ორივე როლი აქვს} other {# დღეს ორივე როლი აქვს}}",
+        "dayLabel": "{day}",
+        "registrationAction": "Weigh-in",
+        "fightAction": "Fight"
       },
       "registrationWindow": {
         "label": "Online registration window",
         "opensAt": "Online registration opens",
         "closesAt": "Online registration closes",
-        "closesAtAuto": "Auto: first weigh-in day ({date})",
+        "closesAtAuto": "Auto: day before event start ({date})",
         "errorOpensAfterCloses": "Opening date must be on or before the closing date.",
-        "errorClosesAfterWeighin": "Closing date must be on or before the first weigh-in day ({date})."
+        "errorClosesAfterEventStart": "Closing date must be on or before the day before event start ({date})."
       },
       "autoAdvanceStage": {
         "label": "Automatically advance event stages",
@@ -425,7 +532,29 @@
         "description": "Update event details. Dates and slug changes take effect immediately."
       },
       "validation": {
-        "summary": "Please fix the highlighted fields."
+        "summary": "გთხოვთ, გამოასწოროთ მონიშნული ველები.",
+        "more": "... კიდევ {count}"
+      },
+      "sections": {
+        "basicsEyebrow": "ღონისძიების იდენტობა",
+        "basicsTitle": "საბაზისო ინფორმაცია",
+        "basicsDescription": "განსაზღვრეთ ღონისძიების მთავარი მონაცემები, რომლებსაც ადმინისტრატორი და მწვრთნელი პირველად ხედავენ.",
+        "scheduleEyebrow": "შეჯიბრის გრაფიკი",
+        "scheduleTitle": "თარიღები და რეგისტრაციის ფანჯარა",
+        "scheduleDescription": "ერთ ადგილას დააყენეთ შეჯიბრის დღეები და ონლაინ რეგისტრაციის ვადები.",
+        "categoriesEyebrow": "შეჯიბრის კონფიგურაცია",
+        "lifecycleEyebrow": "ავტომატიზაცია",
+        "lifecycleTitle": "Lifecycle ქცევა",
+        "lifecycleDescription": "აკონტროლეთ, გადავა თუ არა ღონისძიება ეტაპებს შორის ავტომატურად."
+      },
+      "categoryTemplates": {
+        "sectionTitle": "კატეგორიების შაბლონი",
+        "loading": "კატეგორიების შაბლონები იტვირთება...",
+        "loadError": "კატეგორიების შაბლონების ჩატვირთვა ვერ მოხერხდა.",
+        "required": "გასაგრძელებლად აირჩიეთ მინიმუმ ერთი შეჯიბრის კატეგორია.",
+        "selectedCount": "{count, plural, one {# კატეგორია არჩეულია} other {# კატეგორია არჩეულია}}",
+        "sectionEyebrow": "კატეგორიების ბიბლიოთეკა",
+        "sectionDescription": "აირჩიეთ შაბლონი და გახსენით მხოლოდ ის ასაკობრივი ჯგუფები, რომლებიც გჭირდებათ."
       },
       "detail": {
         "published": "Published",
@@ -536,7 +665,7 @@
       "fieldRole": "Role",
       "fieldClub": "Club",
       "linkUsers": "User Management",
-      "linkRulesets": "Rulesets"
+      "linkRulesets": "კატეგორიების შაბლონები"
     },
     "theme": {
       "light": "Switch to light mode",
@@ -726,33 +855,74 @@
     }
   },
   "athletes": {
-    "title": "Athletes",
-    "searchPlaceholder": "Search by name or document ID…",
+    "title": "სპორტსმენები",
+    "subtitle": "მართეთ სპორტსმენების სია სუფთად, კლუბებით მიბმულად და მზად რეგისტრაციის, weigh-in-ისა და ბადის ეტაპებისთვის.",
+    "searchPlaceholder": "ძებნა სახელით ან დოკუმენტის ID-ით…",
     "filters": {
-      "allClubs": "All clubs"
+      "allClubs": "ყველა კლუბი",
+      "eyebrow": "სპორტსმენების ძიება",
+      "title": "მოძებნეთ და დაავიწროვეთ სია"
+    },
+    "overview": {
+      "eyebrow": "სიის კონტროლი",
+      "title": "საოპერაციო ხედი სპორტსმენების ჩანაწერებისთვის",
+      "description": "გადაამოწმეთ მიბმები, სწრაფად იპოვეთ არასრული ჩანაწერები და მოამზადეთ სუფთა მონაცემები ღონისძიების სამუშაოებამდე.",
+      "loadedCount": "სპორტსმენი ჩანს სიაში"
+    },
+    "stats": {
+      "total": "სულ სპორტსმენები",
+      "totalHint": "ამ შედეგში ნაჩვენები სიის მიმდინარე ზომა.",
+      "linked": "კლუბზე მიბმული",
+      "linkedHint": "სპორტსმენები, რომლებიც უკვე დაკავშირებულია კლუბთან.",
+      "needsClub": "სჭირდება კლუბი",
+      "needsClubHint": "ჩანაწერები, რომლებსაც ჯერ კიდევ არ აქვს ხილული კლუბი.",
+      "duplicates": "დუბლიკატების შემოწმება",
+      "duplicatesHint": "სპორტსმენები, რომლებსაც შესაძლოა merge შემოწმება სჭირდებოდეს."
+    },
+    "selection": {
+      "eyebrow": "გაერთიანების რიგი",
+      "title": "ორი ჩანაწერის შედარება",
+      "description": "აირჩიეთ მაქსიმუმ ორი სპორტსმენი სიიდან, რათა მოამზადოთ კონტროლირებადი გაერთიანება.",
+      "slotLabel": "არჩეული {index}",
+      "empty": "აირჩიეთ ორი სპორტსმენის ჩანაწერი, რათა merge შემოწმება გააქტიურდეს.",
+      "clear": "გასუფთავება"
     },
     "columns": {
-      "name": "Athlete",
-      "dob": "Date of birth",
-      "club": "Club",
-      "document": "Document ID",
-      "dedupe": "Possible duplicates"
+      "select": "არჩევა",
+      "name": "სპორტსმენი",
+      "club": "კლუბი",
+      "identity": "იდენტობა",
+      "status": "სტატუსი",
+      "actions": "ქმედებები"
+    },
+    "details": {
+      "unspecified": "არ არის მითითებული"
+    },
+    "badges": {
+      "missingClub": "კლუბი აკლია",
+      "missingDocument": "დოკუმენტი აკლია",
+      "duplicateCount": "{count} შესაძლო დამთხვევა",
+      "noDuplicates": "დუბლიკატის ნიშანი არ ჩანს"
+    },
+    "actions": {
+      "viewProfile": "პროფილის გახსნა"
     },
     "merge": {
-      "button": "Merge selected",
-      "dialogTitle": "Merge athletes",
-      "dialogDescription": "You are about to merge two athlete records. This action is irreversible and will be logged.",
-      "primaryLabel": "Keep as primary",
-      "secondaryLabel": "Merge into primary",
-      "reasonLabel": "Reason for merge",
-      "confirm": "Confirm merge",
-      "cancel": "Cancel",
-      "errorGeneric": "Could not merge athletes. Please try again.",
-      "errorValidation": "Select two different athletes and provide a reason."
+      "button": "არჩეულის გაერთიანება",
+      "dialogTitle": "სპორტსმენების გაერთიანება",
+      "dialogDescription": "თქვენ აპირებთ ორი სპორტსმენის ჩანაწერის გაერთიანებას. ეს ქმედება შეუქცევადია და დალოგდება.",
+      "selectionTitle": "არჩეული ჩანაწერები",
+      "primaryLabel": "დატოვე ძირითადად",
+      "secondaryLabel": "შეუერთე ძირითად ჩანაწერს",
+      "reasonLabel": "გაერთიანების მიზეზი",
+      "confirm": "გაერთიანების დადასტურება",
+      "cancel": "გაუქმება",
+      "errorGeneric": "სპორტსმენების გაერთიანება ვერ მოხერხდა. გთხოვთ, სცადოთ თავიდან.",
+      "errorValidation": "აირჩიეთ ორი განსხვავებული სპორტსმენი და მიუთითეთ მიზეზი."
     },
-    "emptyTitle": "No athletes yet",
-    "emptyDescription": "Create athletes as registration opens and link them to clubs.",
-    "dedupeHint": "Rows with a higher duplicate count may need review."
+    "emptyTitle": "სპორტსმენები ჯერ არ არის",
+    "emptyDescription": "რეგისტრაციის გახსნისას შექმენით სპორტსმენები და მიაბით ისინი კლუბებს.",
+    "dedupeHint": "სტრიქონებს, რომლებსაც უფრო მაღალი დუბლიკატის რაოდენობა აქვთ, შესაძლოა გადამოწმება სჭირდებოდეს."
   },
   "athleteProfile": {
     "title": "სპორტსმენის პროფილი",
@@ -761,12 +931,44 @@
       "coach": "სპორტსმენის მთავარი დეტალური ხედი თქვენი კლუბის სამუშაოსთვის.",
       "public": "სპორტსმენის საჯარო საკონკურსო პროფილი."
     },
+    "overview": {
+      "eyebrow": "სპორტსმენის საკონტროლო ხედი",
+      "subtitle": {
+        "admin": "ერთ საოპერაციო პროფილში გადაამოწმეთ იდენტობა, ღონისძიებებში აქტივობა და საკონკურსო სტატუსი.",
+        "coach": "ერთ ადგილას ნახეთ თქვენი სპორტსმენის რეგისტრაციები, ბრძოლები და კლუბის კონტექსტი.",
+        "public": "საკონკურსო პროფილი სპორტსმენის, ღონისძიებების და ბრძოლების ძირითადი ინფორმაციით."
+      },
+      "unassignedClub": "კლუბი არ არის მიბმული",
+      "unspecified": "არ არის მითითებული",
+      "facts": {
+        "clubBase": "კლუბის ბაზა",
+        "coaches": "სამწვრთნელო გუნდი",
+        "latestEvent": "ბოლო ღონისძიება"
+      },
+      "clubMetaEmpty": "ლოკაცია მითითებული არ არის",
+      "coachCount": "{count, plural, one {# მწვრთნელი მიბმულია} other {# მწვრთნელი მიბმულია}}",
+      "noCoach": "მწვრთნელი მიბმული არ არის",
+      "noEvent": "ღონისძიების აქტივობა ჯერ არ არის",
+      "stats": {
+        "registrations": "რეგისტრაციები",
+        "registrationsHint": "ამ სპორტსმენთან დაკავშირებული შეყვანები.",
+        "fights": "ბრძოლები",
+        "fightsHint": "ღონისძიებებში დაფიქსირებული ბუთები.",
+        "record": "ბალანსი",
+        "recordHint": "დასრულებული ბრძოლებიდან მოგება და წაგება.",
+        "pending": "მოლოდინში",
+        "pendingHint": "ბრძოლები, რომლებიც ჯერ გადაწყვეტილი არ არის."
+      }
+    },
     "identity": {
       "eyebrow": "იდენტობა",
+      "summary": "სპორტსმენისა და კლუბის ძირითადი ინფორმაცია, რომელიც გამოიყენება რეგისტრაციასა და შეჯიბრის პროცესებში.",
       "club": "კლუბი",
       "sex": "სქესი",
       "dateOfBirth": "დაბადების თარიღი",
       "coaches": "მწვრთნელები",
+      "clubMetaEmpty": "ლოკაცია მითითებული არ არის",
+      "noCoaches": "მწვრთნელები ჯერ არ არიან მიბმული.",
       "sexValue": {
         "MALE": "კაცი",
         "FEMALE": "ქალი"
@@ -865,6 +1067,104 @@
       "name": "Club name",
       "city": "City",
       "country": "Country"
+    },
+    "detail": {
+      "title": "კლუბის დეტალები",
+      "subtitle": "კლუბის, მწვრთნელებისა და სპორტსმენების ერთიანი საოპერაციო ხედი.",
+      "locationMissing": "ლოკაცია მითითებული არ არის",
+      "contactMissing": "მწვრთნელის საკონტაქტო ელფოსტა არ არის",
+      "unknownDivision": "რეგისტრაციის კონტექსტი ჯერ არ არის",
+      "overview": {
+        "eyebrow": "კლუბის მიმოხილვა",
+        "facts": {
+          "location": "ლოკაცია",
+          "created": "შექმნილია",
+          "contacts": "მწვრთნელების კონტაქტები"
+        },
+        "stats": {
+          "coaches": "მწვრთნელები",
+          "coachesHint": "{count, plural, one {# აქტიური ანგარიში} other {# აქტიური ანგარიში}}",
+          "athletes": "სპორტსმენები",
+          "athletesHint": "{male} კაცი · {female} ქალი",
+          "activeAthletes": "აქტიური სპორტსმენები",
+          "activeAthletesHint": "სპორტსმენები აქტიური რეგისტრაციებით.",
+          "activeRegistrations": "აქტიური რეგისტრაციები",
+          "activeRegistrationsHint": "მოლოდინში, გაგზავნილი ან დამტკიცებული ჩანაწერები.",
+          "categories": "კატეგორიები",
+          "categoriesHint": "{count, plural, one {# კოდი წარმოდგენილია} other {# კოდი წარმოდგენილია}}"
+        }
+      },
+      "info": {
+        "title": "კლუბის ინფორმაცია",
+        "subtitle": "სისტემაში შენახული ძირითადი კლუბის მეტამონაცემები.",
+        "fields": {
+          "name": "კლუბის სახელი",
+          "location": "ლოკაცია",
+          "created": "შექმნილია",
+          "updated": "განახლდა",
+          "contacts": "მწვრთნელების კონტაქტები",
+          "sexSplit": "გუნდის განაწილება",
+          "categories": "წარმოდგენილი კატეგორიები"
+        },
+        "sexSplitValue": "{male} კაცი · {female} ქალი · {unknown} დაუზუსტებელი"
+      },
+      "coaches": {
+        "title": "მწვრთნელები",
+        "subtitle": "ამ კლუბზე მიბმული ანგარიშები.",
+        "emptyTitle": "მწვრთნელები მიბმული არ არის",
+        "emptyDescription": "დაამატეთ ან მიაბით მწვრთნელის ანგარიშები, რომ კლუბის შტაბი აქ გამოჩნდეს.",
+        "columns": {
+          "created": "შექმნილია"
+        }
+      },
+      "athletes": {
+        "title": "სპორტსმენები",
+        "subtitle": "მიმდინარე გუნდი სწრაფი რეგისტრაციის კონტექსტით.",
+        "emptyTitle": "სპორტსმენები მიბმული არ არის",
+        "emptyDescription": "შექმენით სპორტსმენები და მიაბით ამ კლუბს, რომ სია შეივსოს.",
+        "columns": {
+          "athlete": "სპორტსმენი",
+          "sex": "სქესი",
+          "dateOfBirth": "დაბადების თარიღი",
+          "latestDivision": "ბოლო დივიზიონი",
+          "status": "ბოლო რეგისტრაცია",
+          "activity": "აქტივობა"
+        },
+        "documentId": "დოკუმენტის ID",
+        "noDocument": "დოკუმენტის ID არ არის",
+        "noRegistrations": "რეგისტრაციები ჯერ არ არის",
+        "activity": "{active} აქტიური / {total} სულ",
+        "latestEvent": "ბოლო ღონისძიება: {event}",
+        "categoryMore": "+{count} მეტი",
+        "viewAthlete": "სპორტსმენის გახსნა"
+      },
+      "relatedAccounts": {
+        "title": "დაკავშირებული ანგარიშები",
+        "subtitle": "მონაცემთა მოდელში ნაპოვნი სხვა კლუბზე მიბმული ანგარიშები.",
+        "columns": {
+          "role": "როლი"
+        }
+      },
+      "accountStatus": {
+        "ACTIVE": "აქტიური",
+        "DQ": "შეჩერებული",
+        "ARCHIVED": "დაარქივებული",
+        "INACTIVE": "არააქტიური"
+      },
+      "roles": {
+        "admin": "ადმინისტრატორი",
+        "coach": "მწვრთნელი",
+        "athlete": "სპორტსმენი",
+        "judge": "მსაჯი",
+        "timekeeper": "დროის ოპერატორი"
+      },
+      "registrationStatus": {
+        "PENDING": "მოლოდინში",
+        "SUBMITTED": "გაგზავნილია",
+        "APPROVED": "დამტკიცებულია",
+        "REJECTED": "უარყოფილია",
+        "WITHDRAWN": "გაუქმებულია"
+      }
     }
   },
   "registrations": {
@@ -875,12 +1175,14 @@
     "selectEvent": "Select an event",
     "selectEventSubtitle": "Registrations are managed per event.",
     "selectEventPlaceholder": "Select event",
+    "eventLabel": "ღონისძიება",
     "noResults": "No registrations found",
     "noResultsHint": "Try adjusting filters or select a different event.",
     "filterStatus": "Status",
     "filterClub": "Club",
     "filterClubAll": "All clubs",
     "filterSearch": "Search athlete…",
+    "filterSearchLabel": "ძებნა",
     "filterCategory": "Category",
     "filterCategoryAll": "All categories",
     "clearFilters": "Clear filters",
@@ -901,20 +1203,31 @@
       "WITHDRAWN": "Withdrawn"
     },
     "actions": {
-      "approve": "Approve",
-      "reject": "Reject",
-      "withdraw": "Withdraw"
+      "approve": "დადასტურება",
+      "reject": "უარყოფა",
+      "withdraw": "გაუქმება",
+      "approveAll": "ყველას დადასტურება",
+      "rejectAll": "ყველას უარყოფა",
+      "withdrawAll": "ყველას გაუქმება"
     },
-    "statusUpdated": "Registration status updated.",
-    "approveSuccess": "Registration approved",
-    "rejectSuccess": "Registration rejected",
-    "withdrawSuccess": "Registration withdrawn",
-    "updateFailed": "Failed to update registration",
-    "confirmApprove": "Approve registration?",
-    "confirmReject": "Reject registration?",
-    "confirmWithdraw": "Withdraw registration?",
-    "reasonOptional": "Reason (optional)",
-    "registrationsLocked": "Registrations are locked for this event.",
+    "statusUpdated": "რეგისტრაციის სტატუსი განახლდა.",
+    "approveSuccess": "რეგისტრაცია დადასტურდა",
+    "rejectSuccess": "რეგისტრაცია უარყოფილია",
+    "withdrawSuccess": "რეგისტრაცია გაუქმდა",
+    "updateFailed": "რეგისტრაციის განახლება ვერ მოხერხდა",
+    "confirmApprove": "დავადასტუროთ რეგისტრაცია?",
+    "confirmReject": "ვუარყოთ რეგისტრაცია?",
+    "confirmWithdraw": "გავაუქმოთ რეგისტრაცია?",
+    "bulk": {
+      "title": "მასობრივი სტატუსის მოქმედებები",
+      "description": "მიუსადაგე ერთი სტატუსი მიმდინარე ფილტრით არჩეულ ყველა რეგისტრაციას.",
+      "scopeFiltered": "მიმდინარე ფილტრები",
+      "confirmDescription": "განახლდება {count} რეგისტრაცია.",
+      "successSummary": "{action}: განახლდა {updated}, გამოტოვდა {skipped}, ვერ შესრულდა {failed}.",
+      "updateFailed": "რეგისტრაციების განახლება ვერ მოხერხდა"
+    },
+    "reasonOptional": "მიზეზი (არასავალდებულო)",
+    "registrationsLocked": "ამ ღონისძიებისთვის რეგისტრაციები ჩაკეტილია.",
     "actionDisabled": {
       "approve": "Approve only when status is Pending, Submitted or Rejected",
       "reject": "Reject only when status is Pending, Submitted or Approved",
@@ -1398,6 +1711,10 @@
     "addMatDesc": "ამ ღონისძიებისთვის ახალი ხალიჩის შექმნა.",
     "autoScheduleDesc": "მიუთითეთ ავტომატური განრიგის პარამეტრები.",
     "unscheduled": "დაუგეგმავი",
+    "matsLabel": "ხალიჩები",
+    "fightReady": "მზადაა",
+    "fightWaiting": "ელოდება",
+    "matPlaceholder": "ხალიჩა 1",
     "matAdded": "ხალიჩა დაემატა",
     "scheduleUpdated": "განრიგი განახლდა",
     "errorGeneric": "მოქმედების შესრულება ვერ მოხერხდა."
@@ -1447,6 +1764,51 @@
       "KO": "KO",
       "DQ": "DQ",
       "WO": "გამოუცხადებლობით"
+    }
+  },
+  "eventPhaseGate": {
+    "status": {
+      "upcoming": "მალე",
+      "locked": "ჩაკეტილია",
+      "readonly": "მხოლოდ ნახვა"
+    },
+    "currentPhaseLabel": "მიმდინარე ეტაპი",
+    "pages": {
+      "registrations": {
+        "upcomingWithDate": "რეგისტრაცია გაიხსნება {date}-ს. გვერდი მაშინ გახდება აქტიური.",
+        "upcomingWithoutDate": "ამ ღონისძიებისთვის რეგისტრაცია ჯერ არ არის გახსნილი.",
+        "lockedWithDate": "რეგისტრაცია დაიხურა {date}-ს. ჩანაწერების ნახვა შესაძლებელია, მაგრამ ცვლილებები ჩაკეტილია.",
+        "lockedWithoutDate": "ამ ღონისძიებისთვის რეგისტრაცია დახურულია. ჩანაწერების ნახვა შესაძლებელია, მაგრამ ცვლილებები ჩაკეტილია."
+      },
+      "weighin": {
+        "upcomingWithDate": "აწონვა დაიწყება {date}-ს.",
+        "upcomingWithoutDate": "აწონვა ჯერ ხელმისაწვდომი არ არის.",
+        "lockedWithDate": "აწონვა დასრულდა {date}-ს. შედეგების დაფიქსირება ჩაკეტილია.",
+        "lockedWithoutDate": "ამ ღონისძიებისთვის აწონვა დახურულია."
+      },
+      "integrity": {
+        "upcomingWithDate": "ინტეგრაციის შემოწმება ხელმისაწვდომი გახდება რეგისტრაციის დახურვის შემდეგ, {date}-ს.",
+        "upcomingWithoutDate": "ინტეგრაციის შემოწმება ღონისძიების მოგვიანებით ეტაპზე გახდება ხელმისაწვდომი.",
+        "readonlyWithDate": "აწონვა დასრულდა {date}-ს. ინტეგრაციის შემოწმება ახლა მხოლოდ ნახვის რეჟიმშია.",
+        "readonlyWithoutDate": "ამ ღონისძიებისთვის ინტეგრაციის შემოწმება ახლა მხოლოდ ნახვის რეჟიმშია."
+      },
+      "draw": {
+        "upcomingWithDate": "გათამაშების მართვა ხელმისაწვდომი გახდება რეგისტრაციის დახურვის შემდეგ, {date}-ს.",
+        "upcomingWithoutDate": "გათამაშების მართვა ღონისძიების მოგვიანებით ეტაპზე გახდება ხელმისაწვდომი.",
+        "readonlyWithoutDate": "გათამაშება უკვე შესრულებულია. შედეგების ნახვა აქ შეგიძლიათ."
+      },
+      "schedule": {
+        "upcomingWithDate": "განრიგი ხელმისაწვდომი გახდება გათამაშების შესრულების შემდეგ. შეჯიბრი იწყება {date}-ს.",
+        "upcomingWithoutDate": "განრიგი ხელმისაწვდომი გახდება გათამაშების შესრულების შემდეგ.",
+        "readonlyWithDate": "შეჯიბრი დასრულდა {date}-ს. განრიგი მხოლოდ ნახვის რეჟიმშია.",
+        "readonlyWithoutDate": "შეჯიბრი დასრულებულია. განრიგი მხოლოდ ნახვის რეჟიმშია."
+      },
+      "live": {
+        "upcomingWithDate": "პირდაპირი მართვა დაიწყება {date}-ს.",
+        "upcomingWithoutDate": "პირდაპირი მართვა ჯერ ხელმისაწვდომი არ არის.",
+        "readonlyWithDate": "შეჯიბრი დასრულდა {date}-ს. პირდაპირი მართვა მხოლოდ ნახვის რეჟიმშია.",
+        "readonlyWithoutDate": "შეჯიბრი დასრულებულია. პირდაპირი მართვა მხოლოდ ნახვის რეჟიმშია."
+      }
     }
   },
   "results": {
@@ -1574,7 +1936,9 @@
       "MISSING_CATEGORY": "Missing category code",
       "MISSING_DOB": "Missing date of birth",
       "DUPLICATE_ATHLETE": "Duplicate athletes",
-      "UNRESOLVED_FAIL_WEIGHIN": "Unresolved failed weigh-in"
+      "UNRESOLVED_FAIL_WEIGHIN": "Unresolved failed weigh-in",
+      "WEIGHIN_NOT_FINALIZED": "Weigh-in not finalized",
+      "ONE_HOUR_UNRESOLVED": "One-hour reweigh still unresolved"
     }
   }
 }

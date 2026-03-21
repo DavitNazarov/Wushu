@@ -5,19 +5,32 @@ import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
-import { InlineAlert } from '@/components/ui/InlineAlert';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { ApiError, apiGet, apiPatch, apiPost } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
-import type { CategorySelection, EventCategoriesResponse, EventCreateInput, EventRow, RulesetRow, ValidationIssue } from '@/types/api';
+import type {
+  CategorySelection,
+  EventCategoriesResponse,
+  EventCreateInput,
+  EventRow,
+  ValidationIssue,
+} from '@/types/api';
 import { EditEventDatesFields } from './EditEventDatesFields';
 import { AutoAdvanceToggle } from './AutoAdvanceToggle';
-import { CategorySelector } from './CategorySelector';
-import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
+import { EventBasicsFields } from './EventBasicsFields';
+import { EventCategoryTemplatePanel } from './EventCategoryTemplatePanel';
+import { EventFormSection } from './EventFormSection';
+import { EventValidationIssuesAlert } from './EventValidationIssuesAlert';
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 function isoToDate(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -57,12 +70,6 @@ export function EditEventModal({ open, onClose, event }: Props) {
   const [categorySelection, setCategorySelection] = useState<CategorySelection | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null);
 
-  const { data: rulesets, error: rulesetsError, refetch: refetchRulesets } = useQuery({
-    queryKey: ['rulesets'],
-    queryFn: () => apiGet<RulesetRow[]>('/api/rulesets'),
-    enabled: open,
-  });
-
   // Load existing categories once and init the selection state
   const { data: existingCategories } = useQuery({
     queryKey: ['event-categories', event.id],
@@ -71,17 +78,19 @@ export function EditEventModal({ open, onClose, event }: Props) {
   });
 
   const initialCategorySelection = useMemo<CategorySelection | null>(() => {
-    if (!existingCategories || !rulesets?.length) return null;
+    if (!existingCategories) return null;
     if (!existingCategories.ageGroups.length) return null;
-    const rulesetId = rulesets[0].id;
     return {
-      rulesetId,
+      categoryTemplateId:
+        existingCategories.categoryTemplateId ?? event.categoryTemplateId ?? '',
       ageGroups: existingCategories.ageGroups.map((ag) => ({
-        rulesetAgeGroupId: ag.rulesetAgeGroupId,
-        weightCategoryIds: ag.weightCategories.map((wc) => wc.rulesetWeightCategoryId),
+        categoryTemplateGroupId: ag.categoryTemplateGroupId,
+        weightCategoryIds: ag.weightCategories.map(
+          (wc) => wc.categoryTemplateCategoryId,
+        ),
       })),
     };
-  }, [existingCategories, rulesets]);
+  }, [event.categoryTemplateId, existingCategories]);
   const effectiveCategorySelection = categorySelection ?? initialCategorySelection;
 
   const slugIsValid = !slug || SLUG_RE.test(slug);
@@ -107,7 +116,7 @@ export function EditEventModal({ open, onClose, event }: Props) {
     return map;
   }, [issues]);
 
-  const minWeighinDay = registrationDays.length ? [...registrationDays].sort()[0] : null;
+  const latestRegistrationCloseDay = rangeStart ? addDays(rangeStart, -1) : null;
 
   const regOpensError: string | null = (() => {
     if (!regOpensAt || !DATE_RE.test(regOpensAt)) return null;
@@ -119,17 +128,26 @@ export function EditEventModal({ open, onClose, event }: Props) {
   const regClosesError: string | null = (() => {
     if (!regClosesAt || !DATE_RE.test(regClosesAt)) return null;
     if (regOpensAt && DATE_RE.test(regOpensAt) && regOpensAt > regClosesAt) return null;
-    if (minWeighinDay && regClosesAt > minWeighinDay)
-      return tEvents('registrationWindow.errorClosesAfterWeighin', { date: minWeighinDay });
+    if (latestRegistrationCloseDay && regClosesAt > latestRegistrationCloseDay) {
+      return tEvents('registrationWindow.errorClosesAfterEventStart', {
+        date: latestRegistrationCloseDay,
+      });
+    }
     return null;
   })();
+
+  const totalSelectedCats = (effectiveCategorySelection?.ageGroups ?? []).reduce(
+    (sum, ageGroup) => sum + ageGroup.weightCategoryIds.length,
+    0,
+  );
 
   const canSubmit =
     !issues?.length &&
     name.trim() && slug.trim() && slugIsValid &&
     location.trim() && rangeStart && rangeEnd &&
     registrationDays.length > 0 && fightDays.length > 0 &&
-    !regOpensError && !regClosesError;
+    !regOpensError && !regClosesError &&
+    (!effectiveCategorySelection || totalSelectedCats > 0);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -205,6 +223,7 @@ export function EditEventModal({ open, onClose, event }: Props) {
       onClose={handleClose}
       title={tEvents('edit.title')}
       description={tEvents('edit.description')}
+      widthClassName="max-w-3xl"
       footer={
         <>
           <SecondaryButton onClick={handleClose}>{tCommon('cancel')}</SecondaryButton>
@@ -219,130 +238,91 @@ export function EditEventModal({ open, onClose, event }: Props) {
     >
       <div className="space-y-5">
         {issues && issues.length > 0 && (
-          <InlineAlert variant="error">
-            <p className="text-[12px] font-medium">
-              {tCommon('error')}: {tEvents('validation.summary')}
-            </p>
-            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[12px]">
-              {issues.slice(0, 5).map((issue, idx) => (
-                <li key={idx}>
-                  <span className="font-mono">{issue.path}</span>: {issue.message}
-                </li>
-              ))}
-              {issues.length > 5 && <li>… {issues.length - 5} more</li>}
-            </ul>
-          </InlineAlert>
+          <EventValidationIssuesAlert issues={issues} />
         )}
 
-        {/* Name */}
-        <div>
-          <label className={labelCls}>{tEvents('columns.name')}</label>
-          <input
-            className={inputCls}
-            value={name}
-            onChange={(e) => { setName(e.target.value); setIssues(null); }}
+        <EventFormSection
+          eyebrow={tEvents('sections.basicsEyebrow')}
+          title={tEvents('sections.basicsTitle')}
+          description={tEvents('sections.basicsDescription')}
+        >
+          <EventBasicsFields
+            name={name}
+            slug={slug}
+            location={location}
+            timezone={timezone}
+            slugIsValid={slugIsValid}
+            inputCls={inputCls}
+            labelCls={labelCls}
+            issuesByPath={issuesByPath}
+            tEvents={(key) => tEvents(key as Parameters<typeof tEvents>[0])}
+            onNameChange={(value) => { setName(value); setIssues(null); }}
+            onSlugChange={(value) => { setSlug(value); setIssues(null); }}
+            onLocationChange={setLocation}
+            onTimezoneChange={setTimezone}
           />
-        </div>
+        </EventFormSection>
 
-        {/* Slug */}
-        <div>
-          <label className={labelCls}>Slug</label>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 select-none text-[13px] text-[var(--color-text-muted)]">/</span>
-            <input
-              className={`${inputCls} pl-6`}
-              value={slug}
-              onChange={(e) => { setSlug(e.target.value); setIssues(null); }}
-            />
-          </div>
-          {!slugIsValid && (
-            <p className="mt-1 text-[12px] text-[var(--color-danger)]">
-              Lowercase letters, numbers, and dashes only
-            </p>
-          )}
-          {issuesByPath.get('slug')?.map((msg, i) => (
-            <p key={i} className="mt-1 text-[12px] text-[var(--color-danger)]">{msg}</p>
-          ))}
-        </div>
+        <EventFormSection
+          eyebrow={tEvents('sections.scheduleEyebrow')}
+          title={tEvents('sections.scheduleTitle')}
+          description={tEvents('sections.scheduleDescription')}
+        >
+          <EditEventDatesFields
+            eventDays={eventDays}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEnd}
+            registrationDays={registrationDays}
+            fightDays={fightDays}
+            regOpensAt={regOpensAt}
+            regClosesAt={regClosesAt}
+            regOpensError={regOpensError}
+            regClosesError={regClosesError}
+            latestRegistrationCloseDay={latestRegistrationCloseDay}
+            issuesByPath={issuesByPath}
+            sectionCls={sectionCls}
+            onRangeStartChange={(v) => { setRangeStart(v); setRegistrationDays([]); setFightDays([]); setIssues(null); }}
+            onRangeEndChange={(v) => { setRangeEnd(v); setRegistrationDays([]); setFightDays([]); setIssues(null); }}
+            onRegistrationDaysChange={(days) => {
+              setRegistrationDays(days);
+              setIssues(null);
+              if (latestRegistrationCloseDay && !regClosesAt) {
+                setRegClosesAt(latestRegistrationCloseDay);
+              }
+            }}
+            onFightDaysChange={(days) => { setFightDays(days); setIssues(null); }}
+            onRegOpensAtChange={(v) => { setRegOpensAt(v); setIssues(null); }}
+            onRegClosesAtChange={(v) => { setRegClosesAt(v); setIssues(null); }}
+            tEvents={(key, params) => tEvents(key as Parameters<typeof tEvents>[0], params as Parameters<typeof tEvents>[1])}
+          />
+        </EventFormSection>
 
-        {/* Location + Timezone */}
-        <div className="grid items-end gap-3 sm:grid-cols-2">
-          <div>
-            <label className={labelCls}>{tEvents('columns.location')}</label>
-            <input
-              className={inputCls}
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelCls}>{tEvents('timezone')}</label>
-            <input
-              className={inputCls}
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-            />
-          </div>
-        </div>
+        <EventFormSection
+          eyebrow={tEvents('sections.categoriesEyebrow')}
+          title={tEvents('categoryTemplates.sectionTitle')}
+          description={tEvents('categoryTemplates.sectionDescription')}
+        >
+          <EventCategoryTemplatePanel
+            open={open}
+            value={effectiveCategorySelection}
+            onChange={(value) => setCategorySelection(value)}
+            showSelectionError={!!effectiveCategorySelection && totalSelectedCats === 0}
+            embedded
+          />
+        </EventFormSection>
 
-        <EditEventDatesFields
-          eventDays={eventDays}
-          rangeStart={rangeStart}
-          rangeEnd={rangeEnd}
-          registrationDays={registrationDays}
-          fightDays={fightDays}
-          regOpensAt={regOpensAt}
-          regClosesAt={regClosesAt}
-          regOpensError={regOpensError}
-          regClosesError={regClosesError}
-          minWeighinDay={minWeighinDay}
-          issuesByPath={issuesByPath}
-          inputCls={inputCls}
-          labelCls={labelCls}
-          sectionCls={sectionCls}
-          onRangeStartChange={(v) => { setRangeStart(v); setRegistrationDays([]); setFightDays([]); setIssues(null); }}
-          onRangeEndChange={(v) => { setRangeEnd(v); setRegistrationDays([]); setFightDays([]); setIssues(null); }}
-          onRegistrationDaysChange={(days) => { setRegistrationDays(days); setIssues(null); if (days.length && !regClosesAt) setRegClosesAt([...days].sort()[0]); }}
-          onFightDaysChange={(days) => { setFightDays(days); setIssues(null); }}
-          onRegOpensAtChange={(v) => { setRegOpensAt(v); setIssues(null); }}
-          onRegClosesAtChange={(v) => { setRegClosesAt(v); setIssues(null); }}
-          tEvents={(key, params) => tEvents(key as Parameters<typeof tEvents>[0], params as Parameters<typeof tEvents>[1])}
-        />
-
-        {/* Competition rules */}
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-alt)]/40 p-4">
-          <p className={sectionCls}>Competition Rules</p>
-          {rulesetsError && (
-            <div className="mb-3">
-              <AdminErrorAlert
-                error={rulesetsError}
-                fallbackMessage="Failed to load rulesets."
-                retryLabel={tCommon('retry')}
-                onRetry={() => refetchRulesets()}
-              />
-            </div>
-          )}
-          {rulesets && rulesets.length > 0 ? (
-            <CategorySelector
-              rulesets={rulesets}
-              value={effectiveCategorySelection}
-              onChange={(v) => setCategorySelection(v)}
-            />
-          ) : (
-            <p className="text-[12px] text-[var(--color-text-muted)]">Loading rulesets…</p>
-          )}
-        </div>
-
-        {/* Lifecycle automation */}
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-alt)]/40 p-4">
-          <p className={sectionCls}>Lifecycle</p>
+        <EventFormSection
+          eyebrow={tEvents('sections.lifecycleEyebrow')}
+          title={tEvents('sections.lifecycleTitle')}
+          description={tEvents('sections.lifecycleDescription')}
+        >
           <AutoAdvanceToggle
             checked={autoAdvanceStage}
             onChange={setAutoAdvanceStage}
             label={tEvents('autoAdvanceStage.label')}
             helper={tEvents('autoAdvanceStage.helper')}
           />
-        </div>
+        </EventFormSection>
       </div>
     </Modal>
   );

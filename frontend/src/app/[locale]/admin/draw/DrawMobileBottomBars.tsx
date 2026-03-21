@@ -5,6 +5,7 @@ import type { DrawOverviewResponse } from '@/types/api';
 
 type Props = {
   overview: DrawOverviewResponse | null;
+  editable: boolean;
   currentEventId: string;
   locale: string;
   pathname: string;
@@ -17,6 +18,7 @@ type Props = {
 
 export function DrawMobileBottomBars({
   overview,
+  editable,
   currentEventId,
   locale,
   pathname,
@@ -28,7 +30,7 @@ export function DrawMobileBottomBars({
 }: Props) {
   return (
     <>
-      {overview && (
+      {overview && editable && (
         <div className="fixed inset-x-0 bottom-16 z-20 border-t border-[var(--color-border)] bg-[var(--color-surface)] p-2 md:hidden">
           <div className="grid grid-cols-2 gap-2">
             {overview.event.drawStatus === 'NOT_GENERATED' ? (

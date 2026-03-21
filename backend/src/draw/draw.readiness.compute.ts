@@ -95,11 +95,11 @@ function buildBuckets(input: DrawReadinessContext): Map<string, CategoryBucket> 
   for (const category of input.categories) {
     buckets.set(category.id, {
       id: category.id,
-      ageGroupCode: category.eventAgeGroup.rulesetAgeGroup.code,
-      ageGroupName: category.eventAgeGroup.rulesetAgeGroup.name,
-      division: category.eventAgeGroup.rulesetAgeGroup.sex,
-      categoryName: category.rulesetWeightCategory.name,
-      sortOrder: category.rulesetWeightCategory.sortOrder,
+      ageGroupCode: category.eventAgeGroup.categoryTemplateAgeGroup.code,
+      ageGroupName: category.eventAgeGroup.categoryTemplateAgeGroup.name,
+      division: category.eventAgeGroup.categoryTemplateAgeGroup.sex,
+      categoryName: category.categoryTemplateWeight.name,
+      sortOrder: category.categoryTemplateWeight.sortOrder,
       bracketDrawn: input.drawnCategoryIds.has(category.id),
       eligibleAthletes: [],
       excludedAthletes: [],
@@ -158,8 +158,10 @@ export function computeDrawReadiness(input: DrawReadinessContext): DrawComputedO
       registrationStatus: registration.status,
       weighInStatus: registration.weighInStatus,
       originalCategory:
-        registration.registeredEventWeightCategory?.rulesetWeightCategory.name ?? null,
-      finalCategory: registration.eventWeightCategory?.rulesetWeightCategory.name ?? null,
+        registration.registeredEventWeightCategory?.categoryTemplateWeight.name ??
+        null,
+      finalCategory:
+        registration.eventWeightCategory?.categoryTemplateWeight.name ?? null,
       movedUp,
       overrideUsed,
       eligible,
