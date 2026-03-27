@@ -1,34 +1,16 @@
 'use client';
 
-import { getResolvedAgeGroup, getResolvedWeightDefinition } from '@/lib/weighin/category';
+import { getResolvedAgeGroup } from '@/lib/weighin/category';
 import { Badge } from '@/components/ui/Badge';
-import type { WeighInListEntry, WeighInPreviewResponse } from '@/types/weighin';
+import type { WeighInListEntry } from '@/types/weighin';
 
 type Props = {
   entry: WeighInListEntry;
-  preview: WeighInPreviewResponse | null;
   t: (key: string) => string;
 };
 
-export function WeighInAthleteSummaryCard({ entry, preview, t }: Props) {
-  const currentWeight = getResolvedWeightDefinition(entry.eventWeightCategory);
-  const registeredWeight = getResolvedWeightDefinition(entry.registeredEventWeightCategory);
+export function WeighInAthleteSummaryCard({ entry, t }: Props) {
   const ageGroup = getResolvedAgeGroup(entry.eventWeightCategory?.eventAgeGroup);
-  const currentCategory =
-    currentWeight?.name ??
-    entry.categoryLabel ??
-    entry.categoryCode ??
-    '—';
-  const registeredCategory =
-    registeredWeight?.name ??
-    entry.categoryLabel ??
-    entry.categoryCode ??
-    '—';
-  const finalCategory = preview?.nextCategory?.name ?? currentCategory;
-  const policyLabel = t(`policy${entry.event.weighInPolicyCode}`) !==
-    `policy${entry.event.weighInPolicyCode}`
-    ? t(`policy${entry.event.weighInPolicyCode}`)
-    : entry.event.weighInPolicyCode;
 
   return (
     <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
@@ -50,9 +32,7 @@ export function WeighInAthleteSummaryCard({ entry, preview, t }: Props) {
         <p>{t('athleteCodeLabel')}: {entry.athlete.documentId ?? entry.athlete.id}</p>
         <p>{t('divisionLabel')}: {entry.athlete.sex ?? '—'}</p>
         <p>{t('ageGroupLabel')}: {ageGroup?.name ?? '—'}</p>
-        <p>{t('registeredCategoryLabel')}: {registeredCategory}</p>
-        <p>{t('finalCategoryLabel')}: {finalCategory}</p>
-        <p>{t('policyLabel')}: {policyLabel}</p>
+        <p>{t('attemptShortLabel')}: {entry.weighIns.length}</p>
       </div>
     </section>
   );

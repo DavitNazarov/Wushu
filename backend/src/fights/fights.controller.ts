@@ -73,6 +73,32 @@ export class FightsController {
     }
   }
 
+  @Get('live/queue-board')
+  async getLiveQueueBoard(
+    @Req() req: AuthenticatedRequest,
+    @Query('eventId') eventId?: string,
+  ) {
+    if (!eventId) {
+      throw new HttpException('eventId_REQUIRED', HttpStatus.BAD_REQUEST);
+    }
+    const auth = req.auth!;
+    try {
+      return await this.fights.getLiveQueueBoard({
+        organisationId: auth.organisationId,
+        eventId,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'EVENT_NOT_FOUND') {
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Get(':id')
   async getById(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     const auth = req.auth!;
@@ -255,9 +281,15 @@ export class FightsController {
 
       const fight = await this.fights.getById(auth.organisationId, id);
       if (fight) {
+        this.gateway.emitFightUpdate(fight.eventId, fight.matId, fight);
         this.gateway.emitTimerUpdate(fight.eventId, fight.matId, {
           fightId: id,
           timer,
+        });
+        this.gateway.emitScheduleUpdate(fight.eventId, {
+          type: 'LIVE_TIMER_CHANGED',
+          fightId: id,
+          matId: fight.matId,
         });
       }
       return timer;
@@ -271,6 +303,72 @@ export class FightsController {
         msg === 'TIMER_STALE_UPDATE' ||
         msg === 'EVENT_NOT_LIVE' ||
         msg === 'INVALID_FIGHT_STATE_FOR_TIMER'
+      ) {
+        throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      }
+      throw new HttpException(
+        'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':id/round-result')
+  async recordRoundResult(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { winner: 'RED' | 'BLUE'; expectedUpdatedAt?: string },
+  ) {
+    const auth = req.auth!;
+    try {
+      const result = await this.fights.recordRoundResult({
+        organisationId: auth.organisationId,
+        fightId: id,
+        actorUserId: auth.sub,
+        winner: body.winner,
+        expectedUpdatedAt: body.expectedUpdatedAt ?? null,
+      });
+
+      this.gateway.emitFightUpdate(result.fight.eventId, result.fight.matId, result.fight);
+      this.gateway.emitTimerUpdate(result.fight.eventId, result.fight.matId, {
+        fightId: result.fight.id,
+        timer: result.timer ?? null,
+      });
+      this.gateway.emitScheduleUpdate(result.fight.eventId, {
+        type: result.fight.winnerAthleteId
+          ? 'LIVE_FIGHT_FINISHED'
+          : 'LIVE_REST_STARTED',
+        fightId: result.fight.id,
+        matId: result.fight.matId,
+      });
+
+      if (result.advanced) {
+        this.gateway.emitFightUpdate(
+          result.advanced.eventId,
+          result.advanced.matId,
+          result.advanced,
+        );
+        this.gateway.emitScheduleUpdate(result.advanced.eventId, {
+          type: 'LIVE_RESULT_PROPAGATED',
+          fightId: result.advanced.id,
+          matId: result.advanced.matId,
+        });
+      }
+
+      return result;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'FIGHT_NOT_FOUND') {
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      }
+      if (
+        msg === 'TIMER_NOT_INITIALIZED' ||
+        msg === 'INVALID_TIMER_PHASE' ||
+        msg === 'ROUND_STILL_RUNNING' ||
+        msg === 'TIMER_STALE_UPDATE' ||
+        msg === 'ROUND_RESULT_ALREADY_SET' ||
+        msg === 'EVENT_NOT_LIVE' ||
+        msg === 'WINNER_NOT_PRESENT'
       ) {
         throw new HttpException(msg, HttpStatus.BAD_REQUEST);
       }

@@ -516,6 +516,12 @@ export interface BracketParticipantView {
   finalCategory: string | null;
 }
 
+export interface BracketParticipantSlotView {
+  kind: 'ATHLETE' | 'WINNER_PLACEHOLDER' | 'BYE' | 'TBD';
+  sourceBoutNo: number | null;
+  athlete: BracketParticipantView | null;
+}
+
 export interface BracketRoundMatchup {
   fightId: string;
   boutNo: number;
@@ -531,6 +537,10 @@ export interface BracketRoundMatchup {
   participants: {
     red: BracketParticipantView | null;
     blue: BracketParticipantView | null;
+  };
+  slots: {
+    red: BracketParticipantSlotView;
+    blue: BracketParticipantSlotView;
   };
 }
 
@@ -553,6 +563,8 @@ export interface BracketFightListRow {
   blueAthleteId: string | null;
   redAthleteName: string | null;
   blueAthleteName: string | null;
+  redSlot: BracketParticipantSlotView;
+  blueSlot: BracketParticipantSlotView;
   scheduledStartTime: string | null;
   matName: string | null;
   orderInMat: number | null;
@@ -675,6 +687,34 @@ export interface ScheduleFightRow {
   matName: string | null;
   orderInMat: number | null;
   scheduledAt: string | null;
+}
+
+export interface AutoScheduleConflict {
+  fightId: string;
+  scheduledOrder: number;
+  athleteIds: string[];
+  violatedAthleteIds: string[];
+  previousFightIds: string[];
+  requiredFightGap: number;
+  actualFightGap: number;
+  missingFightCount: number;
+}
+
+export interface AutoScheduleDiagnostics {
+  minFightGap: number;
+  fullySatisfied: boolean;
+  conflictCount: number;
+  conflicts: AutoScheduleConflict[];
+}
+
+export interface AutoScheduleResponse {
+  updates: Array<{
+    id: string;
+    matId: string;
+    orderInMat: number;
+    scheduledStartTime: string;
+  }>;
+  diagnostics: AutoScheduleDiagnostics;
 }
 
 export interface LiveBoardParticipantView {
@@ -883,6 +923,7 @@ export interface MatRow {
   eventId: string;
   name: string;
   label: string | null;
+  order?: number;
 }
 
 export interface NewsPostRow {
@@ -945,8 +986,16 @@ export interface UserDetailRow {
 
 export interface TimerState {
   state: 'IDLE' | 'RUNNING' | 'PAUSED' | 'FINISHED';
-  startedAt: string | null;
+  phase: 'ROUND' | 'REST' | 'FINISHED';
+  currentRound: number;
+  phaseStartedAt: string | null;
   pausedAt: string | null;
   elapsed: number;
+  phaseDurationSeconds: number;
+  roundDurationSeconds: number;
+  restDurationSeconds: number;
+  redRoundWins: number;
+  blueRoundWins: number;
+  roundWinners: Array<'RED' | 'BLUE' | null>;
   updatedAt?: string;
 }

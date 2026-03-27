@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { UserRole, type AthleteSex } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { extractScoreToken } from '../draw/brackets.helpers';
-import type { AthleteProfileFightRow, AthleteProfileRegistrationRow, AthleteProfileResponse } from './athlete-profile.types';
+import type {
+  AthleteProfileFightRow,
+  AthleteProfileRegistrationRow,
+  AthleteProfileResponse,
+} from './athlete-profile.types';
 
 @Injectable()
 export class AthleteProfileService {
@@ -55,12 +59,20 @@ export class AthleteProfileService {
     });
   }
 
-  async getPublicProfile(athleteId: string): Promise<AthleteProfileResponse | null> {
+  async getPublicProfile(
+    athleteId: string,
+  ): Promise<AthleteProfileResponse | null> {
     const athlete = await this.prisma.athlete.findUnique({
       where: { id: athleteId },
       include: {
         club: {
-          select: { id: true, name: true, city: true, country: true },
+          include: {
+            coaches: {
+              where: { role: UserRole.coach, isActive: true, deletedAt: null },
+              orderBy: { displayName: 'asc' },
+              select: { id: true, displayName: true },
+            },
+          },
         },
       },
     });
@@ -76,7 +88,15 @@ export class AthleteProfileService {
         lastName: athlete.lastName,
         fullName: `${athlete.firstName} ${athlete.lastName}`.trim(),
         sex: athlete.sex,
-        club: athlete.club,
+        club: athlete.club
+          ? {
+              id: athlete.club.id,
+              name: athlete.club.name,
+              city: athlete.club.city,
+              country: athlete.club.country,
+            }
+          : null,
+        coaches: athlete.club?.coaches ?? [],
       },
     });
 
@@ -127,20 +147,32 @@ export class AthleteProfileService {
             },
           },
         },
-        orderBy: [{ event: { competitionStartDate: 'desc' } }, { createdAt: 'desc' }],
+        orderBy: [
+          { event: { competitionStartDate: 'desc' } },
+          { createdAt: 'desc' },
+        ],
       }),
       this.prisma.fight.findMany({
         where: {
           organisationId: input.organisationId,
-          OR: [{ redAthleteId: input.athleteId }, { blueAthleteId: input.athleteId }],
+          OR: [
+            { redAthleteId: input.athleteId },
+            { blueAthleteId: input.athleteId },
+          ],
         },
         include: {
           event: true,
           mat: { select: { name: true } },
           redAthlete: { select: { id: true, firstName: true, lastName: true } },
-          blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+          blueAthlete: {
+            select: { id: true, firstName: true, lastName: true },
+          },
         },
-        orderBy: [{ scheduledStartTime: 'asc' }, { round: 'asc' }, { boutNo: 'asc' }],
+        orderBy: [
+          { scheduledStartTime: 'asc' },
+          { round: 'asc' },
+          { boutNo: 'asc' },
+        ],
       }),
     ]);
 
@@ -153,46 +185,58 @@ export class AthleteProfileService {
 
     return {
       athlete: input.identity,
-      registrations: visibleRegistrations.map((registration): AthleteProfileRegistrationRow => {
-        const initialName =
-          registration.registeredEventWeightCategory?.categoryTemplateWeight.name ?? null;
-        const finalName =
-          registration.eventWeightCategory?.categoryTemplateWeight.name ?? null;
-        const latestWeighIn = registration.weighIns[0] ?? null;
+      registrations: visibleRegistrations.map(
+        (registration): AthleteProfileRegistrationRow => {
+          const initialName =
+            registration.registeredEventWeightCategory?.categoryTemplateWeight
+              .name ?? null;
+          const finalName =
+            registration.eventWeightCategory?.categoryTemplateWeight.name ??
+            null;
+          const latestWeighIn = registration.weighIns[0] ?? null;
 
-        return {
-          id: registration.id,
-          eventId: registration.eventId,
-          eventName: registration.event.name,
-          eventSlug: registration.event.slug,
-          eventLifecycle: registration.event.lifecycle,
-          eventPublished: registration.event.published,
-          competitionStartDate: registration.event.competitionStartDate.toISOString(),
-          competitionEndDate: registration.event.competitionEndDate.toISOString(),
-          categoryCode: registration.categoryCode,
-          ageGroupName:
-            registration.eventWeightCategory?.eventAgeGroup.categoryTemplateAgeGroup
-              .name ?? null,
-          division:
-            (registration.eventWeightCategory?.eventAgeGroup.categoryTemplateAgeGroup
-              .sex as AthleteSex | null) ?? null,
-          ...(input.visibility === 'private'
-            ? {
-                registrationStatus: registration.status,
-                weighInStatus: registration.weighInStatus,
-                latestWeighInDecision: latestWeighIn?.decision ?? null,
-                latestWeighInAt: latestWeighIn?.createdAt.toISOString() ?? null,
-              }
-            : {}),
-          initialWeightCategoryName: initialName,
-          finalWeightCategoryName: finalName,
-          movedUp: Boolean(initialName && finalName && initialName !== finalName),
-        };
-      }),
+          return {
+            id: registration.id,
+            eventId: registration.eventId,
+            eventName: registration.event.name,
+            eventSlug: registration.event.slug,
+            eventLifecycle: registration.event.lifecycle,
+            eventPublished: registration.event.published,
+            competitionStartDate:
+              registration.event.competitionStartDate.toISOString(),
+            competitionEndDate:
+              registration.event.competitionEndDate.toISOString(),
+            categoryCode: registration.categoryCode,
+            ageGroupName:
+              registration.eventWeightCategory?.eventAgeGroup
+                .categoryTemplateAgeGroup.name ?? null,
+            division:
+              (registration.eventWeightCategory?.eventAgeGroup
+                .categoryTemplateAgeGroup.sex as AthleteSex | null) ?? null,
+            ...(input.visibility === 'private'
+              ? {
+                  registrationStatus: registration.status,
+                  weighInStatus: registration.weighInStatus,
+                  latestWeighInDecision: latestWeighIn?.decision ?? null,
+                  latestWeighInAt:
+                    latestWeighIn?.createdAt.toISOString() ?? null,
+                }
+              : {}),
+            initialWeightCategoryName: initialName,
+            finalWeightCategoryName: finalName,
+            movedUp: Boolean(
+              initialName && finalName && initialName !== finalName,
+            ),
+          };
+        },
+      ),
       fights: visibleFights.map((fight): AthleteProfileFightRow => {
-        const athleteCorner = fight.redAthleteId === input.athleteId ? 'RED' : 'BLUE';
+        const athleteCorner =
+          fight.redAthleteId === input.athleteId ? 'RED' : 'BLUE';
         const opponent =
-          athleteCorner === 'RED' ? fight.blueAthlete ?? null : fight.redAthlete ?? null;
+          athleteCorner === 'RED'
+            ? (fight.blueAthlete ?? null)
+            : (fight.redAthlete ?? null);
 
         return {
           id: fight.id,
@@ -210,7 +254,9 @@ export class AthleteProfileService {
           matName: fight.mat?.name ?? null,
           athleteCorner,
           opponentAthleteId: opponent?.id ?? null,
-          opponentName: opponent ? `${opponent.firstName} ${opponent.lastName}` : null,
+          opponentName: opponent
+            ? `${opponent.firstName} ${opponent.lastName}`
+            : null,
           winnerAthleteId: fight.winnerAthleteId ?? null,
         };
       }),

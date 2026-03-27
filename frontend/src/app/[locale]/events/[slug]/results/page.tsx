@@ -1,6 +1,6 @@
 import { getTranslations } from 'next-intl/server';
+import { PublicResultsPanel } from '@/components/event/PublicResultsPanel';
 import { PublicLayout } from '@/components/layout/PublicLayout';
-import { Card } from '@/components/ui/Card';
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -17,11 +17,7 @@ export default async function PublicEventResultsPage({ params }: Props) {
         <h1 className="text-2xl font-semibold text-[var(--color-text)]">
           {tPublic('results')}
         </h1>
-        <Card>
-          <p className="text-[15px] text-[var(--color-text-muted)]">
-            {tPublic('notPublishedDescription')}
-          </p>
-        </Card>
+        <PublicResultsPanel eventSlug={slug} />
       </div>
     </PublicLayout>
   );

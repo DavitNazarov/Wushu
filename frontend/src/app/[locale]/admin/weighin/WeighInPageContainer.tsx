@@ -1,9 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useLocale, useTranslations } from 'next-intl';
-import { usePathname } from 'next/navigation';
 import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useToast } from '@/components/ui/Toast';
@@ -13,7 +12,6 @@ import { useAdminEventSelection } from '@/hooks/useAdminEventSelection';
 import { apiPost } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import { toWeighInCategoryList } from '@/lib/weighin/category';
-import { Link } from '@/i18n/navigation';
 import {
   buildWeighInQueueGroups,
   formatWeighInQueueGroupHeading,
@@ -44,21 +42,22 @@ export function WeighInPageContainer() {
   const tGate = useTranslations('eventPhaseGate');
   const tEventsGate = useTranslations('admin.events');
   const tNav = useTranslations('nav');
-  const tPublic = useTranslations('public');
   const tEvents = useTranslations('admin.events');
   const locale = useLocale();
-  const pathname = usePathname();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<WeighInQueueFilter>('ALL');
-  const [mobileTab, setMobileTab] = useState<'queue' | 'active'>('queue');
+  const [mobileView, setMobileView] = useState<'queue' | 'panel'>('queue');
   const [selectedRegistrationId, setSelectedRegistrationId] = useState<string | null>(null);
   const [weightDraft, setWeightDraft] = useState<{ scopeKey: string; value: string }>({
     scopeKey: '',
     value: '',
   });
   const [overrideOpen, setOverrideOpen] = useState(false);
+  const queueScrollTopRef = useRef(0);
+  const queueSectionRef = useRef<HTMLElement | null>(null);
+  const panelSectionRef = useRef<HTMLElement | null>(null);
 
   const { currentEventId, events, eventsQuery, selectedEvent, setSelectedEventId } = useAdminEventSelection();
   const gate = resolveEventControlGate('weighin', selectedEvent);
@@ -239,9 +238,47 @@ export function WeighInPageContainer() {
       : 'DONE';
 
   const lifecycleIndex = lifecycleSteps.findIndex((step) => step.stage === lifecycleStage);
+  const selectedAthleteName = selectedEntry
+    ? `${selectedEntry.athlete.firstName} ${selectedEntry.athlete.lastName}`.trim()
+    : '';
+
+  const isMobileViewport = () => typeof window !== 'undefined' && window.innerWidth < 768;
+  const scrollToSectionTop = (section: HTMLElement | null, topOverride?: number) => {
+    if (typeof window === 'undefined') return;
+    const top = typeof topOverride === 'number' ? topOverride : (section?.offsetTop ?? 0);
+    window.scrollTo({ top, behavior: 'auto' });
+  };
+
+  const handleSelectAthlete = (id: string) => {
+    const nextEntry = orderedEntries.find((entry) => entry.id === id) ?? null;
+    const shouldUseMobileNav = isMobileViewport();
+
+    if (shouldUseMobileNav) {
+      queueScrollTopRef.current = window.scrollY;
+    }
+
+    setSelectedRegistrationId(id);
+    setWeightDraft({ scopeKey: '', value: '' });
+    setMobileView(shouldUseMobileNav ? 'panel' : 'queue');
+
+    if (shouldUseMobileNav && nextEntry) {
+      window.requestAnimationFrame(() => {
+        scrollToSectionTop(panelSectionRef.current);
+      });
+    }
+  };
+
+  const handleBackToQueue = () => {
+    setMobileView('queue');
+    if (!isMobileViewport()) return;
+
+    window.requestAnimationFrame(() => {
+      scrollToSectionTop(queueSectionRef.current, queueScrollTopRef.current);
+    });
+  };
 
   return (
-    <div className="space-y-4 pb-24 md:pb-0">
+    <div className="space-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
 
       <WeighInToolbar
@@ -254,6 +291,7 @@ export function WeighInPageContainer() {
           setSelectedEventId(nextId);
           setSelectedRegistrationId(null);
           setWeightDraft({ scopeKey: '', value: '' });
+          setMobileView('queue');
         }}
         onSearchChange={setSearch}
         onFilterChange={setFilter}
@@ -330,100 +368,83 @@ export function WeighInPageContainer() {
       )}
 
       {showContent && (
-        <div className="md:hidden">
-          <div className="mb-3 grid grid-cols-2 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
-            <button
-              type="button"
-              onClick={() => setMobileTab('queue')}
-              className={`min-h-[44px] rounded-[var(--radius-pill)] px-3 text-[13px] font-semibold ${
-                mobileTab === 'queue'
-                  ? 'bg-[var(--color-primary)]/20 text-[var(--color-text)]'
-                  : 'text-[var(--color-text-muted)]'
-              }`}
-            >
+        <div className="relative overflow-hidden md:grid md:gap-4 md:grid-cols-[minmax(300px,40%)_minmax(0,60%)] md:items-start">
+          <section
+            ref={queueSectionRef}
+            className={`min-w-0 space-y-3 transition-transform duration-[250ms] ease-out md:relative md:translate-x-0 md:opacity-100 md:pointer-events-auto ${
+              mobileView === 'queue'
+                ? 'relative translate-x-0 opacity-100 pointer-events-auto'
+                : 'absolute inset-0 -translate-x-full opacity-0 pointer-events-none'
+            }`}
+          >
+            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
               {t('queueTitle')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobileTab('active')}
-              className={`min-h-[44px] rounded-[var(--radius-pill)] px-3 text-[13px] font-semibold ${
-                mobileTab === 'active'
-                  ? 'bg-[var(--color-primary)]/20 text-[var(--color-text)]'
-                  : 'text-[var(--color-text-muted)]'
-              }`}
-            >
+            </h2>
+            <WeighInAthleteList
+              groups={groupedQueue}
+              selectedId={resolvedSelectedRegistrationId}
+              isLoading={athletesQuery.isLoading}
+              onSelect={handleSelectAthlete}
+              t={(key) => t(key as Parameters<typeof t>[0])}
+            />
+          </section>
+
+          <section
+            ref={panelSectionRef}
+            className={`space-y-3 border-0 transition-transform duration-[250ms] ease-out md:relative md:translate-x-0 md:opacity-100 md:pointer-events-auto md:sticky md:top-[calc(var(--topbar-height)+2rem)] md:self-start md:max-h-[calc(100vh-var(--topbar-height)-3rem)] md:overflow-y-auto md:border-l md:border-[var(--color-border)] md:pl-4 ${
+              mobileView === 'panel'
+                ? 'relative translate-x-0 opacity-100 pointer-events-auto'
+                : 'absolute inset-0 translate-x-full opacity-0 pointer-events-none'
+            }`}
+          >
+            <h2 className="hidden text-[13px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] md:block">
               {t('detailsTitle')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showContent && (
-        <div className="grid gap-4 lg:grid-cols-[minmax(300px,40%)_minmax(0,60%)] lg:items-start">
-        <section className={`min-w-0 space-y-3 ${mobileTab === 'active' ? 'hidden md:block' : ''}`}>
-          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-            {t('queueTitle')}
-          </h2>
-          <WeighInAthleteList
-            groups={groupedQueue}
-            selectedId={resolvedSelectedRegistrationId}
-            isLoading={athletesQuery.isLoading}
-            onSelect={(id) => {
-              setSelectedRegistrationId(id);
-              setWeightDraft({ scopeKey: '', value: '' });
-              setMobileTab('active');
-            }}
-            t={(key) => t(key as Parameters<typeof t>[0])}
-          />
-        </section>
-
-        <section
-          className={`space-y-3 border-0 lg:sticky lg:top-[calc(var(--topbar-height)+2rem)] lg:self-start lg:max-h-[calc(100vh-var(--topbar-height)-3rem)] lg:overflow-y-auto lg:border-l lg:border-[var(--color-border)] lg:pl-4 ${
-            mobileTab === 'queue' ? 'hidden md:block' : ''
-          }`}
-        >
-          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-            {t('detailsTitle')}
-          </h2>
-          <div className="md:hidden">
-            <button
-              type="button"
-              onClick={() => setMobileTab('queue')}
-              className="min-h-[44px] rounded-[var(--radius-pill)] border border-[var(--color-border)] px-3 text-[13px] font-semibold text-[var(--color-text)]"
-            >
-              {tC('back')}
-            </button>
-          </div>
-          <WeighInDetailsPanel
-            selected={selectedEntry}
-            preview={previewQuery.data ?? null}
-            previewError={previewQuery.error}
-            previewLoading={previewQuery.isFetching}
-            weightInput={weightInput}
-            recordError={recordMutation.error}
-            isRecordPending={recordMutation.isPending}
-            onWeightInputChange={(value) =>
-              setWeightDraft({
-                scopeKey: weightScopeKey,
-                value,
-              })
-            }
-            onRecord={(payload) => submitRecord(payload)}
-            isReconcilingCategory={reconcileMutation.isPending}
-            onReconcileCategory={() => {
-              if (!selectedEntry) return;
-              reconcileMutation.mutate(selectedEntry.id);
-            }}
-            onOpenOverride={() => setOverrideOpen(true)}
-            t={(key, values) =>
-              t(
-                key as Parameters<typeof t>[0],
-                values as Record<string, string | number | Date> | undefined,
-              )
-            }
-            tC={(key) => tC(key as Parameters<typeof tC>[0])}
-          />
-        </section>
+            </h2>
+            <div className="sticky top-[var(--topbar-height)] z-30 -mx-4 bg-[var(--color-bg)] px-4 py-3 md:hidden">
+              <div className="flex min-h-[44px] items-center justify-between gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-sm">
+                <button
+                  type="button"
+                  onClick={handleBackToQueue}
+                  className="min-h-[44px] shrink-0 rounded-[var(--radius-pill)] border border-[var(--color-border)] px-3 text-[13px] font-semibold text-[var(--color-text)]"
+                >
+                  {`\u2190 ${tC('back')} ${t('queueTitle')}`}
+                </button>
+                <p className="min-w-0 flex-1 truncate text-right text-[13px] font-semibold text-[var(--color-text)]">
+                  {selectedAthleteName}
+                </p>
+              </div>
+            </div>
+            <WeighInDetailsPanel
+              selected={selectedEntry}
+              preview={previewQuery.data ?? null}
+              previewError={previewQuery.error}
+              previewLoading={previewQuery.isFetching}
+              weightInput={weightInput}
+              recordError={recordMutation.error}
+              isRecordPending={recordMutation.isPending}
+              onWeightInputChange={(value) =>
+                setWeightDraft({
+                  scopeKey: weightScopeKey,
+                  value,
+                })
+              }
+              onRecord={(payload) => submitRecord(payload)}
+              isReconcilingCategory={reconcileMutation.isPending}
+              onReconcileCategory={() => {
+                if (!selectedEntry) return;
+                reconcileMutation.mutate(selectedEntry.id);
+              }}
+              onOpenOverride={() => setOverrideOpen(true)}
+              isOverrideOpen={overrideOpen}
+              t={(key, values) =>
+                t(
+                  key as Parameters<typeof t>[0],
+                  values as Record<string, string | number | Date> | undefined,
+                )
+              }
+              tC={(key) => tC(key as Parameters<typeof tC>[0])}
+            />
+          </section>
         </div>
       )}
 
@@ -445,38 +466,6 @@ export function WeighInPageContainer() {
           )
         }
       />
-
-      <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 md:hidden">
-        <ul className="grid grid-cols-5 gap-1 text-center">
-          {[
-            { href: '/admin', label: tPublic('overview') },
-            { href: '/admin/weighin', label: tNav('weighin') },
-            { href: '/admin/draw', label: tNav('draw') },
-            { href: '/admin/live', label: tNav('live') },
-            { href: '/admin/settings', label: tPublic('more') },
-          ].map((item) => {
-            const active = pathname === `/${locale}${item.href}`;
-            const href =
-                  currentEventId && item.href !== '/admin'
-                    ? `${item.href}?eventId=${encodeURIComponent(currentEventId)}`
-                    : item.href;
-            return (
-              <li key={item.href}>
-                <Link
-                  href={href}
-                  className={`flex min-h-[44px] items-center justify-center rounded-[var(--radius-pill)] px-1 text-[12px] font-semibold ${
-                    active
-                      ? 'bg-[var(--color-primary)]/20 text-[var(--color-text)]'
-                      : 'text-[var(--color-text-muted)]'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
     </div>
   );
 }

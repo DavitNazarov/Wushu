@@ -1,12 +1,15 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/Card';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { usePublicSchedule } from '@/hooks/usePublicApi';
+import { usePublicEvent, usePublicSchedule } from '@/hooks/usePublicApi';
+import { useRealtimeQuerySync } from '@/hooks/useRealtimeQuerySync';
 import type { ScheduleFight } from '@/lib/api/public';
+import { groupScheduleFightsByDate } from '@/lib/public-schedule';
 
 function formatTime(iso: string | null, locale: string): string {
   if (!iso) return '—';
@@ -31,7 +34,24 @@ export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
   const tPublic = useTranslations('public');
   const tCommon = useTranslations('common');
   const locale = useLocale();
+  const eventQuery = usePublicEvent(eventSlug);
   const { data: fights, isLoading, error, refetch } = usePublicSchedule(eventSlug);
+  const unscheduledLabel = tPublic('scheduleUnscheduled');
+  useRealtimeQuerySync({
+    scope: 'public-schedule',
+    eventId: eventQuery.data?.id ?? null,
+    enabled: !!eventSlug && !!eventQuery.data?.id,
+    queryKeys: [['public', 'schedule', eventSlug]],
+  });
+  const groupedFights = useMemo(
+    () =>
+      groupScheduleFightsByDate({
+        fights: fights ?? [],
+        locale,
+        unscheduledLabel,
+      }),
+    [fights, locale, unscheduledLabel],
+  );
 
   if (error) {
     return (
@@ -65,20 +85,11 @@ export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
     );
   }
 
-  const byDate = fights.reduce<Record<string, ScheduleFight[]>>((acc, f) => {
-    const date = f.scheduledAt
-      ? new Date(f.scheduledAt).toLocaleDateString(locale)
-      : tPublic('scheduleUnscheduled');
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(f);
-    return acc;
-  }, {});
-
   return (
     <div className="space-y-6">
-      {Object.entries(byDate).map(([date, items]) => (
-        <Card key={date}>
-          <h3 className="mb-4 text-[15px] font-semibold text-[var(--color-text)]">{date}</h3>
+      {groupedFights.map(({ label, fights: items }) => (
+        <Card key={label}>
+          <h3 className="mb-4 text-[15px] font-semibold text-[var(--color-text)]">{label}</h3>
           <div className="space-y-2">
             {items.map((f) => (
               <div

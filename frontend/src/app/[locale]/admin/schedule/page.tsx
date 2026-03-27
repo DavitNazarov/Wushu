@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { io } from 'socket.io-client';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
@@ -13,29 +12,22 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
-import type { MatRow, ScheduleFightRow } from '@/types/api';
+import type {
+  AutoScheduleResponse,
+  MatRow,
+  ScheduleFightRow,
+} from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
 import { resolveEventControlGate } from '@/domain/events/controlPageGate';
 import { useAdminEventSelection } from '@/hooks/useAdminEventSelection';
+import { useRealtimeQuerySync } from '@/hooks/useRealtimeQuerySync';
+import { ScheduleFightGrid } from './ScheduleFightGrid';
 
 const SEL =
   'h-10 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
 const INPUT =
   'h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
-
-function statusTone(status: ScheduleFightRow['liveStatus']) {
-  switch (status) {
-    case 'RUNNING':
-      return 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]';
-    case 'FINISHED':
-      return 'bg-[var(--color-success)]/20 text-[var(--color-success)]';
-    case 'UPCOMING':
-      return 'bg-[var(--color-warning)]/20 text-[var(--color-warning)]';
-    default:
-      return 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]';
-  }
-}
 
 export default function SchedulePage() {
   const t = useTranslations('schedule');
@@ -62,6 +54,7 @@ export default function SchedulePage() {
   const gate = resolveEventControlGate('schedule', selectedEvent);
   const showContent = gate.mode === 'active' || gate.mode === 'readonly';
   const isEditable = gate.mode === 'active';
+  const scheduleQueryKey = useMemo(() => ['schedule', eid] as const, [eid]);
 
   const { data: mats } = useQuery({
     queryKey: ['mats', eid],
@@ -70,38 +63,16 @@ export default function SchedulePage() {
   });
 
   const { data: fights, isLoading, error, refetch } = useQuery({
-    queryKey: ['schedule', eid],
+    queryKey: scheduleQueryKey,
     queryFn: () => apiGet<ScheduleFightRow[]>(`/api/schedule?eventId=${eid}`),
     enabled: !!eid && showContent,
   });
-
-  useEffect(() => {
-    if (!eid || !showContent) return;
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? window.location.origin;
-    const socket = io(baseUrl, {
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-    });
-
-    const onConnect = () => {
-      socket.emit('join-event', { eventId: eid });
-    };
-
-    const onUpdate = () => {
-      void qc.invalidateQueries({ queryKey: ['schedule', eid] });
-    };
-
-    socket.on('connect', onConnect);
-    socket.on('schedule:update', onUpdate);
-    socket.on('fight:update', onUpdate);
-
-    return () => {
-      socket.off('connect', onConnect);
-      socket.off('schedule:update', onUpdate);
-      socket.off('fight:update', onUpdate);
-      socket.close();
-    };
-  }, [eid, qc, showContent]);
+  useRealtimeQuerySync({
+    scope: 'admin-schedule',
+    eventId: eid || null,
+    enabled: !!eid && showContent,
+    queryKeys: [scheduleQueryKey],
+  });
 
   const addMatMut = useMutation({
     mutationFn: () =>
@@ -117,10 +88,21 @@ export default function SchedulePage() {
   });
 
   const autoMut = useMutation({
-    mutationFn: () => apiPost('/api/schedule/auto', { eventId: eid, ...autoForm }),
-    onSuccess: () => {
+    mutationFn: () =>
+      apiPost<AutoScheduleResponse>('/api/schedule/auto', {
+        eventId: eid,
+        ...autoForm,
+      }),
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['schedule', eid] });
-      toast(t('scheduleUpdated'));
+      toast(
+        result.diagnostics.fullySatisfied
+          ? t('scheduleUpdated')
+          : t('scheduleUpdatedWithConflicts', {
+              count: result.diagnostics.conflictCount,
+            }),
+        result.diagnostics.fullySatisfied ? 'success' : 'error',
+      );
       setAutoOpen(false);
     },
     onError: (error) =>
@@ -128,11 +110,24 @@ export default function SchedulePage() {
   });
 
   const scheduleFlow = useMemo(
-    () =>
-      [...(fights ?? [])].sort(
-        (a, b) => (a.scheduleOrder ?? Number.MAX_SAFE_INTEGER) - (b.scheduleOrder ?? Number.MAX_SAFE_INTEGER),
-      ),
-    [fights],
+    () => {
+      const matOrderById = new Map((mats ?? []).map((mat) => [mat.id, mat.order]));
+      return [...(fights ?? [])].sort((left, right) => {
+        const leftScheduled = left.matId != null && left.orderInMat != null;
+        const rightScheduled = right.matId != null && right.orderInMat != null;
+        if (leftScheduled !== rightScheduled) return leftScheduled ? -1 : 1;
+
+        if (leftScheduled && rightScheduled) {
+          const matOrderLeft = left.matId ? (matOrderById.get(left.matId) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+          const matOrderRight = right.matId ? (matOrderById.get(right.matId) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+          if (matOrderLeft !== matOrderRight) return matOrderLeft - matOrderRight;
+          return (left.orderInMat ?? Number.MAX_SAFE_INTEGER) - (right.orderInMat ?? Number.MAX_SAFE_INTEGER);
+        }
+
+        return (left.scheduleOrder ?? Number.MAX_SAFE_INTEGER) - (right.scheduleOrder ?? Number.MAX_SAFE_INTEGER);
+      });
+    },
+    [fights, mats],
   );
 
   const unscheduledCount = useMemo(
@@ -214,49 +209,11 @@ export default function SchedulePage() {
       ) : showContent && !scheduleFlow.length ? (
         <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
       ) : showContent ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {scheduleFlow.map((f) => (
-            <div
-              key={f.id}
-              className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-[11px] text-[var(--color-text-muted)]">
-                  #{f.scheduleOrder ?? '-'}
-                </div>
-                <span
-                  className={`rounded-[var(--radius-pill)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusTone(
-                    f.liveStatus,
-                  )}`}
-                >
-                  {(f.liveStatus ?? 'PENDING').toLowerCase()}
-                </span>
-              </div>
-
-              <div className="mt-2 text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">
-                {f.bracketRoundLabel} • {f.bracketFightNumber}
-              </div>
-
-              <div className="mt-2 text-[13px] font-medium text-red-400">{f.redDisplayName}</div>
-              <div className="text-[11px] text-[var(--color-text-muted)]">vs</div>
-              <div className="text-[13px] font-medium text-blue-400">{f.blueDisplayName}</div>
-
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-text-muted)]">
-                <span>{f.isPlayable ? t('fightReady') : t('fightWaiting')}</span>
-                {f.matName && <span>• {f.matName}</span>}
-                {f.scheduledAt && (
-                  <span>
-                    •{' '}
-                    {new Date(f.scheduledAt).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+        <ScheduleFightGrid
+          fights={scheduleFlow}
+          fightReadyLabel={t('fightReady')}
+          fightWaitingLabel={t('fightWaiting')}
+        />
       ) : null}
 
       {isEditable && (

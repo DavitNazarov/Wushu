@@ -1,210 +1,87 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { FightResultBanner } from '@/components/fight/FightResultBanner';
+import { FightRoundSummary } from '@/components/fight/FightRoundSummary';
+import { LivePhaseBanner } from '@/components/fight/LivePhaseBanner';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { InlineAlert } from '@/components/ui/InlineAlert';
-import { Skeleton, SkeletonRows } from '@/components/ui/Skeleton';
-import { usePublicLive, usePublicMat } from '@/hooks/usePublicApi';
-import type { MatFight } from '@/lib/api/public';
+import { SkeletonRows } from '@/components/ui/Skeleton';
+import { useFightTimerDisplay } from '@/hooks/useFightTimerDisplay';
+import { usePublicLive } from '@/hooks/usePublicApi';
+import { useRealtimeQuerySync } from '@/hooks/useRealtimeQuerySync';
+import { getFightDisplayTone, getFightWinnerCorner } from '@/lib/live/fightPresentation';
+import type { PublicLiveFeed } from '@/lib/api/public';
+import { useTranslations } from 'next-intl';
 
 type Props = {
   eventSlug: string;
 };
 
-type TimerState = MatFight['timerState'];
-
-function athleteName(athlete: MatFight['redAthlete'], byeLabel: string) {
-  if (!athlete) return byeLabel;
-  return `${athlete.firstName} ${athlete.lastName}`;
+function phaseLabel(
+  timerState: NonNullable<PublicLiveFeed['current']>['timerState'],
+  t: (key: 'phaseRest' | 'phaseFinished' | 'phaseRound', values?: Record<string, string | number>) => string,
+) {
+  if (!timerState) return null;
+  if (timerState.phase === 'REST') {
+    return t('phaseRest', { round: timerState.currentRound });
+  }
+  if (timerState.phase === 'FINISHED') {
+    return t('phaseFinished');
+  }
+  return t('phaseRound', { round: timerState.currentRound });
 }
 
-function useTimerDisplay(timerState: TimerState) {
-  const [elapsed, setElapsed] = useState(0);
-  const frameRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    function tick() {
-      if (!timerState) {
-        setElapsed(0);
-      } else if (timerState.state === 'RUNNING' && timerState.startedAt) {
-        setElapsed(Date.now() - new Date(timerState.startedAt).getTime() + timerState.pausedMs);
-      } else if (timerState.state === 'PAUSED') {
-        setElapsed(timerState.pausedMs);
-      } else {
-        setElapsed(0);
-      }
-      frameRef.current = requestAnimationFrame(tick);
-    }
-
-    frameRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
-    };
-  }, [timerState]);
-
-  const seconds = Math.floor(elapsed / 1000);
-  const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
-  const remainder = String(seconds % 60).padStart(2, '0');
-  return `${minutes}:${remainder}`;
-}
-
-function MatFightRow({ fight, byeLabel, versusLabel }: { fight: MatFight; byeLabel: string; versusLabel: string }) {
-  return (
-    <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/50 p-3">
-      <p className="text-[14px] text-[var(--color-text)]">
-        {athleteName(fight.redAthlete, byeLabel)} {versusLabel} {athleteName(fight.blueAthlete, byeLabel)}
-      </p>
-      <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-        {fight.categoryCode} · #{fight.boutNo}
-      </p>
-    </div>
-  );
-}
-
-function MatLiveView({ eventSlug, matName, matCount }: { eventSlug: string; matName: string; matCount: number }) {
-  const tCommon = useTranslations('common');
+function UpcomingCard({
+  label,
+  fight,
+}: {
+  label: string;
+  fight: PublicLiveFeed['current'];
+}) {
   const tPublic = useTranslations('public');
-  const tLive = useTranslations('live');
-  const { data, isLoading, error, refetch } = usePublicMat(eventSlug, matName);
-  const timerDisplay = useTimerDisplay(data?.now?.timerState ?? null);
-  const byeLabel = tPublic('bye');
-  const versusLabel = tPublic('versus');
-
-  if (error) {
-    return (
-      <InlineAlert
-        variant="error"
-        actions={
-          <button onClick={() => refetch()} className="text-[13px] font-medium underline">
-            {tCommon('retry')}
-          </button>
-        }
-      >
-        {tCommon('loadError')}
-      </InlineAlert>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton width="180px" height="18px" />
-        <Skeleton width="100%" height="180px" />
-        <SkeletonRows rows={2} cols={2} />
-      </div>
-    );
-  }
-
-  if (!data) {
-    return <EmptyState title={tPublic('noMatData')} description={tPublic('liveUnavailable')} />;
-  }
 
   return (
-    <div className="space-y-4">
-      <Card className="bg-[var(--color-surface-alt)]/40">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-[12px] font-semibold uppercase tracking-wider text-[var(--color-primary)]">
-              {matCount === 1 ? tPublic('liveSingleMatTitle') : tPublic('liveSelectedMatLabel')}
-            </p>
-            <h2 className="text-[18px] font-semibold text-[var(--color-text)]">{data.mat.name}</h2>
-          </div>
+    <Card className="border-[var(--color-border)]/80 bg-[var(--color-surface)]">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-muted)]">
+        {label}
+      </p>
+      {fight ? (
+        <div className="mt-3 space-y-2">
+          <p className="text-lg font-semibold text-[var(--color-text)]">
+            {fight.redDisplayName} {tPublic('versus')} {fight.blueDisplayName}
+          </p>
           <p className="text-[13px] text-[var(--color-text-muted)]">
-            {matCount === 1 ? tPublic('liveSingleMatInlineBody') : tPublic('liveMultiMatInlineBody')}
+            {fight.categoryName} · #{fight.scheduleOrder ?? fight.boutNo} · {fight.bracketRoundLabel}
           </p>
         </div>
-      </Card>
-
-      <Card className="border-[var(--color-primary)]/30">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-primary)]">
-          {tLive('currentFight')}
+      ) : (
+        <p className="mt-3 text-[14px] text-[var(--color-text-muted)]">
+          {tPublic('liveUnavailable')}
         </p>
-        {!data.now ? (
-          <p className="mt-3 text-[14px] text-[var(--color-text-muted)]">{tLive('noFights')}</p>
-        ) : (
-          <div className="mt-4 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--color-text-muted)]">
-              <span>
-                {data.now.categoryCode} · #{data.now.boutNo}
-              </span>
-              <span>{tPublic('now')}</span>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-              <div className="rounded-[var(--radius-card)] bg-[var(--color-danger)]/10 p-4 text-center">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[var(--color-danger)]">
-                  {tLive('red')}
-                </p>
-                <p className="mt-2 text-xl font-semibold text-[var(--color-text)]">
-                  {athleteName(data.now.redAthlete, byeLabel)}
-                </p>
-              </div>
-
-              <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-6 py-5 text-center">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-                  {tPublic('liveTimer')}
-                </p>
-                <p className="mt-2 font-mono text-4xl font-bold text-[var(--color-text)]">
-                  {timerDisplay}
-                </p>
-              </div>
-
-              <div className="rounded-[var(--radius-card)] bg-sky-500/10 p-4 text-center">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-sky-400">
-                  {tLive('blue')}
-                </p>
-                <p className="mt-2 text-xl font-semibold text-[var(--color-text)]">
-                  {athleteName(data.now.blueAthlete, byeLabel)}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-            {tPublic('onDeck')}
-          </p>
-          <div className="mt-3">
-            {data.onDeck ? (
-              <MatFightRow fight={data.onDeck} byeLabel={byeLabel} versusLabel={versusLabel} />
-            ) : (
-              <p className="text-[14px] text-[var(--color-text-muted)]">{tPublic('liveNoOnDeck')}</p>
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-            {tPublic('next')}
-          </p>
-          <div className="mt-3 space-y-2">
-            {data.next.length > 0 ? (
-              data.next.map((fight) => (
-                <MatFightRow key={fight.id} fight={fight} byeLabel={byeLabel} versusLabel={versusLabel} />
-              ))
-            ) : (
-              <p className="text-[14px] text-[var(--color-text-muted)]">{tLive('noUpcoming')}</p>
-            )}
-          </div>
-        </Card>
-      </div>
-    </div>
+      )}
+    </Card>
   );
 }
 
 export function PublicLivePanel({ eventSlug }: Props) {
   const tCommon = useTranslations('common');
   const tPublic = useTranslations('public');
-  const [matName, setMatName] = useState<string | null>(null);
-  const { data, isLoading, error, refetch } = usePublicLive(eventSlug, matName);
+  const tLive = useTranslations('live');
+  const translateLive = tLive as unknown as (
+    key: string,
+    values?: Record<string, string | number>,
+  ) => string;
+  const { data, isLoading, error, refetch } = usePublicLive(eventSlug);
 
-  const mats = useMemo(() => data?.mats ?? [], [data?.mats]);
-  const selectedMatName = matName ?? data?.selectedMatName ?? mats[0]?.name ?? null;
+  useRealtimeQuerySync({
+    scope: 'public-live',
+    eventId: data?.eventId ?? null,
+    enabled: !!data?.eventId,
+    queryKeys: [['public', 'live', eventSlug]],
+  });
+
+  const timerDisplay = useFightTimerDisplay(data?.current?.timerState ?? null);
 
   if (error) {
     return (
@@ -225,49 +102,158 @@ export function PublicLivePanel({ eventSlug }: Props) {
     return <SkeletonRows rows={3} cols={2} />;
   }
 
-  if (!data || mats.length === 0 || !selectedMatName) {
-    return <EmptyState title={tPublic('noMatData')} description={tPublic('liveUnavailable')} />;
+  if (!data) {
+    return (
+      <EmptyState
+        title={tPublic('scheduleNotPublished')}
+        description={tPublic('liveUnavailable')}
+      />
+    );
   }
+
+  const currentFight = data.current;
+  const winnerCorner = currentFight
+    ? getFightWinnerCorner({
+        winnerAthleteId: currentFight.winnerAthleteId,
+        redAthleteId: currentFight.redAthleteId,
+        blueAthleteId: currentFight.blueAthleteId,
+      })
+    : null;
+  const winnerName =
+    winnerCorner === 'RED'
+      ? currentFight?.redDisplayName ?? null
+      : winnerCorner === 'BLUE'
+        ? currentFight?.blueDisplayName ?? null
+        : null;
+  const latestResultCorner = data.latestResult
+    ? getFightWinnerCorner({
+        winnerAthleteId: data.latestResult.winnerAthleteId,
+        redAthleteId: data.latestResult.redAthleteId,
+        blueAthleteId: data.latestResult.blueAthleteId,
+      })
+    : null;
+  const latestResultWinner =
+    latestResultCorner === 'RED'
+      ? data.latestResult?.redDisplayName ?? null
+      : latestResultCorner === 'BLUE'
+        ? data.latestResult?.blueDisplayName ?? null
+        : null;
 
   return (
     <div className="space-y-4">
-      {mats.length > 1 && (
-        <Card className="space-y-4 bg-[var(--color-surface-alt)]/40">
-          <div>
-            <h2 className="text-[18px] font-semibold text-[var(--color-text)]">
-              {tPublic('liveMultiMatTitle')}
-            </h2>
-            <p className="mt-1 text-[14px] text-[var(--color-text-muted)]">
-              {tPublic('liveMultiMatInlineBody')}
-            </p>
-          </div>
+      <Card className="border-[var(--color-primary)]/30 bg-[var(--color-surface)] p-5 sm:p-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--color-primary)]">
+          {tLive('currentFight')}
+        </p>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {mats.map((mat) => {
-              const active = mat.name === selectedMatName;
-              return (
-                <button
-                  key={mat.id}
-                  type="button"
-                  onClick={() => setMatName(mat.name)}
-                  className={`rounded-[var(--radius-card)] border p-4 text-left transition ${
-                    active
-                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10'
-                      : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/35'
-                  }`}
+        {!currentFight ? (
+          <p className="mt-3 text-[14px] text-[var(--color-text-muted)]">{tLive('noFights')}</p>
+        ) : (
+          <div className="mt-4 space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-[var(--color-text-muted)]">
+              <span>
+                {currentFight.categoryName} · #{currentFight.scheduleOrder ?? currentFight.boutNo}
+              </span>
+              <span>{currentFight.bracketRoundLabel}</span>
+            </div>
+
+            <LivePhaseBanner
+              eyebrow={translateLive('currentPhase')}
+              headline={phaseLabel(currentFight.timerState, translateLive) ?? translateLive('phaseWaiting')}
+              timerDisplay={timerDisplay.display}
+              timerLabel={tPublic('liveTimer')}
+              detail={translateLive('roundWinsSummary', {
+                red: currentFight.timerState?.redRoundWins ?? 0,
+                blue: currentFight.timerState?.blueRoundWins ?? 0,
+              })}
+              tone={getFightDisplayTone({
+                timerState: currentFight.timerState,
+                winnerAthleteId: currentFight.winnerAthleteId,
+              })}
+            />
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-[var(--radius-card)] border border-[var(--color-danger)]/30 bg-[var(--color-danger-subtle)] p-5">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.22em] text-[var(--color-danger)]">
+                  {tLive('red')}
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-[var(--color-text)] sm:text-3xl">
+                  {currentFight.redDisplayName}
+                </p>
+              </div>
+
+              <div className="rounded-[var(--radius-card)] border border-sky-500/30 bg-sky-500/12 p-5">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.22em] text-sky-400">
+                  {tLive('blue')}
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-[var(--color-text)] sm:text-3xl">
+                  {currentFight.blueDisplayName}
+                </p>
+              </div>
+            </div>
+
+            <FightRoundSummary timerState={currentFight.timerState} t={translateLive} />
+
+            {winnerName ? (
+              <FightResultBanner
+                title={translateLive('fightResult')}
+                winnerName={winnerName}
+                winnerCorner={winnerCorner}
+                methodLabel={
+                  currentFight.winMethod
+                    ? translateLive(`methods.${currentFight.winMethod}`)
+                    : null
+                }
+                notes={currentFight.notes}
+                t={translateLive}
+              />
+            ) : null}
+          </div>
+        )}
+      </Card>
+
+      {latestResultWinner ? (
+        <FightResultBanner
+          title={translateLive('latestResult')}
+          winnerName={latestResultWinner}
+          winnerCorner={latestResultCorner}
+          methodLabel={
+            data.latestResult?.winMethod
+              ? translateLive(`methods.${data.latestResult.winMethod}`)
+              : null
+          }
+          notes={data.latestResult?.notes ?? null}
+          t={translateLive}
+        />
+      ) : null}
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <UpcomingCard label={tPublic('onDeck')} fight={data.onDeck} />
+        <Card>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-muted)]">
+            {tPublic('next')}
+          </p>
+          <div className="mt-3 space-y-3">
+            {data.upNext.length > 0 ? (
+              data.upNext.map((fight) => (
+                <div
+                  key={fight.id}
+                  className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/50 p-4"
                 >
-                  <p className="text-[15px] font-semibold text-[var(--color-text)]">{mat.name}</p>
-                  <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
-                    {active ? tPublic('liveSelectedMat') : tPublic('liveSelectMat')}
+                  <p className="text-[15px] font-semibold text-[var(--color-text)]">
+                    {fight.redDisplayName} {tPublic('versus')} {fight.blueDisplayName}
                   </p>
-                </button>
-              );
-            })}
+                  <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
+                    {fight.categoryName} · #{fight.scheduleOrder ?? fight.boutNo} · {fight.bracketRoundLabel}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-[14px] text-[var(--color-text-muted)]">{tLive('noUpcoming')}</p>
+            )}
           </div>
         </Card>
-      )}
-
-      <MatLiveView eventSlug={eventSlug} matName={selectedMatName} matCount={mats.length} />
+      </div>
     </div>
   );
 }

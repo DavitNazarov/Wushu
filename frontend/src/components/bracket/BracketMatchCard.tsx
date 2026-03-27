@@ -25,18 +25,23 @@ export function BracketMatchCard({
   getAthleteHref,
 }: Props) {
   return (
-    <article className="relative space-y-2 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5">
+    <article className="bracket-bout relative min-h-[168px] space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <BracketConnectorLayer showRight={showConnectorRight} showLeft={showConnectorLeft} />
 
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] text-[var(--color-text-muted)]">#{match.fightNumber}</span>
-        <div className="flex items-center gap-1.5">
-          <BracketScoreBadge score={match.score} winMethod={match.winMethod} />
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+            {tBracket('fightColumns.bout')}
+          </p>
+          <p className="mt-1 text-[15px] font-semibold text-[var(--color-text)]">#{match.fightNumber}</p>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
           <StatusChip status={match.status as never} label={tFightStatus(match.status)} domain="fight" />
+          <BracketScoreBadge score={match.score} winMethod={match.winMethod} />
         </div>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <BracketParticipantRow slot={match.participants.a} tBracket={tBracket} getAthleteHref={getAthleteHref} />
         <BracketParticipantRow slot={match.participants.b} tBracket={tBracket} getAthleteHref={getAthleteHref} />
       </div>

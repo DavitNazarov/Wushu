@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { use } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { logRealtime } from '@/lib/realtime/realtimeLogger';
+import { getSocketServerUrl } from '@/lib/realtime/socketUrl';
 
 type Athlete = { id: string; firstName: string; lastName: string } | null;
 type TimerState = {
@@ -23,6 +25,7 @@ type Fight = {
 };
 
 type MatFeed = {
+  eventId: string;
   mat: { id: string; name: string };
   now: Fight | null;
   onDeck: Fight | null;
@@ -71,6 +74,7 @@ export default function MatScreenPage({
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const matIdRef = useRef<string | null>(null);
+  const feedRef = useRef<MatFeed | null>(null);
   const timerDisplay = useTimer(feed?.now?.timerState ?? null);
 
   const loadFeed = useCallback(async () => {
@@ -81,16 +85,24 @@ export default function MatScreenPage({
       if (res.ok) {
         const data = (await res.json()) as MatFeed;
         setFeed(data);
+        feedRef.current = data;
         matIdRef.current = data.mat.id;
         setConnected(true);
         setLastUpdated(new Date());
         if (socketRef.current?.connected) {
+          socketRef.current.emit('join-event', { eventId: data.eventId });
           socketRef.current.emit('join-mat', { matId: data.mat.id });
+          logRealtime('public-mat-screen', 'join-rooms', {
+            eventId: data.eventId,
+            matId: data.mat.id,
+          });
         }
       } else {
+        feedRef.current = null;
         setConnected(false);
       }
     } catch {
+      feedRef.current = null;
       setConnected(false);
     }
   }, [eventSlug, matName]);
@@ -99,7 +111,7 @@ export default function MatScreenPage({
     queueMicrotask(() => {
       void loadFeed();
     });
-    const socketBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? window.location.origin;
+    const socketBaseUrl = getSocketServerUrl();
     const socket = io(socketBaseUrl, {
       transports: ['websocket', 'polling'],
       withCredentials: true,
@@ -109,13 +121,24 @@ export default function MatScreenPage({
     const onConnect = () => {
       setConnected(true);
       if (matIdRef.current) {
+        if (feedRef.current?.eventId) {
+          socket.emit('join-event', { eventId: feedRef.current.eventId });
+        }
         socket.emit('join-mat', { matId: matIdRef.current });
+        logRealtime('public-mat-screen', 'join-rooms', {
+          eventId: feedRef.current?.eventId ?? null,
+          matId: matIdRef.current,
+        });
       }
     };
     const onDisconnect = () => {
       setConnected(false);
     };
     const onUpdate = () => {
+      logRealtime('public-mat-screen', 'receive-update', {
+        eventSlug,
+        matName,
+      });
       void loadFeed();
     };
 

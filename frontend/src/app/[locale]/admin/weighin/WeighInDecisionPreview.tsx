@@ -54,8 +54,11 @@ export function WeighInDecisionPreview({ preview, isLoading, t }: Props) {
       </h3>
       <InlineAlert variant={variant}>
         <div className="space-y-1">
-          <p className="text-[13px] font-semibold">{mapped.title}</p>
-          <p className="text-[12px] opacity-95">{mapped.description}</p>
+          <p className="text-[13px] font-semibold md:hidden">
+            {mapped.title} {mapped.description ? `— ${mapped.description}` : ''}
+          </p>
+          <p className="hidden text-[13px] font-semibold md:block">{mapped.title}</p>
+          <p className="hidden text-[12px] opacity-95 md:block">{mapped.description}</p>
         </div>
       </InlineAlert>
     </section>

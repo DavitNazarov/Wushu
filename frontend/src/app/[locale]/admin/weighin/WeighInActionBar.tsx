@@ -54,7 +54,18 @@ export function WeighInActionBar({
     (action) => action.code === 'MANUAL_OVERRIDE',
   );
 
-  if (!preview) return null;
+  if (!preview) {
+    return (
+      <section className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <h3 className="text-[12px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+          {t('actionTitle')}
+        </h3>
+        <PrimaryButton className="min-h-[44px] w-full sm:w-auto" disabled>
+          {t('actionRecordWeighIn')}
+        </PrimaryButton>
+      </section>
+    );
+  }
 
   const isManualPrimary = primaryAction?.code === 'SUBMIT_MANUAL_DECISION';
   const manualRequiresCategory = manualDecision === 'MOVED_UP';

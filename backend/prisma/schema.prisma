@@ -99,6 +99,12 @@ enum TimerStateEnum {
   FINISHED
 }
 
+enum TimerPhaseEnum {
+  ROUND
+  REST
+  FINISHED
+}
+
 enum WinMethod {
   POINTS
   KO
@@ -657,10 +663,19 @@ model TimerState {
   fightId        String         @id
   organisationId String
   state          TimerStateEnum @default(IDLE)
+  phase          TimerPhaseEnum @default(ROUND)
   round          Int            @default(1)
   startedAt      DateTime?
   pausedAt       DateTime?
   pausedMs       Int            @default(0)
+  phaseDurationSeconds Int      @default(120)
+  roundDurationSeconds Int      @default(120)
+  restDurationSeconds  Int      @default(60)
+  redRoundWins        Int       @default(0)
+  blueRoundWins       Int       @default(0)
+  round1Winner        FightSlot?
+  round2Winner        FightSlot?
+  round3Winner        FightSlot?
   updatedAt      DateTime       @updatedAt
   updatedByUserId String?
 

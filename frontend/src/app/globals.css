@@ -100,3 +100,53 @@ body {
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: var(--radius-input);
 }
+
+@media (min-width: 768px) {
+  [class*='md:grid-cols-[minmax(300px,40%)_minmax(0,60%)]'] {
+    overflow: visible;
+  }
+
+  [class*='md:grid-cols-[minmax(300px,40%)_minmax(0,60%)]'] > section:nth-of-type(2) {
+    position: sticky;
+    top: calc(var(--topbar-height) + 2rem);
+    max-height: calc(100vh - var(--topbar-height) - 3rem);
+    overflow-y: auto;
+    align-self: flex-start;
+  }
+}
+
+.bracket-bout {
+  position: relative;
+}
+
+.bracket-connector-fallback {
+  display: none;
+}
+
+.bracket-round:not(.bracket-round--last) .bracket-bout::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -1.25rem;
+  width: 1.25rem;
+  height: 2px;
+  transform: translateY(-50%);
+  background-color: var(--color-border);
+}
+
+.bracket-round:not(.bracket-round--last) .bracket-bout:nth-child(odd):not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -1.25rem;
+  width: 1.25rem;
+  height: calc(100% + 1rem);
+  background:
+    linear-gradient(var(--color-border), var(--color-border)) left center / 100% 2px no-repeat,
+    linear-gradient(var(--color-border), var(--color-border)) right top / 2px 100% no-repeat;
+}
+
+.bracket-round.bracket-round--last .bracket-bout::after,
+.bracket-round.bracket-round--last .bracket-bout::before {
+  display: none;
+}

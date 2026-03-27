@@ -102,7 +102,7 @@ export class ScheduleController {
   ) {
     const auth = req.auth!;
     try {
-      const updates = await this.schedule.autoSchedule({
+      const result = await this.schedule.autoSchedule({
         organisationId: auth.organisationId,
         eventId: body.eventId,
         actorUserId: auth.sub,
@@ -116,9 +116,10 @@ export class ScheduleController {
       });
       this.gateway.emitScheduleUpdate(body.eventId, {
         type: 'SCHEDULE_AUTO',
-        updatedFightIds: updates.map((item) => item.id),
+        updatedFightIds: result.updates.map((item) => item.id),
+        matIds: [...new Set(result.updates.map((item) => item.matId))],
       });
-      return updates;
+      return result;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'EVENT_NOT_FOUND')

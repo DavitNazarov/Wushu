@@ -24,9 +24,13 @@ export function BracketRoundColumn({
   getAthleteHref,
 }: Props) {
   return (
-    <section className="w-[308px] shrink-0 space-y-3">
+    <section
+      className={`bracket-round w-[336px] shrink-0 space-y-4 ${
+        isFirst ? 'bracket-round--first' : ''
+      } ${isLast ? 'bracket-round--last' : ''}`}
+    >
       <BracketRoundHeader round={round} title={title} />
-      <div className="space-y-3">
+      <div className="bracket-round-matches space-y-4">
         {round.matches.map((match) => (
           <BracketMatchCard
             key={match.id}

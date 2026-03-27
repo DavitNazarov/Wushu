@@ -65,33 +65,31 @@ export function AthleteProfileIdentity({ athlete, scope }: Props) {
           ) : null}
         </div>
 
-        {scope !== 'public' ? (
-          <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/35 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-                <UserRound className="h-4 w-4" />
-                <p className="text-[11px] uppercase tracking-wide">{t('coaches')}</p>
-              </div>
-              <span className="rounded-full bg-[var(--color-primary-subtle)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-primary)]">
-                {coachCount}
-              </span>
+        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/35 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+              <UserRound className="h-4 w-4" />
+              <p className="text-[11px] uppercase tracking-wide">{t('coaches')}</p>
             </div>
-            {coachCount > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {athlete.coaches?.map((coach) => (
-                  <span
-                    key={coach.id}
-                    className="rounded-full bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text)]"
-                  >
-                    {coach.displayName}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-[13px] text-[var(--color-text-muted)]">{t('noCoaches')}</p>
-            )}
+            <span className="rounded-full bg-[var(--color-primary-subtle)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-primary)]">
+              {coachCount}
+            </span>
           </div>
-        ) : null}
+          {coachCount > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {athlete.coaches?.map((coach) => (
+                <span
+                  key={coach.id}
+                  className="rounded-full bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text)]"
+                >
+                  {coach.displayName}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-[13px] text-[var(--color-text-muted)]">{t('noCoaches')}</p>
+          )}
+        </div>
       </div>
     </Card>
   );

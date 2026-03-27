@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import type {
   EventLifecycle,
+  FightSlot,
   FightStatus,
   Prisma,
+  TimerPhaseEnum,
   TimerStateEnum,
   WinMethod,
 } from '@prisma/client';
@@ -18,12 +20,26 @@ import { resolveCompetitionFormat } from '../draw/competition-format';
 import { roundStageLabel } from '../draw/brackets.helpers';
 import {
   computeLiveStatuses,
+  deriveLiveQueueBoard,
   type LiveFightStatus,
 } from './live-queue.logic';
 import {
   hasRecordedResult,
   isDownstreamFightLocked,
 } from './result-safeguards';
+import { buildScheduleRows } from '../schedule/schedule-order.logic';
+import {
+  buildTimerView,
+  DEFAULT_REST_DURATION_SECONDS,
+  getElapsedMs,
+  getFightRoundDurationSeconds,
+  getFightWinnerFromRounds,
+  getRemainingMs,
+  getRoundWinnerField,
+  isAwaitingRoundResult,
+  isPhaseExpired,
+  type FightTimerSnapshot,
+} from './fight-timer.logic';
 
 const FIGHT_STATE_TRANSITIONS: Record<FightStatus, FightStatus[]> = {
   QUEUED: ['ON_DECK'],
@@ -106,6 +122,33 @@ export class FightsService {
     return 'NOT_STARTED';
   }
 
+  private resolveRoundDurationSeconds(input: {
+    roundDurationSeconds?: number | null;
+    eventWeightCategory?: {
+      eventAgeGroup?: {
+        categoryTemplateAgeGroup?: {
+          roundDurationSeconds: number;
+        } | null;
+      } | null;
+    } | null;
+  }): number {
+    return getFightRoundDurationSeconds(input);
+  }
+
+  private toTimerStateView(timer: FightTimerSnapshot | null) {
+    return buildTimerView(timer);
+  }
+
+  private getWinnerAthleteIdBySlot(
+    fight: {
+      redAthleteId: string | null;
+      blueAthleteId: string | null;
+    },
+    winner: FightSlot,
+  ): string | null {
+    return winner === 'RED' ? fight.redAthleteId : fight.blueAthleteId;
+  }
+
   async list(params: {
     organisationId: string;
     eventId?: string;
@@ -149,6 +192,147 @@ export class FightsService {
     });
   }
 
+  async getLiveQueueBoard(input: {
+    organisationId: string;
+    eventId: string;
+  }) {
+    const event = await this.prisma.event.findFirst({
+      where: { id: input.eventId, organisationId: input.organisationId },
+      select: { id: true },
+    });
+    if (!event) throw new Error('EVENT_NOT_FOUND');
+
+    const [mats, fights] = await Promise.all([
+      this.prisma.mat.findMany({
+        where: {
+          organisationId: input.organisationId,
+          eventId: input.eventId,
+        },
+        orderBy: { order: 'asc' },
+      }),
+      this.prisma.fight.findMany({
+        where: {
+          organisationId: input.organisationId,
+          eventId: input.eventId,
+        },
+        include: {
+          mat: true,
+          redAthlete: { select: { id: true, firstName: true, lastName: true } },
+          blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+          winnerAthlete: {
+            select: { id: true, firstName: true, lastName: true },
+          },
+          timerState: true,
+          eventWeightCategory: {
+            select: {
+              categoryTemplateWeight: {
+                select: { name: true, sortOrder: true },
+              },
+              eventAgeGroup: {
+                select: {
+                  categoryTemplateAgeGroup: {
+                    select: { name: true, sortOrder: true, roundDurationSeconds: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: [
+          { eventWeightCategoryId: 'asc' },
+          { categoryCode: 'asc' },
+          { round: 'asc' },
+          { boutNo: 'asc' },
+        ],
+      }),
+    ]);
+
+    const scheduleRows = buildScheduleRows(fights).map((row) => ({
+      ...row,
+      liveStatus: 'PENDING' as LiveFightStatus,
+    }));
+    const globalQueueRows = scheduleRows.map((row) => ({
+      ...row,
+      matId: null,
+      orderInMat: null,
+      isFinished: row.status === 'COMPLETE' || row.status === 'CONFIRMED',
+    }));
+    const liveStatuses = computeLiveStatuses(
+      globalQueueRows.map((row) => ({
+        id: row.id,
+        matId: row.matId,
+        orderInMat: row.orderInMat,
+        scheduleOrder: row.scheduleOrder,
+        status: row.status,
+        isPlayable: row.isPlayable,
+        isFinished: row.isFinished,
+      })),
+    );
+
+    for (const row of scheduleRows) {
+      row.liveStatus = liveStatuses.get(row.id) ?? 'PENDING';
+    }
+
+    const rowById = new Map(scheduleRows.map((row) => [row.id, row]));
+    const fightById = new Map(fights.map((fight) => [fight.id, fight]));
+    const board = deriveLiveQueueBoard(
+      globalQueueRows.map((row) => ({
+        ...row,
+        liveStatus: liveStatuses.get(row.id) ?? 'PENDING',
+      })),
+    );
+
+    const toFightRow = (fightId: string) => {
+      const row = rowById.get(fightId);
+      const fight = fightById.get(fightId);
+      if (!row || !fight) return null;
+
+      return {
+        id: fight.id,
+        categoryCode: row.categoryCode,
+        categoryName: row.categoryName,
+        ageGroupName: row.ageGroupName,
+        competitionFormat: row.competitionFormat,
+        round: fight.round,
+        boutNo: fight.boutNo,
+        bracketRoundLabel: row.bracketRoundLabel,
+        scheduleOrder: row.scheduleOrder,
+        status: row.status,
+        liveStatus: row.liveStatus,
+        isPlayable: row.isPlayable,
+        redAthleteId: fight.redAthleteId ?? null,
+        blueAthleteId: fight.blueAthleteId ?? null,
+        winnerAthleteId: fight.winnerAthleteId ?? null,
+        winMethod: fight.winMethod ?? null,
+        notes: fight.notes ?? null,
+        redDisplayName: row.redDisplayName,
+        blueDisplayName: row.blueDisplayName,
+        matId: row.matId,
+        matName: row.matName,
+        orderInMat: row.orderInMat,
+        scheduledAt: row.scheduledAt,
+        timerState: this.toTimerStateView(fight.timerState),
+      };
+    };
+
+    return {
+      eventId: input.eventId,
+      mats,
+      selectedMatId: null,
+      currentFight: board.current ? toFightRow(board.current.id) : null,
+      onDeckFight: board.onDeck ? toFightRow(board.onDeck.id) : null,
+      nextFights: board.next
+        .map((row) => toFightRow(row.id))
+        .filter((row): row is NonNullable<typeof row> => row != null),
+      queuePreview: board.queue
+        .map((row) => toFightRow(row.id))
+        .filter((row): row is NonNullable<typeof row> => row != null),
+      completedFights: board.completed
+        .map((row) => toFightRow(row.id))
+        .filter((row): row is NonNullable<typeof row> => row != null),
+    };
+  }
+
   async getLiveCategoryBoard(input: {
     organisationId: string;
     eventId: string;
@@ -182,7 +366,7 @@ export class FightsService {
             eventAgeGroup: {
               select: {
                 categoryTemplateAgeGroup: {
-                  select: { name: true },
+                  select: { name: true, roundDurationSeconds: true },
                 },
               },
             },
@@ -321,13 +505,7 @@ export class FightsService {
               ? `Winner of ${blueSourceScheduleOrder}`
               : 'TBD';
           const timerState = fight.timerState
-            ? {
-                state: fight.timerState.state,
-                startedAt: fight.timerState.startedAt,
-                pausedAt: fight.timerState.pausedAt,
-                elapsed: fight.timerState.pausedMs,
-                updatedAt: fight.timerState.updatedAt,
-              }
+            ? this.toTimerStateView(fight.timerState)
             : null;
           const isPlayable = this.isFightPlayable({
             redAthleteId: fight.redAthleteId,
@@ -544,6 +722,334 @@ export class FightsService {
     };
   }
 
+  private async finalizeFightResult(
+    tx: Prisma.TransactionClient,
+    input: {
+      fight: {
+        id: string;
+        organisationId: string;
+        eventId: string;
+        event: { lifecycle: EventLifecycle };
+        redAthleteId: string | null;
+        blueAthleteId: string | null;
+        nextFightId: string | null;
+        nextFightSlot: 'RED' | 'BLUE' | null;
+      };
+      actorUserId: string;
+      winner: FightSlot;
+      method: WinMethod;
+      notes?: string | null;
+      timerState?: FightTimerSnapshot | null;
+      reason?: string | null;
+      override?: boolean;
+      auditAction: string;
+    },
+  ) {
+    const winnerAthleteId = this.getWinnerAthleteIdBySlot(input.fight, input.winner);
+    if (!winnerAthleteId) throw new Error('WINNER_NOT_PRESENT');
+
+    const now = new Date();
+    const updated = await tx.fight.update({
+      where: { id: input.fight.id },
+      data: {
+        winnerAthleteId,
+        loserAthleteId:
+          winnerAthleteId === input.fight.redAthleteId
+            ? input.fight.blueAthleteId ?? null
+            : input.fight.redAthleteId ?? null,
+        winMethod: input.method,
+        notes: input.notes ?? null,
+        status: 'CONFIRMED',
+        confirmedByUserId: input.actorUserId,
+        confirmedAt: now,
+      },
+    });
+
+    const timer =
+      input.timerState ??
+      (await tx.timerState.findUnique({
+        where: { fightId: input.fight.id },
+      }));
+    let finalizedTimer: FightTimerSnapshot | null = null;
+    if (timer) {
+      const extraElapsed =
+        timer.state === 'RUNNING' && timer.startedAt
+          ? Math.max(0, now.getTime() - timer.startedAt.getTime())
+          : 0;
+
+      finalizedTimer = await tx.timerState.update({
+        where: { fightId: input.fight.id },
+        data: {
+          state: 'FINISHED',
+          phase: 'FINISHED',
+          startedAt: null,
+          pausedAt: now,
+          pausedMs: timer.pausedMs + extraElapsed,
+          phaseDurationSeconds: 0,
+          updatedByUserId: input.actorUserId,
+        },
+      });
+    }
+
+    const advanced = await this.propagateWinnerToNextFight(tx, updated);
+
+    await this.audit.write(
+      {
+        organisationId: input.fight.organisationId,
+        eventId: input.fight.eventId,
+        actorUserId: input.actorUserId,
+        action: input.auditAction,
+        entityType: 'fight',
+        entityId: input.fight.id,
+        before: input.fight as unknown as Prisma.JsonValue,
+        after: updated as unknown as Prisma.JsonValue,
+        reason: input.reason ?? null,
+        override: input.override ?? false,
+      },
+      tx,
+    );
+
+    return { fight: updated, advanced, timer: finalizedTimer };
+  }
+
+  async recordRoundResult(input: {
+    organisationId: string;
+    fightId: string;
+    actorUserId: string;
+    winner: FightSlot;
+    expectedUpdatedAt?: string | null;
+  }) {
+    const fight = await this.prisma.fight.findFirst({
+      where: { id: input.fightId, organisationId: input.organisationId },
+      include: {
+        event: true,
+        timerState: true,
+      },
+    });
+    if (!fight) throw new Error('FIGHT_NOT_FOUND');
+    this.assertLiveStage(fight.event.lifecycle);
+
+    if (!fight.timerState) throw new Error('TIMER_NOT_INITIALIZED');
+    if (fight.timerState.phase !== 'ROUND') throw new Error('INVALID_TIMER_PHASE');
+    if (
+      fight.timerState.state === 'RUNNING' &&
+      getRemainingMs(fight.timerState, new Date()) > 0
+    ) {
+      throw new Error('ROUND_STILL_RUNNING');
+    }
+    if (input.expectedUpdatedAt) {
+      const expectedMs = new Date(input.expectedUpdatedAt).getTime();
+      if (
+        Number.isNaN(expectedMs) ||
+        fight.timerState.updatedAt.getTime() !== expectedMs
+      ) {
+        throw new Error('TIMER_STALE_UPDATE');
+      }
+    }
+
+    const winnerField = getRoundWinnerField(fight.timerState.round);
+    if (fight.timerState[winnerField] && fight.timerState[winnerField] !== input.winner) {
+      throw new Error('ROUND_RESULT_ALREADY_SET');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const latestTimer = await tx.timerState.findUnique({
+        where: { fightId: input.fightId },
+      });
+      if (!latestTimer) throw new Error('TIMER_NOT_INITIALIZED');
+
+      const redRoundWins =
+        latestTimer.redRoundWins + (input.winner === 'RED' ? 1 : 0);
+      const blueRoundWins =
+        latestTimer.blueRoundWins + (input.winner === 'BLUE' ? 1 : 0);
+
+      const updatedTimer = await tx.timerState.update({
+        where: { fightId: input.fightId },
+        data: {
+          [winnerField]: input.winner,
+          redRoundWins,
+          blueRoundWins,
+          state: 'PAUSED',
+          startedAt: null,
+          pausedAt: new Date(),
+          pausedMs: latestTimer.phaseDurationSeconds * 1000,
+          updatedByUserId: input.actorUserId,
+        },
+      });
+
+      const fightWinner = getFightWinnerFromRounds({
+        redRoundWins,
+        blueRoundWins,
+      });
+
+      if (fightWinner || latestTimer.round >= 3) {
+        return this.finalizeFightResult(tx, {
+          fight,
+          actorUserId: input.actorUserId,
+          winner: fightWinner ?? input.winner,
+          method: 'POINTS',
+          timerState: updatedTimer,
+          auditAction: 'FIGHT_ROUND_RESULT_SET',
+        });
+      }
+
+      const restTimer = await tx.timerState.update({
+        where: { fightId: input.fightId },
+        data: {
+          phase: 'REST',
+          state: 'RUNNING',
+          startedAt: new Date(),
+          pausedAt: null,
+          pausedMs: 0,
+          phaseDurationSeconds: latestTimer.restDurationSeconds,
+          updatedByUserId: input.actorUserId,
+        },
+      });
+
+      const updatedFight = await tx.fight.update({
+        where: { id: input.fightId },
+        data: { status: 'IN_PROGRESS' },
+      });
+
+      await this.audit.write(
+        {
+          organisationId: fight.organisationId,
+          eventId: fight.eventId,
+          actorUserId: input.actorUserId,
+          action: 'FIGHT_ROUND_RESULT_SET',
+          entityType: 'fight',
+          entityId: input.fightId,
+          before: latestTimer as unknown as Prisma.JsonValue,
+          after: restTimer as unknown as Prisma.JsonValue,
+        },
+        tx,
+      );
+
+      return { fight: updatedFight, advanced: null, timer: restTimer };
+    });
+  }
+
+  async advanceExpiredTimers(now = new Date()) {
+    const activeTimers = await this.prisma.timerState.findMany({
+      where: {
+        state: 'RUNNING',
+        phase: { in: ['ROUND', 'REST'] },
+        startedAt: { not: null },
+        fight: {
+          status: { in: ['IN_PROGRESS', 'PAUSED'] },
+          event: { lifecycle: 'LIVE' },
+        },
+      },
+      include: {
+        fight: true,
+      },
+    });
+
+    const transitions: Array<{
+      eventId: string;
+      matId: string | null;
+      fight: Prisma.FightGetPayload<object>;
+      timer: ReturnType<FightsService['toTimerStateView']>;
+      scheduleEventType: string;
+      advancedFight: Prisma.FightGetPayload<object> | null;
+    }> = [];
+
+    for (const timer of activeTimers) {
+      if (!isPhaseExpired(timer, now)) continue;
+
+      const transition = await this.prisma.$transaction(async (tx) => {
+        const currentTimer = await tx.timerState.findUnique({
+          where: { fightId: timer.fightId },
+          include: { fight: true },
+        });
+        if (!currentTimer || !isPhaseExpired(currentTimer, now)) {
+          return null;
+        }
+
+        if (currentTimer.phase === 'ROUND') {
+          const updatedTimer = await tx.timerState.update({
+            where: { fightId: currentTimer.fightId },
+            data: {
+              state: 'PAUSED',
+              startedAt: null,
+              pausedAt: now,
+              pausedMs: currentTimer.phaseDurationSeconds * 1000,
+            },
+          });
+          const updatedFight = await tx.fight.update({
+            where: { id: currentTimer.fightId },
+            data: { status: 'PAUSED' },
+          });
+          await this.audit.write(
+            {
+              organisationId: currentTimer.organisationId,
+              eventId: currentTimer.fight.eventId,
+              action: 'FIGHT_ROUND_TIMER_EXPIRED',
+              entityType: 'fight',
+              entityId: currentTimer.fightId,
+              before: currentTimer as unknown as Prisma.JsonValue,
+              after: updatedTimer as unknown as Prisma.JsonValue,
+            },
+            tx,
+          );
+
+          return {
+            eventId: currentTimer.fight.eventId,
+            matId: currentTimer.fight.matId,
+            fight: updatedFight,
+            timer: this.toTimerStateView(updatedTimer),
+            scheduleEventType: 'LIVE_ROUND_ENDED',
+            advancedFight: null,
+          };
+        }
+
+        const updatedTimer = await tx.timerState.update({
+          where: { fightId: currentTimer.fightId },
+          data: {
+            phase: 'ROUND',
+            state: 'RUNNING',
+            round: currentTimer.round + 1,
+            startedAt: now,
+            pausedAt: null,
+            pausedMs: 0,
+            phaseDurationSeconds: currentTimer.roundDurationSeconds,
+          },
+        });
+        const updatedFight = await tx.fight.update({
+          where: { id: currentTimer.fightId },
+          data: { status: 'IN_PROGRESS' },
+        });
+        await this.audit.write(
+          {
+            organisationId: currentTimer.organisationId,
+            eventId: currentTimer.fight.eventId,
+            action: 'FIGHT_REST_COMPLETED',
+            entityType: 'fight',
+            entityId: currentTimer.fightId,
+            before: currentTimer as unknown as Prisma.JsonValue,
+            after: updatedTimer as unknown as Prisma.JsonValue,
+          },
+          tx,
+        );
+
+        return {
+          eventId: currentTimer.fight.eventId,
+          matId: currentTimer.fight.matId,
+          fight: updatedFight,
+          timer: this.toTimerStateView(updatedTimer),
+          scheduleEventType: 'LIVE_NEXT_ROUND_STARTED',
+          advancedFight: null,
+        };
+      });
+
+      if (transition) {
+        transitions.push(transition);
+      }
+    }
+
+    return transitions;
+  }
+
   async startFight(input: {
     organisationId: string;
     fightId: string;
@@ -613,7 +1119,21 @@ export class FightsService {
   }> {
     const fight = await this.prisma.fight.findFirst({
       where: { id: input.fightId, organisationId: input.organisationId },
-      include: { event: true },
+      include: {
+        event: true,
+        timerState: true,
+        eventWeightCategory: {
+          select: {
+            eventAgeGroup: {
+              select: {
+                categoryTemplateAgeGroup: {
+                  select: { roundDurationSeconds: true },
+                },
+              },
+            },
+          },
+        },
+      },
     });
     if (!fight) throw new Error('FIGHT_NOT_FOUND');
 
@@ -650,6 +1170,10 @@ export class FightsService {
     }
 
     const updateData: Prisma.FightUncheckedUpdateInput = { status: input.to };
+    const resolvedRoundDurationSeconds = this.resolveRoundDurationSeconds(fight);
+    if (input.to === 'IN_PROGRESS' && !fight.roundDurationSeconds) {
+      updateData.roundDurationSeconds = resolvedRoundDurationSeconds;
+    }
     if (input.to === 'CONFIRMED') {
       updateData.confirmedByUserId = input.actorUserId;
       updateData.confirmedAt = new Date();
@@ -686,10 +1210,14 @@ export class FightsService {
               fightId: input.fightId,
               organisationId: input.organisationId,
               state: 'RUNNING',
+              phase: 'ROUND',
               round: 1,
               startedAt: now,
               pausedAt: null,
               pausedMs: 0,
+              phaseDurationSeconds: resolvedRoundDurationSeconds,
+              roundDurationSeconds: resolvedRoundDurationSeconds,
+              restDurationSeconds: DEFAULT_REST_DURATION_SECONDS,
               updatedByUserId: input.actorUserId,
             },
           });
@@ -708,10 +1236,15 @@ export class FightsService {
             where: { fightId: input.fightId },
             data: {
               state: 'RUNNING',
+              phase: 'ROUND',
               round: timer.round || 1,
               startedAt: now,
               pausedAt: null,
               pausedMs: 0,
+              phaseDurationSeconds: timer.roundDurationSeconds || resolvedRoundDurationSeconds,
+              roundDurationSeconds: timer.roundDurationSeconds || resolvedRoundDurationSeconds,
+              restDurationSeconds:
+                timer.restDurationSeconds || DEFAULT_REST_DURATION_SECONDS,
               updatedByUserId: input.actorUserId,
             },
           });
@@ -756,7 +1289,21 @@ export class FightsService {
   }) {
     const fight = await this.prisma.fight.findFirst({
       where: { id: input.fightId, organisationId: input.organisationId },
-      include: { timerState: true, event: true },
+      include: {
+        timerState: true,
+        event: true,
+        eventWeightCategory: {
+          select: {
+            eventAgeGroup: {
+              select: {
+                categoryTemplateAgeGroup: {
+                  select: { roundDurationSeconds: true },
+                },
+              },
+            },
+          },
+        },
+      },
     });
     if (!fight) throw new Error('FIGHT_NOT_FOUND');
     if (!canRunLiveCompetition(fight.event.lifecycle)) {
@@ -794,41 +1341,78 @@ export class FightsService {
     let startedAt: Date | null = existing?.startedAt ?? null;
     let pausedAt: Date | null = null;
     let pausedMs = existing?.pausedMs ?? 0;
+    let phase: TimerPhaseEnum = existing?.phase ?? 'ROUND';
+    let phaseDurationSeconds =
+      existing?.phaseDurationSeconds ??
+      this.resolveRoundDurationSeconds(fight);
+    let round = input.round ?? existing?.round ?? 1;
+    let fightStatusUpdate: FightStatus | null = null;
 
     switch (input.action) {
       case 'START':
         newState = 'RUNNING';
+        phase = existing?.phase ?? 'ROUND';
+        round = input.round ?? existing?.round ?? 1;
         startedAt = now;
+        pausedAt = null;
         pausedMs = 0;
+        phaseDurationSeconds =
+          phase === 'REST'
+            ? existing?.restDurationSeconds ?? DEFAULT_REST_DURATION_SECONDS
+            : existing?.roundDurationSeconds ?? this.resolveRoundDurationSeconds(fight);
+        fightStatusUpdate = 'IN_PROGRESS';
         break;
       case 'PAUSE':
         if (existing?.state !== 'RUNNING') throw new Error('TIMER_NOT_RUNNING');
         newState = 'PAUSED';
         pausedAt = now;
-        pausedMs =
-          existing.pausedMs +
-          (now.getTime() - (existing.startedAt?.getTime() ?? now.getTime()));
-        startedAt = existing.startedAt;
+        pausedMs = getElapsedMs(existing, now);
+        startedAt = null;
+        phase = existing.phase;
+        phaseDurationSeconds = existing.phaseDurationSeconds;
+        round = existing.round;
+        fightStatusUpdate = 'PAUSED';
         break;
       case 'RESUME':
         if (existing?.state !== 'PAUSED') throw new Error('TIMER_NOT_PAUSED');
         newState = 'RUNNING';
         startedAt = now;
+        pausedAt = null;
         pausedMs = existing.pausedMs;
+        phase = existing.phase;
+        phaseDurationSeconds = existing.phaseDurationSeconds;
+        round = existing.round;
+        fightStatusUpdate = 'IN_PROGRESS';
         break;
       case 'RESET':
         newState = 'IDLE';
+        phase = 'ROUND';
+        round = 1;
         startedAt = null;
+        pausedAt = null;
         pausedMs = 0;
+        phaseDurationSeconds = this.resolveRoundDurationSeconds(fight);
+        fightStatusUpdate = 'PAUSED';
         break;
     }
 
     const timerData = {
       state: newState,
-      round: input.round ?? existing?.round ?? 1,
+      phase,
+      round,
       startedAt,
       pausedAt,
       pausedMs,
+      phaseDurationSeconds,
+      roundDurationSeconds:
+        existing?.roundDurationSeconds ?? this.resolveRoundDurationSeconds(fight),
+      restDurationSeconds:
+        existing?.restDurationSeconds ?? DEFAULT_REST_DURATION_SECONDS,
+      redRoundWins: existing?.redRoundWins ?? 0,
+      blueRoundWins: existing?.blueRoundWins ?? 0,
+      round1Winner: existing?.round1Winner ?? null,
+      round2Winner: existing?.round2Winner ?? null,
+      round3Winner: existing?.round3Winner ?? null,
       updatedByUserId: input.actorUserId,
     };
 
@@ -842,6 +1426,13 @@ export class FightsService {
         },
         update: timerData,
       });
+
+      if (fightStatusUpdate) {
+        await tx.fight.update({
+          where: { id: fight.id },
+          data: { status: fightStatusUpdate },
+        });
+      }
 
       await this.audit.write(
         {
@@ -914,63 +1505,16 @@ export class FightsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const now = new Date();
-      const updated = await tx.fight.update({
-        where: { id: input.fightId },
-        data: {
-          winnerAthleteId,
-          loserAthleteId:
-            winnerAthleteId === fight.redAthleteId
-              ? fight.blueAthleteId ?? null
-              : fight.redAthleteId ?? null,
-          winMethod: input.method,
-          notes: input.notes ?? null,
-          status: 'CONFIRMED',
-          confirmedByUserId: input.actorUserId,
-          confirmedAt: now,
-        },
+      return this.finalizeFightResult(tx, {
+        fight,
+        actorUserId: input.actorUserId,
+        winner: input.winner,
+        method: input.method,
+        notes: input.notes ?? null,
+        reason: input.reason ?? null,
+        override: input.override ?? false,
+        auditAction: input.override ? 'FIGHT_RESULT_AMENDED' : 'FIGHT_RESULT_SET',
       });
-
-      const timer = await tx.timerState.findUnique({
-        where: { fightId: input.fightId },
-      });
-      if (timer) {
-        const extraElapsed =
-          timer.state === 'RUNNING' && timer.startedAt
-            ? Math.max(0, now.getTime() - timer.startedAt.getTime())
-            : 0;
-
-        await tx.timerState.update({
-          where: { fightId: input.fightId },
-          data: {
-            state: 'FINISHED',
-            startedAt: null,
-            pausedAt: now,
-            pausedMs: timer.pausedMs + extraElapsed,
-            updatedByUserId: input.actorUserId,
-          },
-        });
-      }
-
-      const advanced = await this.propagateWinnerToNextFight(tx, updated);
-
-      await this.audit.write(
-        {
-          organisationId: input.organisationId,
-          eventId: fight.eventId,
-          actorUserId: input.actorUserId,
-          action: input.override ? 'FIGHT_RESULT_AMENDED' : 'FIGHT_RESULT_SET',
-          entityType: 'fight',
-          entityId: input.fightId,
-          before: fight as unknown as Prisma.JsonValue,
-          after: updated as unknown as Prisma.JsonValue,
-          reason: input.reason ?? null,
-          override: input.override ?? false,
-        },
-        tx,
-      );
-
-      return { fight: updated, advanced };
     });
   }
 

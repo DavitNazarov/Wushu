@@ -5,23 +5,24 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from '@/i18n/navigation';
 
-type TabId = 'overview' | 'brackets' | 'schedule' | 'live' | 'faq';
+type TabId = 'overview' | 'brackets' | 'schedule' | 'live' | 'results' | 'faq';
 
 type EventTabsProps = {
   overview: React.ReactNode;
   brackets: React.ReactNode;
   schedule: React.ReactNode;
   live: React.ReactNode;
+  results: React.ReactNode;
   faq: React.ReactNode;
 };
 
-const TAB_IDS: TabId[] = ['overview', 'brackets', 'schedule', 'live', 'faq'];
+const TAB_IDS: TabId[] = ['overview', 'brackets', 'schedule', 'live', 'results', 'faq'];
 
 function isTabId(value: string | null): value is TabId {
   return TAB_IDS.includes((value ?? '') as TabId);
 }
 
-export function EventTabs({ overview, brackets, schedule, live, faq }: EventTabsProps) {
+export function EventTabs({ overview, brackets, schedule, live, results, faq }: EventTabsProps) {
   const tPublic = useTranslations('public');
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -36,7 +37,7 @@ export function EventTabs({ overview, brackets, schedule, live, faq }: EventTabs
       if (tab === 'overview') next.delete('tab');
       else next.set('tab', tab);
       const qs = next.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname);
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
     [pathname, router, searchParams],
   );
@@ -46,6 +47,7 @@ export function EventTabs({ overview, brackets, schedule, live, faq }: EventTabs
     { id: 'brackets', label: tPublic('brackets') },
     { id: 'schedule', label: tPublic('schedule') },
     { id: 'live', label: tPublic('live') },
+    { id: 'results', label: tPublic('results') },
     { id: 'faq', label: tPublic('faq') },
   ];
 
@@ -74,6 +76,7 @@ export function EventTabs({ overview, brackets, schedule, live, faq }: EventTabs
       {active === 'brackets' && brackets}
       {active === 'schedule' && schedule}
       {active === 'live' && live}
+      {active === 'results' && results}
       {active === 'faq' && faq}
     </div>
   );

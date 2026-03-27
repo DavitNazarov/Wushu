@@ -13,6 +13,7 @@ import {
   roundStageLabel,
 } from './brackets.helpers';
 import { resolveCompetitionFormat } from './competition-format';
+import { resolveBracketParticipantSlot } from './bracket-slot-resolver';
 import type {
   BracketCategoryDetailsResponse,
   BracketFightListRow,
@@ -316,6 +317,57 @@ export class BracketsService {
           ? athleteMeta.get(fight.blueAthleteId)
           : undefined;
 
+      const redParticipant =
+        fight.redAthlete == null
+          ? null
+          : {
+              athleteId: fight.redAthlete.id,
+              athleteName: `${fight.redAthlete.firstName} ${fight.redAthlete.lastName}`,
+              clubName: fight.redAthlete.club?.name ?? redMeta?.clubName ?? null,
+              country: fight.redAthlete.club?.country ?? null,
+              athleteCode:
+                fight.redAthlete.documentId ?? redMeta?.athleteCode ?? fight.redAthlete.id,
+              movedUp: redMeta?.movedUp ?? false,
+              overrideUsed: redMeta?.overrideUsed ?? false,
+              originalCategory: redMeta?.originalCategory ?? null,
+              finalCategory: redMeta?.finalCategory ?? overviewCategory.categoryName,
+            };
+      const blueParticipant =
+        fight.blueAthlete == null
+          ? null
+          : {
+              athleteId: fight.blueAthlete.id,
+              athleteName: `${fight.blueAthlete.firstName} ${fight.blueAthlete.lastName}`,
+              clubName: fight.blueAthlete.club?.name ?? blueMeta?.clubName ?? null,
+              country: fight.blueAthlete.club?.country ?? null,
+              athleteCode:
+                fight.blueAthlete.documentId ??
+                blueMeta?.athleteCode ??
+                fight.blueAthlete.id,
+              movedUp: blueMeta?.movedUp ?? false,
+              overrideUsed: blueMeta?.overrideUsed ?? false,
+              originalCategory: blueMeta?.originalCategory ?? null,
+              finalCategory: blueMeta?.finalCategory ?? overviewCategory.categoryName,
+            };
+      const redSlot = resolveBracketParticipantSlot({
+        side: 'red',
+        fight,
+        participant: redParticipant,
+        competitionFormat,
+        openingRound,
+        getSourceFight: (sourceBoutNo) =>
+          fightsByRoundBout.get(`${fight.round - 1}:${sourceBoutNo}`) ?? null,
+      });
+      const blueSlot = resolveBracketParticipantSlot({
+        side: 'blue',
+        fight,
+        participant: blueParticipant,
+        competitionFormat,
+        openingRound,
+        getSourceFight: (sourceBoutNo) =>
+          fightsByRoundBout.get(`${fight.round - 1}:${sourceBoutNo}`) ?? null,
+      });
+
       const matchup = {
         fightId: fight.id,
         boutNo: fight.boutNo,
@@ -324,68 +376,17 @@ export class BracketsService {
         winMethod: fight.winMethod,
         score: extractScoreToken(fight.notes),
         winnerAthleteId: fight.winnerAthleteId,
-        isBye: (() => {
-          const missingRed =
-            fight.redAthleteId == null && fight.blueAthleteId != null;
-          const missingBlue =
-            fight.redAthleteId != null && fight.blueAthleteId == null;
-          if (!missingRed && !missingBlue) return false;
-
-          // For non-opening rounds, a missing side can be a normal unresolved
-          // dependency ("Winner of X"), not a structural BYE.
-          if (fight.round > openingRound) {
-            if (missingRed) {
-              const redSource = fightsByRoundBout.get(
-                `${fight.round - 1}:${fight.boutNo * 2 - 1}`,
-              );
-              if (redSource) return false;
-            }
-            if (missingBlue) {
-              const blueSource = fightsByRoundBout.get(
-                `${fight.round - 1}:${fight.boutNo * 2}`,
-              );
-              if (blueSource) return false;
-            }
-          }
-
-          return true;
-        })(),
+        isBye: redSlot.kind === 'BYE' || blueSlot.kind === 'BYE',
         orderInMat: fight.orderInMat,
         scheduledStartTime: fight.scheduledStartTime,
         matName: fight.mat?.name ?? null,
         participants: {
-          red:
-            fight.redAthlete == null
-              ? null
-              : {
-                  athleteId: fight.redAthlete.id,
-                  athleteName: `${fight.redAthlete.firstName} ${fight.redAthlete.lastName}`,
-                  clubName: fight.redAthlete.club?.name ?? redMeta?.clubName ?? null,
-                  country: fight.redAthlete.club?.country ?? null,
-                  athleteCode:
-                    fight.redAthlete.documentId ?? redMeta?.athleteCode ?? fight.redAthlete.id,
-                  movedUp: redMeta?.movedUp ?? false,
-                  overrideUsed: redMeta?.overrideUsed ?? false,
-                  originalCategory: redMeta?.originalCategory ?? null,
-                  finalCategory: redMeta?.finalCategory ?? overviewCategory.categoryName,
-                },
-          blue:
-            fight.blueAthlete == null
-              ? null
-              : {
-                  athleteId: fight.blueAthlete.id,
-                  athleteName: `${fight.blueAthlete.firstName} ${fight.blueAthlete.lastName}`,
-                  clubName: fight.blueAthlete.club?.name ?? blueMeta?.clubName ?? null,
-                  country: fight.blueAthlete.club?.country ?? null,
-                  athleteCode:
-                    fight.blueAthlete.documentId ??
-                    blueMeta?.athleteCode ??
-                    fight.blueAthlete.id,
-                  movedUp: blueMeta?.movedUp ?? false,
-                  overrideUsed: blueMeta?.overrideUsed ?? false,
-                  originalCategory: blueMeta?.originalCategory ?? null,
-                  finalCategory: blueMeta?.finalCategory ?? overviewCategory.categoryName,
-                },
+          red: redParticipant,
+          blue: blueParticipant,
+        },
+        slots: {
+          red: redSlot,
+          blue: blueSlot,
         },
       };
 
@@ -408,8 +409,10 @@ export class BracketsService {
         winnerAthleteId: fight.winnerAthleteId,
         redAthleteId: fight.redAthleteId,
         blueAthleteId: fight.blueAthleteId,
-        redAthleteName: matchup.participants.red?.athleteName ?? null,
-        blueAthleteName: matchup.participants.blue?.athleteName ?? null,
+        redAthleteName: redParticipant?.athleteName ?? null,
+        blueAthleteName: blueParticipant?.athleteName ?? null,
+        redSlot,
+        blueSlot,
         scheduledStartTime: fight.scheduledStartTime,
         matName: fight.mat?.name ?? null,
         orderInMat: fight.orderInMat,

@@ -2,6 +2,7 @@
 
 import type { BracketFightListRow } from '@/types/api';
 import { StatusChip } from '@/components/ui/StatusChip';
+import { resolveBracketParticipantLabel } from '@/domain/brackets/participantSlots';
 
 type Props = {
   fights: BracketFightListRow[];
@@ -10,6 +11,13 @@ type Props = {
 };
 
 export function BracketFightList({ fights, t, tFightStatus }: Props) {
+  const slotTextClass = (kind: BracketFightListRow['redSlot']['kind']) => {
+    if (kind === 'ATHLETE') return 'text-[var(--color-text)]';
+    if (kind === 'WINNER_PLACEHOLDER') return 'text-[var(--color-text-muted)]';
+    if (kind === 'BYE') return 'uppercase tracking-[0.08em] text-[var(--color-text-muted)]';
+    return 'text-[var(--color-danger)]';
+  };
+
   return (
     <div className="overflow-x-auto rounded-[var(--radius-card)] border border-[var(--color-border)]">
       <table className="min-w-full text-[12px]">
@@ -35,8 +43,12 @@ export function BracketFightList({ fights, t, tFightStatus }: Props) {
                   ? t('roundLabel.ROUND', { round: fight.round })
                   : t(`roundLabel.${fight.stageLabel}`)}
               </td>
-              <td className="px-2 py-2 text-[var(--color-text)]">{fight.redAthleteName ?? t('bye')}</td>
-              <td className="px-2 py-2 text-[var(--color-text)]">{fight.blueAthleteName ?? t('bye')}</td>
+              <td className={`px-2 py-2 ${slotTextClass(fight.redSlot.kind)}`}>
+                {resolveBracketParticipantLabel({ slot: fight.redSlot, tBracket: t })}
+              </td>
+              <td className={`px-2 py-2 ${slotTextClass(fight.blueSlot.kind)}`}>
+                {resolveBracketParticipantLabel({ slot: fight.blueSlot, tBracket: t })}
+              </td>
               <td className="px-2 py-2 text-[var(--color-text)]">
                 <StatusChip status={fight.status} label={tFightStatus(fight.status)} domain="fight" />
               </td>

@@ -7,6 +7,7 @@ import {
   fetchPublicNews,
   fetchPublicNewsPost,
   fetchPublicBrackets,
+  fetchPublicResults,
   fetchPublicSchedule,
   fetchPublicMat,
   fetchPublicLive,
@@ -67,11 +68,19 @@ export function usePublicMat(eventSlug: string | null, matName: string | null) {
   });
 }
 
-export function usePublicLive(eventSlug: string | null, matName: string | null) {
+export function usePublicLive(eventSlug: string | null) {
   return useQuery({
-    queryKey: ['public', 'live', eventSlug, matName],
-    queryFn: () => fetchPublicLive(eventSlug!, matName),
+    queryKey: ['public', 'live', eventSlug],
+    queryFn: () => fetchPublicLive(eventSlug!),
     enabled: !!eventSlug,
     refetchInterval: 4000,
+  });
+}
+
+export function usePublicResults(eventSlug: string | null) {
+  return useQuery({
+    queryKey: ['public', 'results', eventSlug],
+    queryFn: () => fetchPublicResults(eventSlug!),
+    enabled: !!eventSlug,
   });
 }

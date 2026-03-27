@@ -2,8 +2,15 @@ import { FightsService } from './fights.service';
 
 const createPrismaMock = () => {
   const prisma: any = {
+    event: {
+      findFirst: jest.fn(),
+    },
+    mat: {
+      findMany: jest.fn(),
+    },
     fight: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
     },
@@ -308,5 +315,72 @@ describe('FightsService result propagation', () => {
     ).rejects.toThrow('RESULT_CORRECTION_BLOCKED');
 
     expect(prisma.fight.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('FightsService live queue board', () => {
+  it('derives the current fight from global schedule order without requiring mats', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new FightsService(prisma, audit as any);
+
+    prisma.event.findFirst.mockResolvedValue({ id: 'event_1' });
+    prisma.mat.findMany.mockResolvedValue([]);
+    prisma.fight.findMany.mockResolvedValue([
+      {
+        id: 'fight_1',
+        bracketId: 'cat_a',
+        categoryCode: 'A',
+        eventWeightCategoryId: 'cat_a',
+        round: 1,
+        boutNo: 1,
+        status: 'QUEUED',
+        redAthleteId: 'red_1',
+        blueAthleteId: 'blue_1',
+        winnerAthleteId: null,
+        matId: null,
+        orderInMat: null,
+        scheduledStartTime: new Date('2026-03-07T10:00:00.000Z'),
+        redAthlete: { id: 'red_1', firstName: 'Red', lastName: 'One' },
+        blueAthlete: { id: 'blue_1', firstName: 'Blue', lastName: 'One' },
+        winnerAthlete: null,
+        mat: null,
+        timerState: null,
+        winMethod: null,
+        notes: null,
+        eventWeightCategory: null,
+      },
+      {
+        id: 'fight_2',
+        bracketId: 'cat_a',
+        categoryCode: 'A',
+        eventWeightCategoryId: 'cat_a',
+        round: 1,
+        boutNo: 2,
+        status: 'QUEUED',
+        redAthleteId: 'red_2',
+        blueAthleteId: 'blue_2',
+        winnerAthleteId: null,
+        matId: null,
+        orderInMat: null,
+        scheduledStartTime: new Date('2026-03-07T10:05:00.000Z'),
+        redAthlete: { id: 'red_2', firstName: 'Red', lastName: 'Two' },
+        blueAthlete: { id: 'blue_2', firstName: 'Blue', lastName: 'Two' },
+        winnerAthlete: null,
+        mat: null,
+        timerState: null,
+        winMethod: null,
+        notes: null,
+        eventWeightCategory: null,
+      },
+    ]);
+
+    const result = await service.getLiveQueueBoard({
+      organisationId: 'org_1',
+      eventId: 'event_1',
+    });
+
+    expect(result.currentFight?.id).toBe('fight_1');
+    expect(result.onDeckFight?.id).toBe('fight_2');
   });
 });

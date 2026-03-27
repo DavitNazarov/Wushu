@@ -7,6 +7,10 @@ import {
   computeLiveStatuses,
   type LiveFightStatus,
 } from '../fights/live-queue.logic';
+import {
+  buildScheduleRows,
+} from './schedule-order.logic';
+import { planAutoScheduleOrder } from './auto-schedule-order.logic';
 
 @Injectable()
 export class ScheduleService {
@@ -157,6 +161,20 @@ export class ScheduleService {
         winnerAthlete: {
           select: { id: true, firstName: true, lastName: true },
         },
+        eventWeightCategory: {
+          select: {
+            categoryTemplateWeight: {
+              select: { name: true, sortOrder: true },
+            },
+            eventAgeGroup: {
+              select: {
+                categoryTemplateAgeGroup: {
+                  select: { name: true, sortOrder: true },
+                },
+              },
+            },
+          },
+        },
       },
       orderBy: [
         { eventWeightCategoryId: 'asc' },
@@ -166,129 +184,10 @@ export class ScheduleService {
       ],
     });
 
-    const bucketByFightId = new Map<string, string>();
-    const fightsByBucket = new Map<string, typeof fights>();
-    for (const fight of fights) {
-      const bucketKey =
-        fight.bracketId ??
-        fight.eventWeightCategoryId ??
-        fight.categoryCode ??
-        fight.id;
-      const bucket = fightsByBucket.get(bucketKey) ?? [];
-      bucket.push(fight);
-      fightsByBucket.set(bucketKey, bucket);
-      bucketByFightId.set(fight.id, bucketKey);
-    }
-
-    const fightSourceById = new Map<
-      string,
-      { redSourceFightId: string | null; blueSourceFightId: string | null }
-    >();
-    const roundLabelByFightId = new Map<string, string>();
-    const visibleFights: typeof fights = [];
-
-    for (const bucket of fightsByBucket.values()) {
-      const openingRound =
-        bucket.length > 0
-          ? bucket.reduce((min, fight) => Math.min(min, fight.round), bucket[0].round)
-          : 0;
-      const maxRound =
-        bucket.length > 0
-          ? bucket.reduce((max, fight) => Math.max(max, fight.round), bucket[0].round)
-          : 0;
-      const byRoundBout = new Map(
-        bucket.map((fight) => [`${fight.round}:${fight.boutNo}`, fight]),
-      );
-
-      for (const fight of bucket) {
-        const redSourceFightId =
-          fight.round > openingRound
-            ? byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2 - 1}`)?.id ??
-              null
-            : null;
-        const blueSourceFightId =
-          fight.round > openingRound
-            ? byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2}`)?.id ?? null
-            : null;
-        const hasSourceDependencies = !!redSourceFightId || !!blueSourceFightId;
-
-        fightSourceById.set(fight.id, { redSourceFightId, blueSourceFightId });
-        roundLabelByFightId.set(
-          fight.id,
-          this.bracketRoundLabel(fight.round, maxRound),
-        );
-
-        if (
-          this.isScheduleVisibleFight({
-            fight,
-            openingRound,
-            hasSourceDependencies,
-          })
-        ) {
-          visibleFights.push(fight);
-        }
-      }
-    }
-
-    const sortedVisible = [...visibleFights].sort((a, b) => {
-      const bucketA = bucketByFightId.get(a.id) ?? '';
-      const bucketB = bucketByFightId.get(b.id) ?? '';
-      if (bucketA !== bucketB) return bucketA.localeCompare(bucketB);
-      return a.round - b.round || a.boutNo - b.boutNo;
-    });
-
-    const scheduleOrderByFightId = new Map<string, number>();
-    sortedVisible.forEach((fight, index) => {
-      scheduleOrderByFightId.set(fight.id, index + 1);
-    });
-
-    const scheduleRows = sortedVisible.map((fight) => {
-      const source = fightSourceById.get(fight.id) ?? {
-        redSourceFightId: null,
-        blueSourceFightId: null,
-      };
-      const redSourceScheduleOrder = source.redSourceFightId
-        ? scheduleOrderByFightId.get(source.redSourceFightId) ?? null
-        : null;
-      const blueSourceScheduleOrder = source.blueSourceFightId
-        ? scheduleOrderByFightId.get(source.blueSourceFightId) ?? null
-        : null;
-
-      return {
-        id: fight.id,
-        bracketRoundLabel:
-          roundLabelByFightId.get(fight.id) ?? `Round ${fight.round}`,
-        bracketFightNumber: fight.boutNo,
-        scheduleOrder: scheduleOrderByFightId.get(fight.id) ?? null,
-        redDisplayName: this.displayName({
-          athlete: fight.redAthlete
-            ? { firstName: fight.redAthlete.firstName, lastName: fight.redAthlete.lastName }
-            : null,
-          sourceScheduleOrder: redSourceScheduleOrder,
-        }),
-        blueDisplayName: this.displayName({
-          athlete: fight.blueAthlete
-            ? { firstName: fight.blueAthlete.firstName, lastName: fight.blueAthlete.lastName }
-            : null,
-          sourceScheduleOrder: blueSourceScheduleOrder,
-        }),
-        redSourceScheduleOrder,
-        blueSourceScheduleOrder,
-        isPlayable: this.isFightPlayable({
-          redAthleteId: fight.redAthleteId,
-          blueAthleteId: fight.blueAthleteId,
-          winnerAthleteId: fight.winnerAthleteId,
-          status: fight.status,
-        }),
-        isScheduled: fight.matId != null && fight.orderInMat != null,
-        status: fight.status,
-        matId: fight.matId,
-        matName: fight.mat?.name ?? null,
-        orderInMat: fight.orderInMat,
-        scheduledAt: fight.scheduledStartTime,
-        liveStatus: 'PENDING' as LiveFightStatus,
-      };
-    });
+    const scheduleRows = buildScheduleRows(fights).map((row) => ({
+      ...row,
+      liveStatus: 'PENDING' as LiveFightStatus,
+    }));
 
     const liveStatuses = computeLiveStatuses(
       scheduleRows.map((row) => ({
@@ -339,7 +238,22 @@ export class ScheduleService {
         organisationId: input.organisationId,
         eventId: input.eventId,
       },
-      orderBy: [{ round: 'asc' }, { boutNo: 'asc' }],
+      include: {
+        eventWeightCategory: {
+          select: {
+            categoryTemplateWeight: {
+              select: { name: true, sortOrder: true },
+            },
+            eventAgeGroup: {
+              select: {
+                categoryTemplateAgeGroup: {
+                  select: { name: true, sortOrder: true },
+                },
+              },
+            },
+          },
+        },
+      },
     });
     const mats = await this.prisma.mat.findMany({
       where: { organisationId: input.organisationId, eventId: input.eventId },
@@ -347,14 +261,7 @@ export class ScheduleService {
     });
 
     if (mats.length === 0) throw new Error('NO_MATS');
-    const schedulableFights = fights.filter((fight) =>
-      this.isFightPlayable({
-        redAthleteId: fight.redAthleteId,
-        blueAthleteId: fight.blueAthleteId,
-        winnerAthleteId: fight.winnerAthleteId,
-        status: fight.status,
-      }),
-    );
+    const { fights: schedulableFights, diagnostics } = planAutoScheduleOrder(fights);
     if (schedulableFights.length === 0) {
       throw new Error('NO_SCHEDULABLE_FIGHTS');
     }
@@ -451,6 +358,7 @@ export class ScheduleService {
             policyMinRestMinutes: event.minRestMinutes,
             fightCount: schedulableFights.length,
             matCount: mats.length,
+            restGapDiagnostics: diagnostics,
           } as unknown as Prisma.JsonValue,
           override: input.override ?? false,
           reason: input.reason ?? null,
@@ -459,7 +367,10 @@ export class ScheduleService {
       );
     });
 
-    return updates;
+    return {
+      updates,
+      diagnostics,
+    };
   }
 
   async moveFight(input: {

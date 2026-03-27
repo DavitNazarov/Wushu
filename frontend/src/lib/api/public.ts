@@ -3,6 +3,9 @@
  * Use relative URLs so Next.js rewrites proxy to backend.
  */
 
+import type { TimerState } from '@/types/api';
+import type { PublicResultsFeed } from './public-results';
+
 export type PublicEvent = {
   id: string;
   name: string;
@@ -74,11 +77,31 @@ export type ScheduleFight = {
 
 export type PublicLiveFeed = {
   eventId: string;
-  mats: Array<{ id: string; name: string }>;
-  selectedMatId: string | null;
-  selectedMatName: string | null;
-  current: ScheduleFight | null;
-  upNext: ScheduleFight[];
+  current: PublicLiveFight | null;
+  onDeck: PublicLiveFight | null;
+  upNext: PublicLiveFight[];
+  queuePreview: PublicLiveFight[];
+  latestResult: PublicLiveFight | null;
+};
+
+export type PublicLiveFight = {
+  id: string;
+  categoryCode: string;
+  categoryName: string;
+  boutNo: number;
+  round: number;
+  bracketRoundLabel: string;
+  scheduleOrder: number | null;
+  status: string;
+  liveStatus?: 'PENDING' | 'UPCOMING' | 'RUNNING' | 'FINISHED';
+  redAthleteId: string | null;
+  blueAthleteId: string | null;
+  winnerAthleteId: string | null;
+  winMethod: 'POINTS' | 'KO' | 'DQ' | 'WO' | null;
+  notes: string | null;
+  redDisplayName: string;
+  blueDisplayName: string;
+  timerState: TimerState | null;
 };
 
 export type MatFight = {
@@ -90,10 +113,11 @@ export type MatFight = {
   redAthlete?: { id: string; firstName: string; lastName: string } | null;
   blueAthlete?: { id: string; firstName: string; lastName: string } | null;
   winnerAthlete?: { id: string; firstName: string; lastName: string } | null;
-  timerState?: { state: string; startedAt: string | null; pausedMs: number } | null;
+  timerState?: TimerState | null;
 };
 
 export type MatFeed = {
+  eventId: string;
   mat: { id: string; name: string };
   now: MatFight | null;
   onDeck: MatFight | null;
@@ -169,11 +193,21 @@ export async function fetchPublicMat(
 
 export async function fetchPublicLive(
   eventSlug: string,
-  matName?: string | null,
 ): Promise<PublicLiveFeed | null> {
   const query = new URLSearchParams({ eventSlug });
-  if (matName) query.set('mat', matName);
   const res = await fetch(`/api/public/live?${query.toString()}`, {
+    credentials: 'include',
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchPublicResults(
+  eventSlug: string,
+): Promise<PublicResultsFeed | null> {
+  const query = new URLSearchParams({ eventSlug });
+  const res = await fetch(`/api/public/results?${query.toString()}`, {
     credentials: 'include',
   });
   if (res.status === 404) return null;

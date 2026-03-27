@@ -105,6 +105,12 @@ export type BracketParticipantView = {
   finalCategory: string | null;
 };
 
+export type BracketParticipantSlotView = {
+  kind: 'ATHLETE' | 'WINNER_PLACEHOLDER' | 'BYE' | 'TBD';
+  sourceBoutNo: number | null;
+  athlete: BracketParticipantView | null;
+};
+
 export type BracketRoundMatchup = {
   fightId: string;
   boutNo: number;
@@ -120,6 +126,10 @@ export type BracketRoundMatchup = {
   participants: {
     red: BracketParticipantView | null;
     blue: BracketParticipantView | null;
+  };
+  slots: {
+    red: BracketParticipantSlotView;
+    blue: BracketParticipantSlotView;
   };
 };
 
@@ -142,6 +152,8 @@ export type BracketFightListRow = {
   blueAthleteId: string | null;
   redAthleteName: string | null;
   blueAthleteName: string | null;
+  redSlot: BracketParticipantSlotView;
+  blueSlot: BracketParticipantSlotView;
   scheduledStartTime: Date | null;
   matName: string | null;
   orderInMat: number | null;

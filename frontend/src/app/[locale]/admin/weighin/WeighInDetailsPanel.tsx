@@ -38,6 +38,7 @@ type Props = {
   isReconcilingCategory: boolean;
   onReconcileCategory: () => void;
   onOpenOverride: () => void;
+  isOverrideOpen: boolean;
   t: (key: string, values?: Record<string, unknown>) => string;
   tC: (key: string) => string;
 };
@@ -55,6 +56,7 @@ export function WeighInDetailsPanel({
   isReconcilingCategory,
   onReconcileCategory,
   onOpenOverride,
+  isOverrideOpen,
   t,
   tC,
 }: Props) {
@@ -72,6 +74,19 @@ export function WeighInDetailsPanel({
   const categories = toCategoryList(selected);
   const canPreview = weightInput.trim().length > 0;
   const hasCategoryMapping = Boolean(selected.eventWeightCategory);
+  const primaryAction =
+    preview?.allowedActions.find(
+      (action) => action.level === 'PRIMARY' || action.level === 'DANGER',
+    ) ?? null;
+  const canSubmitOnEnter =
+    hasCategoryMapping &&
+    !previewLoading &&
+    !isRecordPending &&
+    !isOverrideOpen &&
+    preview != null &&
+    preview.recordingAllowed &&
+    primaryAction?.code != null &&
+    primaryAction.code !== 'SUBMIT_MANUAL_DECISION';
 
   return (
     <div className="space-y-3">
@@ -99,7 +114,7 @@ export function WeighInDetailsPanel({
       )}
       <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)]">
         <div className="border-b border-[var(--color-border)] p-3">
-          <WeighInAthleteSummaryCard entry={selected} preview={preview} t={t} />
+          <WeighInAthleteSummaryCard entry={selected} t={t} />
         </div>
         <div className="border-b border-[var(--color-border)] p-3">
           <WeighInCategoryInfoCard
@@ -114,26 +129,30 @@ export function WeighInDetailsPanel({
             value={weightInput}
             onChange={onWeightInputChange}
             disabled={!hasCategoryMapping}
+            onEnter={() => {
+              if (!canSubmitOnEnter) return;
+              onRecord({});
+            }}
             t={(key) => t(key)}
           />
-          {hasCategoryMapping && (
-            <div className="mt-3">
-              <WeighInActionBar
-                preview={preview}
-                categories={categories}
-                isPending={isRecordPending}
-                onRecord={onRecord}
-                onOpenOverride={onOpenOverride}
-                t={t}
-              />
-            </div>
-          )}
         </div>
         {hasCategoryMapping && (
           <div className="border-b border-[var(--color-border)] p-3">
             <WeighInDecisionPreview
               preview={preview}
               isLoading={previewLoading}
+              t={t}
+            />
+          </div>
+        )}
+        {hasCategoryMapping && (
+          <div className="border-b border-[var(--color-border)] p-3">
+            <WeighInActionBar
+              preview={preview}
+              categories={categories}
+              isPending={isRecordPending}
+              onRecord={onRecord}
+              onOpenOverride={onOpenOverride}
               t={t}
             />
           </div>
