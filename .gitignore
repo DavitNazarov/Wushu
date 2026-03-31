@@ -7,4 +7,5 @@ build/
 coverage/
 .env
 .env.*
-*.tsbuildinfo
+*.tsbuildinfofrontend/.next
+frontend/.next
