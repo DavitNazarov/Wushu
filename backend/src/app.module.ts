@@ -22,6 +22,7 @@ import { ResultsModule } from './results/results.module';
 import { ExportsModule } from './exports/exports.module';
 import { RequestLoggerMiddleware } from './common/request-logger.middleware';
 import { EventPoliciesModule } from './event-policies/event-policies.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { EventPoliciesModule } from './event-policies/event-policies.module';
     ExportsModule,
     EventPoliciesModule,
   ],
+  controllers: [HealthController],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
