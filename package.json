@@ -14,6 +14,8 @@
 
     "prisma:studio": "npm run prisma:studio -w backend",
     "prisma:migrate": "npm run prisma:migrate -w backend",
+    "db:dump:local": "npm run db:dump:local -w backend",
+    "db:restore:neon": "npm run db:restore:neon -w backend",
 
     "build": "npm run build -w backend && npm run build -w frontend",
     "build:backend": "npm run build -w backend",

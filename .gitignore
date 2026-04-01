@@ -9,3 +9,4 @@ coverage/
 .env.*
 *.tsbuildinfofrontend/.next
 frontend/.next
+backend/tmp/
