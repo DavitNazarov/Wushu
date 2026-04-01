@@ -87,6 +87,16 @@ export function getRoundWinners(timer: FightTimerSnapshot): Array<FightSlot | nu
   return [timer.round1Winner, timer.round2Winner, timer.round3Winner];
 }
 
+export function getRecordedRoundWinner(
+  timer: Pick<
+    FightTimerSnapshot,
+    'round' | 'round1Winner' | 'round2Winner' | 'round3Winner'
+  >,
+  round = timer.round,
+): FightSlot | null {
+  return timer[getRoundWinnerField(round)] ?? null;
+}
+
 export function getFightWinnerFromRounds(
   timer: Pick<FightTimerSnapshot, 'redRoundWins' | 'blueRoundWins'>,
 ): FightSlot | null {

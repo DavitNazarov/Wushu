@@ -28,7 +28,7 @@ function redirectToLogin(): void {
   loginRedirectDone = true;
   const locale = window.location.pathname.match(/^\/(en|ka)/)?.[1] ?? 'en';
   const next = encodeURIComponent(window.location.pathname);
-  window.location.href = `/${locale}/login?next=${next}`;
+  window.location.href = `/${locale}/login?force=1&next=${next}`;
 }
 
 export class ApiError extends Error {

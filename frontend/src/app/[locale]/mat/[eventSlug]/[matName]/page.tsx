@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { use } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { logRealtime } from '@/lib/realtime/realtimeLogger';
-import { getSocketServerUrl } from '@/lib/realtime/socketUrl';
+import { getSocketServerUrl, SOCKET_IO_PATH } from '@/lib/realtime/socketUrl';
 
 type Athlete = { id: string; firstName: string; lastName: string } | null;
 type TimerState = {
@@ -108,14 +108,19 @@ export default function MatScreenPage({
   }, [eventSlug, matName]);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      void loadFeed();
-    });
+    queueMicrotask(() => void loadFeed());
     const socketBaseUrl = getSocketServerUrl();
-    const socket = io(socketBaseUrl, {
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-    });
+    const socket = socketBaseUrl
+      ? io(socketBaseUrl, {
+          path: SOCKET_IO_PATH,
+          transports: ['polling', 'websocket'],
+          withCredentials: true,
+        })
+      : io({
+          path: SOCKET_IO_PATH,
+          transports: ['polling', 'websocket'],
+          withCredentials: true,
+        });
     socketRef.current = socket;
 
     const onConnect = () => {
@@ -128,12 +133,12 @@ export default function MatScreenPage({
         logRealtime('public-mat-screen', 'join-rooms', {
           eventId: feedRef.current?.eventId ?? null,
           matId: matIdRef.current,
+          baseUrl: socketBaseUrl ?? 'same-origin',
+          path: SOCKET_IO_PATH,
         });
       }
     };
-    const onDisconnect = () => {
-      setConnected(false);
-    };
+    const onDisconnect = () => setConnected(false);
     const onUpdate = () => {
       logRealtime('public-mat-screen', 'receive-update', {
         eventSlug,
@@ -148,9 +153,7 @@ export default function MatScreenPage({
     socket.on('timer:update', onUpdate);
     socket.on('schedule:update', onUpdate);
 
-    const fallbackInterval = setInterval(() => {
-      void loadFeed();
-    }, 30000);
+    const fallbackInterval = setInterval(() => void loadFeed(), 30000);
 
     return () => {
       clearInterval(fallbackInterval);
@@ -176,9 +179,7 @@ export default function MatScreenPage({
           {decodedMatName}
         </div>
         {lastUpdated && (
-          <div className="text-xs opacity-40">
-            Updated {lastUpdated.toLocaleTimeString()}
-          </div>
+          <div className="text-xs opacity-40">Updated {lastUpdated.toLocaleTimeString()}</div>
         )}
       </div>
 
@@ -189,9 +190,7 @@ export default function MatScreenPage({
         >
           <div className="text-3xl font-bold">Reconnecting…</div>
           {lastUpdated && (
-            <div className="mt-2 text-sm opacity-60">
-              Last update: {lastUpdated.toLocaleTimeString()}
-            </div>
+            <div className="mt-2 text-sm opacity-60">Last update: {lastUpdated.toLocaleTimeString()}</div>
           )}
         </div>
       )}

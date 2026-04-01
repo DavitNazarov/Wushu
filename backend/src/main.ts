@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/global-exception.filter';
 import { ZodValidationPipe } from './common/zod-validation.pipe';
+import { createCorsOriginDelegate } from './config/runtime-env';
 
 type CreateAppOptions = {
   httpAdapter?: AbstractHttpAdapter;
@@ -21,7 +22,7 @@ export async function createApp(
     : await NestFactory.create(AppModule);
   app.use(cookieParser());
   app.enableCors({
-    origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+    origin: createCorsOriginDelegate(),
     credentials: true,
   });
   if (globalPrefix) {
@@ -34,7 +35,7 @@ export async function createApp(
 
 async function bootstrap() {
   const app = await createApp();
-  await app.listen(process.env.PORT ?? 4000);
+  await app.listen(process.env.PORT ?? 4000, '0.0.0.0');
 }
 
 if (require.main === module) {

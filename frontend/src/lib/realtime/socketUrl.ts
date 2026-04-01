@@ -1,13 +1,24 @@
 'use client';
 
-export function getSocketServerUrl(): string {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+export const SOCKET_IO_PATH = '/api/socket.io';
+
+function normalizeOrigin(value: string): string {
+  return value.trim().replace(/\/+$/, '');
+}
+
+export function getSocketServerUrl(): string | undefined {
+  const configuredUrl = process.env.NEXT_PUBLIC_SOCKET_URL?.trim();
+
+  if (configuredUrl) {
+    if (configuredUrl === '/' && typeof window !== 'undefined') {
+      return window.location.origin;
+    }
+    return normalizeOrigin(configuredUrl);
   }
 
   if (typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.hostname}:4000`;
+    return window.location.origin;
   }
 
-  return 'http://localhost:4000';
+  return undefined;
 }

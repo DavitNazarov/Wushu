@@ -26,15 +26,10 @@ import { AuthGuard } from './auth.guard';
 import { CapabilityGuard } from './capability.guard';
 import { RequireCapability } from './capability.decorator';
 import { CAPABILITIES } from './capabilities';
-
-// Cookie defaults. maxAge is in milliseconds — Express divides by 1000 for Max-Age header.
-// IMPORTANT: using seconds here would give Max-Age≈0 which instantly deletes the cookie.
-const COOKIE_BASE = {
-  httpOnly: true,
-  sameSite: 'lax' as const,
-  secure: process.env.NODE_ENV === 'production',
-  path: '/',
-};
+import {
+  getAuthCookieOptions,
+  getAuthCookieClearOptions,
+} from './auth-cookie.config';
 
 @Controller('auth')
 export class AuthController {
@@ -64,12 +59,10 @@ export class AuthController {
     }
 
     res.cookie(JWT_COOKIE_NAME, result.token, {
-      ...COOKIE_BASE,
-      maxAge: ACCESS_COOKIE_MAX_AGE_MS,
+      ...getAuthCookieOptions(ACCESS_COOKIE_MAX_AGE_MS),
     });
     res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, {
-      ...COOKIE_BASE,
-      maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+      ...getAuthCookieOptions(REFRESH_COOKIE_MAX_AGE_MS),
     });
 
     // Store refresh token hash in DB for rotation + revocation
@@ -106,19 +99,17 @@ export class AuthController {
     if (!rotated) {
       this.logger.warn('[auth] POST /refresh — token invalid or revoked');
       // Clear stale cookies so the client is in a clean state
-      res.clearCookie(JWT_COOKIE_NAME, { path: '/' });
-      res.clearCookie(REFRESH_COOKIE_NAME, { path: '/' });
+      res.clearCookie(JWT_COOKIE_NAME, getAuthCookieClearOptions());
+      res.clearCookie(REFRESH_COOKIE_NAME, getAuthCookieClearOptions());
       res.status(HttpStatus.UNAUTHORIZED);
       return { error: 'INVALID_REFRESH_TOKEN' };
     }
 
     res.cookie(JWT_COOKIE_NAME, rotated.accessToken, {
-      ...COOKIE_BASE,
-      maxAge: ACCESS_COOKIE_MAX_AGE_MS,
+      ...getAuthCookieOptions(ACCESS_COOKIE_MAX_AGE_MS),
     });
     res.cookie(REFRESH_COOKIE_NAME, rotated.refreshToken, {
-      ...COOKIE_BASE,
-      maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+      ...getAuthCookieOptions(REFRESH_COOKIE_MAX_AGE_MS),
     });
 
     this.logger.log(
@@ -147,8 +138,8 @@ export class AuthController {
       }
     }
 
-    res.clearCookie(JWT_COOKIE_NAME, { path: '/' });
-    res.clearCookie(REFRESH_COOKIE_NAME, { path: '/' });
+    res.clearCookie(JWT_COOKIE_NAME, getAuthCookieClearOptions());
+    res.clearCookie(REFRESH_COOKIE_NAME, getAuthCookieClearOptions());
     return { ok: true };
   }
 

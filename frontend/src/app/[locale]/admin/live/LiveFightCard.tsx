@@ -10,6 +10,7 @@ import {
   getFightDisplayTone,
   getFightWinnerCorner,
 } from '@/lib/live/fightPresentation';
+import { isNextRoundBlocked } from '@/lib/live/timer';
 import type { LiveQueueFightRow } from '@/types/live';
 
 const BTN =
@@ -94,6 +95,7 @@ export function LiveFightCard({
         ? fight.blueDisplayName
         : null;
   const methodLabel = fight.winMethod ? t(`methods.${fight.winMethod}`) : null;
+  const nextRoundBlocked = isNextRoundBlocked(fight.timerState);
 
   return (
     <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)]">
@@ -161,7 +163,7 @@ export function LiveFightCard({
 
         {awaitingRoundResult ? (
           <div className="rounded-[var(--radius-card)] border border-[var(--color-warning)]/40 bg-[var(--color-warning-subtle)] px-4 py-3 text-[14px] font-medium text-[var(--color-text)]">
-            {t('awaitingRoundResult')}
+            {t(nextRoundBlocked ? 'nextRoundBlocked' : 'awaitingRoundResult')}
           </div>
         ) : null}
 

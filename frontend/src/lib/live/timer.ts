@@ -1,5 +1,10 @@
 import type { TimerState } from '@/types/api';
 
+function getPendingRoundWinner(timerState: TimerState | null): 'RED' | 'BLUE' | null {
+  if (!timerState) return null;
+  return timerState.roundWinners[timerState.currentRound - 1] ?? null;
+}
+
 export function getTimerElapsedMs(
   timerState: TimerState | null,
   nowMs = Date.now(),
@@ -35,11 +40,24 @@ export function formatTimerMs(ms: number): string {
 
 export function isAwaitingRoundResult(timerState: TimerState | null): boolean {
   if (!timerState) return false;
+  if (timerState.redRoundWins >= 2 || timerState.blueRoundWins >= 2) return false;
+  if (timerState.phase === 'REST') {
+    return !getPendingRoundWinner(timerState);
+  }
   return (
     timerState.phase === 'ROUND' &&
     timerState.state === 'PAUSED' &&
     getTimerRemainingMs(timerState) === 0 &&
-    timerState.redRoundWins < 2 &&
-    timerState.blueRoundWins < 2
+    !getPendingRoundWinner(timerState)
+  );
+}
+
+export function isNextRoundBlocked(timerState: TimerState | null): boolean {
+  if (!timerState) return false;
+  return (
+    timerState.phase === 'REST' &&
+    timerState.state === 'PAUSED' &&
+    getTimerRemainingMs(timerState) === 0 &&
+    !getPendingRoundWinner(timerState)
   );
 }

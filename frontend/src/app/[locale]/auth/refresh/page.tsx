@@ -52,11 +52,11 @@ export default function AuthRefreshPage() {
 
         console.warn('[auth/refresh] refresh failed', res.status, '— redirecting to login');
         setStatus('failed');
-        router.replace(`/${locale}/login?next=${encodeURIComponent(nextPath)}`);
+        router.replace(`/${locale}/login?force=1&next=${encodeURIComponent(nextPath)}`);
       } catch (err) {
         console.error('[auth/refresh] network error during refresh', err);
         setStatus('failed');
-        router.replace(`/${locale}/login?next=${encodeURIComponent(nextPath)}`);
+        router.replace(`/${locale}/login?force=1&next=${encodeURIComponent(nextPath)}`);
       }
     }
 

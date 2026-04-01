@@ -43,7 +43,7 @@ function redirectToLogin(): void {
   const locale = window.location.pathname.match(/^\/(en|ka)/)?.[1] ?? 'en';
   const next = encodeURIComponent(window.location.pathname);
   console.warn('[fetchWithAuth] refresh failed — redirecting to login');
-  window.location.href = `/${locale}/login?next=${next}`;
+  window.location.href = `/${locale}/login?force=1&next=${next}`;
 }
 
 export async function fetchWithAuth(

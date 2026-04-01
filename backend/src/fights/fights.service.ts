@@ -34,6 +34,7 @@ import {
   getElapsedMs,
   getFightRoundDurationSeconds,
   getFightWinnerFromRounds,
+  getRecordedRoundWinner,
   getRemainingMs,
   getRoundWinnerField,
   isAwaitingRoundResult,
@@ -830,8 +831,11 @@ export class FightsService {
     this.assertLiveStage(fight.event.lifecycle);
 
     if (!fight.timerState) throw new Error('TIMER_NOT_INITIALIZED');
-    if (fight.timerState.phase !== 'ROUND') throw new Error('INVALID_TIMER_PHASE');
+    if (!['ROUND', 'REST'].includes(fight.timerState.phase)) {
+      throw new Error('INVALID_TIMER_PHASE');
+    }
     if (
+      fight.timerState.phase === 'ROUND' &&
       fight.timerState.state === 'RUNNING' &&
       getRemainingMs(fight.timerState, new Date()) > 0
     ) {
@@ -848,7 +852,7 @@ export class FightsService {
     }
 
     const winnerField = getRoundWinnerField(fight.timerState.round);
-    if (fight.timerState[winnerField] && fight.timerState[winnerField] !== input.winner) {
+    if (fight.timerState[winnerField]) {
       throw new Error('ROUND_RESULT_ALREADY_SET');
     }
 
@@ -857,6 +861,14 @@ export class FightsService {
         where: { fightId: input.fightId },
       });
       if (!latestTimer) throw new Error('TIMER_NOT_INITIALIZED');
+      if (!['ROUND', 'REST'].includes(latestTimer.phase)) {
+        throw new Error('INVALID_TIMER_PHASE');
+      }
+
+      const latestWinnerField = getRoundWinnerField(latestTimer.round);
+      if (latestTimer[latestWinnerField]) {
+        throw new Error('ROUND_RESULT_ALREADY_SET');
+      }
 
       const redRoundWins =
         latestTimer.redRoundWins + (input.winner === 'RED' ? 1 : 0);
@@ -866,14 +878,18 @@ export class FightsService {
       const updatedTimer = await tx.timerState.update({
         where: { fightId: input.fightId },
         data: {
-          [winnerField]: input.winner,
+          [latestWinnerField]: input.winner,
           redRoundWins,
           blueRoundWins,
-          state: 'PAUSED',
-          startedAt: null,
-          pausedAt: new Date(),
-          pausedMs: latestTimer.phaseDurationSeconds * 1000,
           updatedByUserId: input.actorUserId,
+          ...(latestTimer.phase === 'ROUND'
+            ? {
+                state: 'PAUSED' as const,
+                startedAt: null,
+                pausedAt: new Date(),
+                pausedMs: latestTimer.phaseDurationSeconds * 1000,
+              }
+            : {}),
         },
       });
 
@@ -890,7 +906,38 @@ export class FightsService {
           method: 'POINTS',
           timerState: updatedTimer,
           auditAction: 'FIGHT_ROUND_RESULT_SET',
+        }).then((result) => ({
+          ...result,
+          scheduleEventType: 'LIVE_FIGHT_FINISHED' as const,
+        }));
+      }
+
+      if (latestTimer.phase === 'REST') {
+        const updatedFight = await tx.fight.update({
+          where: { id: input.fightId },
+          data: { status: latestTimer.state === 'PAUSED' ? 'PAUSED' : 'IN_PROGRESS' },
         });
+
+        await this.audit.write(
+          {
+            organisationId: fight.organisationId,
+            eventId: fight.eventId,
+            actorUserId: input.actorUserId,
+            action: 'FIGHT_ROUND_RESULT_SET',
+            entityType: 'fight',
+            entityId: input.fightId,
+            before: latestTimer as unknown as Prisma.JsonValue,
+            after: updatedTimer as unknown as Prisma.JsonValue,
+          },
+          tx,
+        );
+
+        return {
+          fight: updatedFight,
+          advanced: null,
+          timer: updatedTimer,
+          scheduleEventType: 'LIVE_ROUND_RESULT_SAVED' as const,
+        };
       }
 
       const restTimer = await tx.timerState.update({
@@ -925,7 +972,12 @@ export class FightsService {
         tx,
       );
 
-      return { fight: updatedFight, advanced: null, timer: restTimer };
+      return {
+        fight: updatedFight,
+        advanced: null,
+        timer: restTimer,
+        scheduleEventType: 'LIVE_REST_STARTED' as const,
+      };
     });
   }
 
@@ -970,15 +1022,17 @@ export class FightsService {
           const updatedTimer = await tx.timerState.update({
             where: { fightId: currentTimer.fightId },
             data: {
-              state: 'PAUSED',
-              startedAt: null,
-              pausedAt: now,
-              pausedMs: currentTimer.phaseDurationSeconds * 1000,
+              phase: 'REST',
+              state: 'RUNNING',
+              startedAt: now,
+              pausedAt: null,
+              pausedMs: 0,
+              phaseDurationSeconds: currentTimer.restDurationSeconds,
             },
           });
           const updatedFight = await tx.fight.update({
             where: { id: currentTimer.fightId },
-            data: { status: 'PAUSED' },
+            data: { status: 'IN_PROGRESS' },
           });
           await this.audit.write(
             {
@@ -998,7 +1052,44 @@ export class FightsService {
             matId: currentTimer.fight.matId,
             fight: updatedFight,
             timer: this.toTimerStateView(updatedTimer),
-            scheduleEventType: 'LIVE_ROUND_ENDED',
+            scheduleEventType: 'LIVE_REST_STARTED',
+            advancedFight: null,
+          };
+        }
+
+        if (!getRecordedRoundWinner(currentTimer)) {
+          const updatedTimer = await tx.timerState.update({
+            where: { fightId: currentTimer.fightId },
+            data: {
+              state: 'PAUSED',
+              startedAt: null,
+              pausedAt: now,
+              pausedMs: currentTimer.phaseDurationSeconds * 1000,
+            },
+          });
+          const updatedFight = await tx.fight.update({
+            where: { id: currentTimer.fightId },
+            data: { status: 'PAUSED' },
+          });
+          await this.audit.write(
+            {
+              organisationId: currentTimer.organisationId,
+              eventId: currentTimer.fight.eventId,
+              action: 'FIGHT_REST_BLOCKED_MISSING_ROUND_RESULT',
+              entityType: 'fight',
+              entityId: currentTimer.fightId,
+              before: currentTimer as unknown as Prisma.JsonValue,
+              after: updatedTimer as unknown as Prisma.JsonValue,
+            },
+            tx,
+          );
+
+          return {
+            eventId: currentTimer.fight.eventId,
+            matId: currentTimer.fight.matId,
+            fight: updatedFight,
+            timer: this.toTimerStateView(updatedTimer),
+            scheduleEventType: 'LIVE_NEXT_ROUND_BLOCKED',
             advancedFight: null,
           };
         }

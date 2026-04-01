@@ -1811,6 +1811,7 @@
     "redWinsRound": "Red wins round",
     "blueWinsRound": "Blue wins round",
     "awaitingRoundResult": "Round complete. Select the winner now.",
+    "nextRoundBlocked": "Rest complete. Select round winner to continue.",
     "athletes": "Athletes",
     "progress": "Completed fights",
     "currentStatus": "Category status",

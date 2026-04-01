@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import { logRealtime } from '@/lib/realtime/realtimeLogger';
-import { getSocketServerUrl } from '@/lib/realtime/socketUrl';
+import {
+  getSocketServerUrl,
+  SOCKET_IO_PATH,
+} from '@/lib/realtime/socketUrl';
 
 type QueryKey = readonly unknown[];
 
@@ -25,18 +28,27 @@ export function useRealtimeQuerySync(input: UseRealtimeQuerySyncInput) {
   useEffect(() => {
     if (!input.enabled || !input.eventId) return;
 
-    const baseUrl = getSocketServerUrl();
-    const socket = io(baseUrl, {
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-    });
+    const socketServerUrl = getSocketServerUrl();
+    const socket = socketServerUrl
+      ? io(socketServerUrl, {
+          path: SOCKET_IO_PATH,
+          transports: ['polling', 'websocket'],
+          withCredentials: true,
+        })
+      : io({
+          path: SOCKET_IO_PATH,
+          transports: ['polling', 'websocket'],
+          withCredentials: true,
+        });
+    const connectionTarget = socketServerUrl ?? 'same-origin';
 
     const onConnect = () => {
       setIsConnected(true);
       logRealtime(input.scope, 'connect', {
         eventId: input.eventId,
         matId: input.matId ?? null,
-        baseUrl,
+        baseUrl: connectionTarget,
+        path: SOCKET_IO_PATH,
       });
       socket.emit('join-event', { eventId: input.eventId });
       logRealtime(input.scope, 'join-event', { eventId: input.eventId });
@@ -59,7 +71,8 @@ export function useRealtimeQuerySync(input: UseRealtimeQuerySyncInput) {
       logRealtime(input.scope, 'connect-error', {
         eventId: input.eventId,
         matId: input.matId ?? null,
-        baseUrl,
+        baseUrl: connectionTarget,
+        path: SOCKET_IO_PATH,
         message: error.message,
       });
     };
@@ -93,7 +106,14 @@ export function useRealtimeQuerySync(input: UseRealtimeQuerySyncInput) {
       socket.off('timer:update');
       socket.close();
     };
-  }, [input.enabled, input.eventId, input.matId, input.scope, queryClient, serializedQueryKeys]);
+  }, [
+    input.enabled,
+    input.eventId,
+    input.matId,
+    input.scope,
+    queryClient,
+    serializedQueryKeys,
+  ]);
 
   return {
     isConnected,

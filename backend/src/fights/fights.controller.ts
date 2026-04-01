@@ -335,9 +335,7 @@ export class FightsController {
         timer: result.timer ?? null,
       });
       this.gateway.emitScheduleUpdate(result.fight.eventId, {
-        type: result.fight.winnerAthleteId
-          ? 'LIVE_FIGHT_FINISHED'
-          : 'LIVE_REST_STARTED',
+        type: result.scheduleEventType,
         fightId: result.fight.id,
         matId: result.fight.matId,
       });

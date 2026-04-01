@@ -7,8 +7,17 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
+import { createCorsOriginDelegate } from '../config/runtime-env';
 
-@WebSocketGateway({ cors: { origin: '*' } })
+const SOCKET_IO_PATH = '/api/socket.io';
+
+@WebSocketGateway({
+  path: SOCKET_IO_PATH,
+  cors: {
+    origin: createCorsOriginDelegate(),
+    credentials: true,
+  },
+})
 export class FightsGateway {
   @WebSocketServer()
   server: Server;

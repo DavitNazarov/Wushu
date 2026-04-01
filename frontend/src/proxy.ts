@@ -52,10 +52,10 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (isLoginRoute(pathname) && hasAnyToken && !forceLogin) {
-    // Logged-in user on login page: send them to dashboard.
-    // Dashboard will call getAuthContext(), and if the access token is gone it will
-    // redirect to /auth/refresh — one clean hop, no loop.
+  if (isLoginRoute(pathname) && hasAccessToken && !forceLogin) {
+    // Only a live access token should block the login page.
+    // A lone refresh cookie may be stale or the API may be unreachable, so
+    // forcing a dashboard hop here can trap the user in a refresh loop.
     console.debug(`[middleware] REDIRECT logged-in user away from login | path=${pathname}`);
     const dashboardUrl = request.nextUrl.clone();
     dashboardUrl.pathname = `/${locale}/dashboard`;
