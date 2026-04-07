@@ -84,7 +84,7 @@ export function AnimatedTableRow({
 }) {
   return (
     <motion.tr
-      variants={adminVariants.staggerItem}
+      variants={adminVariants.staggerChild}
       className={`cursor-pointer transition ${className}`}
       onClick={onClick}
       whileHover={{ backgroundColor: 'var(--color-surface-alt)' }}

@@ -9,10 +9,10 @@ import { SkeletonKpiRow, SkeletonRows } from '@/components/ui/Skeleton';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
 import { resolveEventControlGate } from '@/domain/events/controlPageGate';
-import { useAdminEventSelection } from '@/hooks/useAdminEventSelection';
 import { useToast } from '@/components/ui/Toast';
 import { ApiError } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
+import { useAdminEventRoute } from '@/features/admin-events/hooks/useAdminEventRoute';
 import { useDrawOverview } from './useDrawOverview';
 import { useDrawCategoryDetails } from './useDrawCategoryDetails';
 import { useGenerateDraw } from './useGenerateDraw';
@@ -32,7 +32,11 @@ import {
 import { GenerateDrawDialog } from './GenerateDrawDialog';
 import { RegenerateDrawDialog } from './RegenerateDrawDialog';
 
-export function DrawPageContainer() {
+type Props = {
+  eventId: string;
+};
+
+export function DrawPageContainer({ eventId }: Props) {
   const t = useTranslations('draw');
   const tC = useTranslations('common');
   const tGate = useTranslations('eventPhaseGate');
@@ -51,7 +55,11 @@ export function DrawPageContainer() {
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<'categories' | 'selected'>('categories');
 
-  const { currentEventId, events, selectedEvent, setSelectedEventId } = useAdminEventSelection();
+  const { events, selectedEvent, setSelectedEventId } = useAdminEventRoute({
+    eventId,
+    page: 'draw',
+  });
+  const currentEventId = eventId;
   const gate = resolveEventControlGate('draw', selectedEvent);
   const showContent = gate.mode === 'active' || gate.mode === 'readonly';
   const isEditable = gate.mode === 'active';
@@ -195,6 +203,7 @@ export function DrawPageContainer() {
         <>
           <DrawHeaderSummary
             locale={locale}
+            eventId={currentEventId}
             overview={overviewQuery.data}
             editable={isEditable}
             generating={generateMutation.isPending && !regenerateOpen}

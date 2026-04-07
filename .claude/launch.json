@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Frontend (Next.js)",
+      "runtimeExecutable": "/usr/local/bin/node",
+      "runtimeArgs": ["/Users/sn/Wushu/node_modules/.bin/next", "dev", "--port", "3000", "--webpack"],
+      "port": 3000,
+      "cwd": "/Users/sn/Wushu/frontend"
+    },
+    {
+      "name": "Backend (NestJS)",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["/Users/sn/Wushu/backend/start-dev.sh"],
+      "port": 4000,
+      "cwd": "/Users/sn/Wushu/backend"
+    },
+    {
+      "name": "Prisma Studio",
+      "runtimeExecutable": "/usr/local/bin/node",
+      "runtimeArgs": ["/Users/sn/Wushu/node_modules/.bin/prisma", "studio", "--port", "5555"],
+      "port": 5555,
+      "cwd": "/Users/sn/Wushu/backend"
+    }
+  ]
+}

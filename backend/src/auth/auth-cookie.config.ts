@@ -1,24 +1,30 @@
 import type { CookieOptions } from 'express';
 
-const PROXY_MODE_COOKIE_SAME_SITE = 'lax' as const;
+type SameSiteValue = 'strict' | 'lax' | 'none';
 
-function getCookieSameSite(): typeof PROXY_MODE_COOKIE_SAME_SITE {
-  return process.env.COOKIE_SAME_SITE?.trim().toLowerCase() ===
-    PROXY_MODE_COOKIE_SAME_SITE
-    ? PROXY_MODE_COOKIE_SAME_SITE
-    : PROXY_MODE_COOKIE_SAME_SITE;
+/**
+ * Reads COOKIE_SAME_SITE from the environment and returns a validated value.
+ * Defaults to 'lax' which is safe for same-origin proxy setups.
+ *
+ * Set to 'none' only when cookies must be sent in cross-site contexts
+ * (requires NODE_ENV=production so the Secure flag is also set).
+ */
+function getCookieSameSite(): SameSiteValue {
+  const raw = process.env.COOKIE_SAME_SITE?.trim().toLowerCase();
+  if (raw === 'strict' || raw === 'none' || raw === 'lax') return raw;
+  return 'lax';
 }
 
 function getCookieBaseOptions(): Pick<
   CookieOptions,
   'httpOnly' | 'sameSite' | 'secure' | 'path'
 > {
+  const sameSite = getCookieSameSite();
   return {
     httpOnly: true,
-    // Proxy mode keeps auth cookies on the frontend origin, so cross-site
-    // cookie settings must stay disabled unless the architecture changes later.
-    sameSite: getCookieSameSite(),
-    secure: process.env.NODE_ENV === 'production',
+    sameSite,
+    // Secure must be true when sameSite='none'; also always true in production.
+    secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
     path: '/',
   };
 }

@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpException,
   HttpStatus,
+  Param,
   Post,
   Query,
   Req,
@@ -24,6 +26,87 @@ export class ScheduleController {
     private readonly schedule: ScheduleService,
     private readonly gateway: FightsGateway,
   ) {}
+
+  @Get('schedule-sessions')
+  async listSessions(
+    @Req() req: AuthenticatedRequest,
+    @Query('eventId') eventId: string,
+  ) {
+    const auth = req.auth!;
+    if (!eventId)
+      throw new HttpException('eventId_REQUIRED', HttpStatus.BAD_REQUEST);
+    return this.schedule.listSessions(auth.organisationId, eventId);
+  }
+
+  @Post('schedule-sessions')
+  async upsertSession(
+    @Req() req: AuthenticatedRequest,
+    @Body()
+    body: {
+      eventId: string;
+      id?: string;
+      name: string;
+      startTime: string;
+      endTime: string;
+      order: number;
+    },
+  ) {
+    const auth = req.auth!;
+    if (!body.eventId || !body.name || !body.startTime || !body.endTime)
+      throw new HttpException('VALIDATION_ERROR', HttpStatus.BAD_REQUEST);
+    try {
+      const session = await this.schedule.upsertSession({
+        organisationId: auth.organisationId,
+        eventId: body.eventId,
+        actorUserId: auth.sub,
+        id: body.id,
+        name: body.name,
+        startTime: body.startTime,
+        endTime: body.endTime,
+        order: body.order ?? 0,
+      });
+      this.gateway.emitScheduleUpdate(body.eventId, {
+        type: 'SESSION_UPSERTED',
+        sessionId: session.id,
+      });
+      return session;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'SESSION_NOT_FOUND')
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      if (msg === 'INVALID_SESSION_TIMES' || msg === 'SESSION_END_BEFORE_START')
+        throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      throw new HttpException('Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Delete('schedule-sessions/:id')
+  async deleteSession(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') sessionId: string,
+    @Query('eventId') eventId: string,
+  ) {
+    const auth = req.auth!;
+    if (!eventId)
+      throw new HttpException('eventId_REQUIRED', HttpStatus.BAD_REQUEST);
+    try {
+      await this.schedule.deleteSession({
+        organisationId: auth.organisationId,
+        eventId,
+        sessionId,
+      });
+      this.gateway.emitScheduleUpdate(eventId, {
+        type: 'SESSION_DELETED',
+        sessionId,
+      });
+      return { ok: true };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'SESSION_NOT_FOUND')
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      throw new HttpException('Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 
   @Get('mats')
   async listMats(
@@ -98,6 +181,7 @@ export class ScheduleController {
       seed?: number;
       override?: boolean;
       reason?: string;
+      useSessions?: boolean;
     },
   ) {
     const auth = req.auth!;
@@ -113,6 +197,7 @@ export class ScheduleController {
         seed: body.seed,
         override: body.override ?? false,
         reason: body.reason ?? null,
+        useSessions: body.useSessions ?? false,
       });
       this.gateway.emitScheduleUpdate(body.eventId, {
         type: 'SCHEDULE_AUTO',

@@ -13,8 +13,8 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Modal } from '@/components/ui/Modal';
 import { apiGet, apiDelete } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
+import { CreateEventModal } from '@/features/events/components/CreateEventModal';
 import type { EventRow } from '@/types/api';
-import { CreateEventModal } from './CreateEventModal';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 export default function EventsPage() {
@@ -128,9 +128,9 @@ export default function EventsPage() {
                         <tr
                           key={ev.id}
                           onClick={() => router.push(`/${locale}/admin/events/${ev.id}`)}
-                          className="cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]"
+                          className="group cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]"
                         >
-                          <td className="px-4 py-3 font-medium text-[var(--color-text)]">{ev.name}</td>
+                          <td className="px-4 py-3 font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{ev.name}</td>
                           <td className="px-4 py-3 text-[var(--color-text-muted)]">
                             {new Date(ev.competitionStartDate).toLocaleDateString()}
                             {ev.competitionEndDate && ev.competitionEndDate !== ev.competitionStartDate &&
@@ -145,14 +145,17 @@ export default function EventsPage() {
                             />
                           </td>
                           <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              aria-label={tEvents('delete.button')}
-                              onClick={() => { setPendingDelete(ev); setDeleteError(null); }}
-                              className="flex h-7 w-7 items-center justify-center rounded text-[var(--color-text-muted)] transition hover:bg-red-500/10 hover:text-red-500"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                aria-label={tEvents('delete.button')}
+                                onClick={() => { setPendingDelete(ev); setDeleteError(null); }}
+                                className="flex h-7 w-7 items-center justify-center rounded text-[var(--color-text-muted)] transition hover:bg-red-500/10 hover:text-red-500"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                              </button>
+                              <span className="translate-x-0 text-[var(--color-text-muted)] opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--color-primary)] group-hover:opacity-100">→</span>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -165,7 +168,7 @@ export default function EventsPage() {
                   {rows.map((ev) => (
                     <div
                       key={ev.id}
-                      className="relative rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition hover:bg-[var(--color-surface-alt)]"
+                      className="group relative rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]"
                     >
                       <button
                         type="button"
@@ -173,7 +176,7 @@ export default function EventsPage() {
                         className="block w-full text-left"
                       >
                         <div className="flex items-center justify-between gap-2 pr-8">
-                          <p className="truncate text-[13px] font-medium text-[var(--color-text)]">{ev.name}</p>
+                          <p className="truncate text-[13px] font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{ev.name}</p>
                           <StatusChip
                             status={ev.lifecycle}
                             label={tEvents(`lifecycle.${ev.lifecycle}` as Parameters<typeof tEvents>[0])}

@@ -1,6 +1,7 @@
 'use client';
 
-import { Link } from '@/i18n/navigation';
+import Link from 'next/link';
+import { getAdminEventPath } from '@/features/admin-events/lib/adminEventRoutes';
 import type { DrawOverviewResponse } from '@/types/api';
 
 type Props = {
@@ -51,11 +52,7 @@ export function DrawMobileBottomBars({
               </button>
             )}
             <Link
-              href={
-                currentEventId
-                  ? `/admin/brackets?eventId=${encodeURIComponent(currentEventId)}`
-                  : '/admin/brackets'
-              }
+              href={getAdminEventPath(locale, currentEventId, 'brackets')}
               className="flex min-h-[44px] items-center justify-center rounded-[var(--radius-input)] border border-[var(--color-border)] px-3 text-[13px] font-semibold text-[var(--color-text)]"
             >
               {t('actionViewBrackets')}
@@ -67,21 +64,17 @@ export function DrawMobileBottomBars({
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 md:hidden">
         <ul className="grid grid-cols-5 gap-1 text-center">
           {[
-            { href: '/admin', label: tPublic('overview') },
-            { href: '/admin/weighin', label: tNav('weighin') },
-            { href: '/admin/draw', label: tNav('draw') },
-            { href: '/admin/live', label: tNav('live') },
-            { href: '/admin/settings', label: tPublic('more') },
+            { href: `/${locale}/admin`, label: tPublic('overview') },
+            { href: getAdminEventPath(locale, currentEventId, 'weighin'), label: tNav('weighin') },
+            { href: getAdminEventPath(locale, currentEventId, 'draw'), label: tNav('draw') },
+            { href: getAdminEventPath(locale, currentEventId, 'live'), label: tNav('live') },
+            { href: `/${locale}/admin/settings`, label: tPublic('more') },
           ].map((item) => {
-            const active = pathname === `/${locale}${item.href}`;
-            const href =
-              currentEventId && item.href !== '/admin'
-                ? `${item.href}?eventId=${encodeURIComponent(currentEventId)}`
-                : item.href;
+            const active = pathname === item.href;
             return (
               <li key={item.href}>
                 <Link
-                  href={href}
+                  href={item.href}
                   className={`flex min-h-[44px] items-center justify-center rounded-[var(--radius-pill)] px-1 text-[12px] font-semibold ${
                     active
                       ? 'bg-[var(--color-primary)]/20 text-[var(--color-text)]'

@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
@@ -27,10 +28,18 @@ import { HealthController } from './health.controller';
 @Module({
   imports: [
     NestScheduleModule.forRoot(),
+    // Two buckets: a permissive global one and a strict "short" one for auth endpoints.
+    // Controllers/methods that need different limits use @Throttle({ ... }) to override.
     ThrottlerModule.forRoot([
       {
-        ttl: 60_000,
-        limit: 10,
+        name: 'default',
+        ttl: 60_000,  // 1 minute
+        limit: 120,   // 120 req/min per IP — reasonable for normal browsing
+      },
+      {
+        name: 'short',
+        ttl: 10_000,  // 10 seconds
+        limit: 10,    // 10 req/10s burst guard
       },
     ]),
     PrismaModule,
@@ -55,6 +64,14 @@ import { HealthController } from './health.controller';
     EventPoliciesModule,
   ],
   controllers: [HealthController],
+  providers: [
+    // Apply throttling globally to every route so individual controllers
+    // that forget @UseGuards(ThrottlerGuard) are still protected.
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

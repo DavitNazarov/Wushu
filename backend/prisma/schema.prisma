@@ -141,10 +141,11 @@ model Organisation {
   athleteMerges AthleteMerge[]
   registrations Registration[]
   weighIns      WeighInAttempt[]
-  mats          Mat[]
-  brackets      Bracket[]
-  fights        Fight[]
-  timerStates   TimerState[]
+  mats             Mat[]
+  brackets         Bracket[]
+  fights           Fight[]
+  timerStates      TimerState[]
+  scheduleSessions ScheduleSession[]
 }
 
 model User {
@@ -265,6 +266,7 @@ model Event {
   fights          Fight[]
   newsPosts       NewsPost[]
   eventAgeGroups  EventAgeGroup[]
+  scheduleSessions ScheduleSession[]
 
   @@unique([organisationId, slug])
 }
@@ -591,6 +593,22 @@ model Mat {
   @@index([organisationId, eventId])
 }
 
+model ScheduleSession {
+  id             String   @id @default(cuid())
+  organisationId String
+  eventId        String
+  name           String
+  startTime      DateTime
+  endTime        DateTime
+  order          Int
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  event        Event        @relation(fields: [eventId], references: [id])
+  fights       Fight[]
+
+  @@index([organisationId, eventId])
+}
+
 model Bracket {
   id             String   @id @default(cuid())
   organisationId String
@@ -625,6 +643,7 @@ model Fight {
   matId              String?
   orderInMat         Int?
   scheduledStartTime DateTime?
+  sessionId          String?
 
   winnerAthleteId   String?
   loserAthleteId    String?
@@ -642,6 +661,7 @@ model Fight {
   event               Event                @relation(fields: [eventId], references: [id])
   bracket             Bracket?             @relation(fields: [bracketId], references: [id])
   mat                 Mat?                 @relation(fields: [matId], references: [id])
+  scheduleSession     ScheduleSession?     @relation(fields: [sessionId], references: [id])
   redAthlete          Athlete?             @relation("FightRedAthlete", fields: [redAthleteId], references: [id])
   blueAthlete         Athlete?             @relation("FightBlueAthlete", fields: [blueAthleteId], references: [id])
   winnerAthlete       Athlete?             @relation("FightWinner", fields: [winnerAthleteId], references: [id])

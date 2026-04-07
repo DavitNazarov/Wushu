@@ -1,5 +1,18 @@
-import { BracketsPageContainer } from './BracketsPageContainer';
+import { redirect } from 'next/navigation';
+import { getLegacyAdminEventRedirectTarget } from '@/features/admin-events/lib/legacyAdminEventRedirect';
 
-export default function BracketsPage() {
-  return <BracketsPageContainer />;
+type Props = {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function LegacyAdminBracketsPage({ params, searchParams }: Props) {
+  const { locale } = await params;
+  redirect(
+    getLegacyAdminEventRedirectTarget({
+      locale,
+      page: 'brackets',
+      searchParams: await searchParams,
+    }),
+  );
 }

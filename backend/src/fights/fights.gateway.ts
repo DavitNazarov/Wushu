@@ -4,10 +4,21 @@ import {
   SubscribeMessage,
   MessageBody,
   ConnectedSocket,
+  WsException,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { createCorsOriginDelegate } from '../config/runtime-env';
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertUuid(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !UUID_RE.test(value)) {
+    throw new WsException(`Invalid ${field}: must be a UUID`);
+  }
+  return value;
+}
 
 const SOCKET_IO_PATH = '/api/socket.io';
 
@@ -45,17 +56,21 @@ export class FightsGateway {
 
   @SubscribeMessage('join-event')
   handleJoinEvent(
-    @MessageBody() data: { eventId: string },
+    @MessageBody() data: unknown,
     @ConnectedSocket() client: Socket,
   ) {
-    const room = `event:${data.eventId}`;
+    const eventId = assertUuid(
+      data && typeof data === 'object' ? (data as Record<string, unknown>).eventId : undefined,
+      'eventId',
+    );
+    const room = `event:${eventId}`;
     void client.join(room);
     this.logger.debug(
       JSON.stringify({
         scope: 'realtime',
         action: 'join-event',
         clientId: client.id,
-        eventId: data.eventId,
+        eventId,
         room,
       }),
     );
@@ -64,17 +79,21 @@ export class FightsGateway {
 
   @SubscribeMessage('join-mat')
   handleJoinMat(
-    @MessageBody() data: { matId: string },
+    @MessageBody() data: unknown,
     @ConnectedSocket() client: Socket,
   ) {
-    const room = `mat:${data.matId}`;
+    const matId = assertUuid(
+      data && typeof data === 'object' ? (data as Record<string, unknown>).matId : undefined,
+      'matId',
+    );
+    const room = `mat:${matId}`;
     void client.join(room);
     this.logger.debug(
       JSON.stringify({
         scope: 'realtime',
         action: 'join-mat',
         clientId: client.id,
-        matId: data.matId,
+        matId,
         room,
       }),
     );

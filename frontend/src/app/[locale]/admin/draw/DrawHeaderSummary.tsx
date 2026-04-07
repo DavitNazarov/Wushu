@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import type { DrawOverviewResponse } from '@/types/api';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { getAdminEventPath } from '@/features/admin-events/lib/adminEventRoutes';
 import { statusBadgeClasses } from './drawReadinessMapper';
 
 type Props = {
   locale: string;
+  eventId: string;
   overview: DrawOverviewResponse;
   editable: boolean;
   generating: boolean;
@@ -29,6 +31,7 @@ function StatTile({ label, value }: { label: string; value: string | number }) {
 
 export function DrawHeaderSummary({
   locale,
+  eventId,
   overview,
   editable,
   generating,
@@ -88,7 +91,7 @@ export function DrawHeaderSummary({
             </>
           )}
           <Link
-            href={`/${locale}/admin/brackets`}
+            href={getAdminEventPath(locale, eventId, 'brackets')}
             className="inline-flex h-11 items-center justify-center rounded-[var(--radius-input)] border border-[var(--color-border)] bg-transparent px-4 text-sm font-medium text-[var(--color-text)] transition hover:bg-[var(--color-surface-alt)]"
           >
             {t('actionViewBrackets')}

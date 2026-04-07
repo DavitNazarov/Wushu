@@ -67,6 +67,26 @@ body {
   color: var(--color-text);
 }
 
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-text);
+  caret-color: var(--color-text);
+  -webkit-box-shadow: 0 0 0 1000px var(--color-surface-alt) inset;
+  box-shadow: 0 0 0 1000px var(--color-surface-alt) inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 /* Smooth scrollbar for dark mode */
 ::-webkit-scrollbar {
   width: 6px;

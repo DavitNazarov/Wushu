@@ -203,7 +203,7 @@ function UserTableSection({
   return (
     <motion.div
       className="space-y-3"
-      variants={adminVariants.staggerItem}
+      variants={adminVariants.staggerChild}
     >
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-[var(--color-text)]">
@@ -240,7 +240,7 @@ function UserTableSection({
                     onSelectUser(user.id);
                   }
                 }}
-                variants={adminVariants.staggerItem}
+                variants={adminVariants.staggerChild}
               >
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -276,7 +276,7 @@ function UserTableSection({
             type="button"
             className="group w-full rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]"
             onClick={() => onSelectUser(user.id)}
-            variants={adminVariants.staggerItem}
+            variants={adminVariants.staggerChild}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3 min-w-0">

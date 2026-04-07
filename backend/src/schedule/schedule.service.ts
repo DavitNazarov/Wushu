@@ -112,6 +112,71 @@ export class ScheduleService {
     });
   }
 
+  async listSessions(organisationId: string, eventId: string) {
+    return this.prisma.scheduleSession.findMany({
+      where: { organisationId, eventId },
+      orderBy: { order: 'asc' },
+    });
+  }
+
+  async upsertSession(input: {
+    organisationId: string;
+    eventId: string;
+    actorUserId: string;
+    id?: string;
+    name: string;
+    startTime: string;
+    endTime: string;
+    order: number;
+  }) {
+    const startTime = new Date(input.startTime);
+    const endTime = new Date(input.endTime);
+    if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+      throw new Error('INVALID_SESSION_TIMES');
+    }
+    if (endTime <= startTime) throw new Error('SESSION_END_BEFORE_START');
+
+    if (input.id) {
+      const existing = await this.prisma.scheduleSession.findFirst({
+        where: { id: input.id, organisationId: input.organisationId, eventId: input.eventId },
+      });
+      if (!existing) throw new Error('SESSION_NOT_FOUND');
+      return this.prisma.scheduleSession.update({
+        where: { id: input.id },
+        data: { name: input.name, startTime, endTime, order: input.order },
+      });
+    }
+    return this.prisma.scheduleSession.create({
+      data: {
+        organisationId: input.organisationId,
+        eventId: input.eventId,
+        name: input.name,
+        startTime,
+        endTime,
+        order: input.order,
+      },
+    });
+  }
+
+  async deleteSession(input: {
+    organisationId: string;
+    eventId: string;
+    sessionId: string;
+  }) {
+    const existing = await this.prisma.scheduleSession.findFirst({
+      where: { id: input.sessionId, organisationId: input.organisationId, eventId: input.eventId },
+    });
+    if (!existing) throw new Error('SESSION_NOT_FOUND');
+
+    // Unlink fights from this session before deleting
+    await this.prisma.fight.updateMany({
+      where: { sessionId: input.sessionId },
+      data: { sessionId: null },
+    });
+
+    return this.prisma.scheduleSession.delete({ where: { id: input.sessionId } });
+  }
+
   async upsertMat(input: {
     organisationId: string;
     eventId: string;
@@ -222,6 +287,7 @@ export class ScheduleService {
     seed?: number;
     override?: boolean;
     reason?: string | null;
+    useSessions?: boolean;
   }) {
     const event = await this.prisma.event.findFirst({
       where: { id: input.eventId, organisationId: input.organisationId },
@@ -280,6 +346,14 @@ export class ScheduleService {
     const boutMs = (input.avgBoutSeconds + input.bufferSeconds) * 1000;
     const restMs = appliedRestMinutes * 60 * 1000;
 
+    // Load sessions if requested
+    const sessions = input.useSessions
+      ? await this.prisma.scheduleSession.findMany({
+          where: { organisationId: input.organisationId, eventId: input.eventId },
+          orderBy: { order: 'asc' },
+        })
+      : [];
+
     const matNextTime = new Map<string, number>();
     const athleteLastFightEndTime = new Map<string, number>();
     for (const mat of mats) matNextTime.set(mat.id, baseTime);
@@ -289,6 +363,7 @@ export class ScheduleService {
       matId: string;
       orderInMat: number;
       scheduledStartTime: Date;
+      sessionId: string | null;
     }> = [];
     const matOrderCounters = new Map<string, number>();
     for (const mat of mats) matOrderCounters.set(mat.id, 0);
@@ -314,6 +389,60 @@ export class ScheduleService {
         }
       }
 
+      // If sessions are defined, enforce session boundaries.
+      // When the earliest available time is past the current session's end,
+      // advance all mat clocks to the next session's start time and retry.
+      if (sessions.length > 0) {
+        let advanced = true;
+        while (advanced) {
+          advanced = false;
+          // Find which session this time falls into or is past
+          for (const session of sessions) {
+            const sessionEnd = session.endTime.getTime();
+            if (earliestStart >= sessionEnd) {
+              // Find the next session after this one
+              const nextSession = sessions.find(
+                (s) => s.startTime.getTime() > sessionEnd,
+              );
+              if (nextSession) {
+                const nextStart = nextSession.startTime.getTime();
+                // Advance all mats to the next session start if they're stuck in the gap
+                for (const mat of mats) {
+                  const current = matNextTime.get(mat.id) ?? baseTime;
+                  if (current < nextStart) {
+                    matNextTime.set(mat.id, nextStart);
+                  }
+                }
+                // Recalculate earliest start with updated mat times
+                earliestStart = Infinity;
+                bestMatId = mats[0].id;
+                for (const mat of mats) {
+                  const matReady = matNextTime.get(mat.id) ?? baseTime;
+                  const athleteReady = Math.max(
+                    ...athleteIds.map((id) => (athleteLastFightEndTime.get(id) ?? 0) + restMs),
+                    matReady,
+                  );
+                  if (athleteReady < earliestStart) {
+                    earliestStart = athleteReady;
+                    bestMatId = mat.id;
+                  }
+                }
+                advanced = true;
+              }
+              break;
+            }
+          }
+        }
+      }
+
+      // Determine which session this fight belongs to
+      const sessionId =
+        sessions.find(
+          (s) =>
+            earliestStart >= s.startTime.getTime() &&
+            earliestStart < s.endTime.getTime(),
+        )?.id ?? null;
+
       const orderInMat = (matOrderCounters.get(bestMatId) ?? 0) + 1;
       matOrderCounters.set(bestMatId, orderInMat);
 
@@ -326,6 +455,7 @@ export class ScheduleService {
         matId: bestMatId,
         orderInMat,
         scheduledStartTime: new Date(earliestStart),
+        sessionId,
       });
     }
 
@@ -337,6 +467,7 @@ export class ScheduleService {
             matId: upd.matId,
             orderInMat: upd.orderInMat,
             scheduledStartTime: upd.scheduledStartTime,
+            sessionId: upd.sessionId,
           },
         });
       }

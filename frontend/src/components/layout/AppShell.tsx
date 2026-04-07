@@ -5,27 +5,7 @@ import Link from 'next/link';
 import { useTranslations, useLocale } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import {
-  LayoutDashboard,
-  Calendar,
-  FileText,
-  Settings,
-  UserCircle2,
-  Users,
-  ClipboardList,
-  Scale,
-  ShieldCheck,
-  Shuffle,
-  GitBranch,
-  Clock,
-  Radio,
-  Trophy,
-  Building2,
-  Newspaper,
-  Inbox,
-  Menu,
-  ChevronLeft,
-} from 'lucide-react';
+import { ChevronLeft, Menu } from 'lucide-react';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { apiGet } from '@/lib/api/client';
 import type { EventRow } from '@/types/api';
@@ -33,69 +13,31 @@ import { TopbarToggles } from './TopbarToggles';
 import { LogoutButton } from './LogoutButton';
 import { MobileDrawer } from './MobileDrawer';
 import { MobileNav } from './MobileNav';
-
-type NavItem = {
-  key: string;
-  href: string;
-  icon: typeof LayoutDashboard;
-};
-
-type NavSection = {
-  labelKey: string;
-  items: NavItem[];
-};
-
-const eventOpsShortcuts: Array<{ key: string; href: string }> = [
-  { key: 'registrations', href: '/admin/registrations' },
-  { key: 'weighin', href: '/admin/weighin' },
-  { key: 'integrity', href: '/admin/integrity' },
-  { key: 'draw', href: '/admin/draw' },
-  { key: 'schedule', href: '/admin/schedule' },
-  { key: 'live', href: '/admin/live' },
-];
-
-const navSections: NavSection[] = [
-  {
-    labelKey: 'overview',
-    items: [
-      { key: 'dashboard', href: '/admin', icon: LayoutDashboard },
-      { key: 'events', href: '/admin/events', icon: Calendar },
-    ],
-  },
-  {
-    labelKey: 'tournament',
-    items: [
-      { key: 'registrations', href: '/admin/registrations', icon: ClipboardList },
-      { key: 'weighin', href: '/admin/weighin', icon: Scale },
-      { key: 'integrity', href: '/admin/integrity', icon: ShieldCheck },
-      { key: 'draw', href: '/admin/draw', icon: Shuffle },
-      { key: 'brackets', href: '/admin/brackets', icon: GitBranch },
-      { key: 'schedule', href: '/admin/schedule', icon: Clock },
-      { key: 'live', href: '/admin/live', icon: Radio },
-      { key: 'results', href: '/admin/results', icon: Trophy },
-    ],
-  },
-  {
-    labelKey: 'people',
-    items: [
-      { key: 'clubs', href: '/admin/clubs', icon: Building2 },
-      { key: 'athletes', href: '/admin/athletes', icon: UserCircle2 },
-    ],
-  },
-  {
-    labelKey: 'admin',
-    items: [
-      { key: 'users', href: '/admin/users', icon: Users },
-      { key: 'categoryTemplates', href: '/admin/category-templates', icon: FileText },
-      { key: 'news', href: '/admin/news', icon: Newspaper },
-      { key: 'inbox', href: '/admin/inbox', icon: Inbox },
-      { key: 'settings', href: '/admin/settings', icon: Settings },
-    ],
-  },
-];
+import { AdminSelectedEventSummary } from './AdminSelectedEventSummary';
+import { getActiveAdminNavKey } from './adminNavMatcher';
+import {
+  adminEventOpsShortcutKeys,
+  adminNavSections,
+  type AdminNavItemKey,
+} from './adminNavConfig';
+import {
+  getAdminEventPath,
+  matchAdminEventRoute,
+  type AdminEventRoutePage,
+} from '@/features/admin-events/lib/adminEventRoutes';
 
 type AppShellProps = {
   children: ReactNode;
+};
+
+const NAV_KEY_TO_EVENT_PAGE: Partial<Record<AdminNavItemKey, AdminEventRoutePage>> = {
+  registrations: 'registrations',
+  weighin: 'weighin',
+  draw: 'draw',
+  brackets: 'brackets',
+  schedule: 'schedule',
+  live: 'live',
+  results: 'results',
 };
 
 export function AppShell({ children }: AppShellProps) {
@@ -115,26 +57,58 @@ export function AppShell({ children }: AppShellProps) {
   });
 
   const closeMobile = useCallback(() => setMobileOpen(false), []);
-  const currentEventId = searchParams.get('eventId') ?? '';
+  const routeEventMatch = matchAdminEventRoute(pathname, locale);
+  const activeNavKey = getActiveAdminNavKey(pathname, locale);
+  const currentEventId = routeEventMatch?.eventId ?? searchParams.get('eventId') ?? '';
   const selectedEvent = useMemo(
-    () =>
-      (events ?? []).find((ev) => ev.id === currentEventId) ??
-      (events?.length ? events[0] : null),
-    [events, currentEventId],
+    () => {
+      const matchedEvent = (events ?? []).find((ev) => ev.id === currentEventId) ?? null;
+      if (routeEventMatch) return matchedEvent;
+      return matchedEvent ?? (events?.length ? events[0] : null);
+    },
+    [currentEventId, events, routeEventMatch],
   );
 
   function setEventIdInUrl(nextEventId: string) {
-    const next = new URLSearchParams(searchParams.toString());
-    if (nextEventId) next.set('eventId', nextEventId);
-    else next.delete('eventId');
-    const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname);
+    if (!nextEventId) return;
+
+    if (routeEventMatch) {
+      router.replace(getAdminEventPath(locale, nextEventId, routeEventMatch.page));
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.set('eventId', nextEventId);
+    const queryString = nextSearchParams.toString();
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname);
   }
 
-  function isActive(href: string) {
-    return href === '/admin'
-      ? pathname === `/${locale}/admin` || pathname === `/${locale}/admin/`
-      : pathname.startsWith(`/${locale}${href}`);
+  function hrefForItem(item: { key: AdminNavItemKey; href: string }) {
+    const eventPage = NAV_KEY_TO_EVENT_PAGE[item.key];
+    if (eventPage) {
+      return selectedEvent?.id
+        ? getAdminEventPath(locale, selectedEvent.id, eventPage)
+        : `/${locale}/admin/events`;
+    }
+
+    if (item.key === 'integrity') {
+      return selectedEvent?.id
+        ? `/${locale}/admin/integrity?eventId=${encodeURIComponent(selectedEvent.id)}`
+        : `/${locale}/admin/integrity`;
+    }
+
+    return `/${locale}${item.href}`;
+  }
+
+  function hrefForShortcut(key: (typeof adminEventOpsShortcutKeys)[number]) {
+    const eventPage = NAV_KEY_TO_EVENT_PAGE[key];
+    if (eventPage && selectedEvent?.id) {
+      return getAdminEventPath(locale, selectedEvent.id, eventPage);
+    }
+    if (key === 'integrity' && selectedEvent?.id) {
+      return `/${locale}/admin/integrity?eventId=${encodeURIComponent(selectedEvent.id)}`;
+    }
+    return `/${locale}/admin/events`;
   }
 
   function renderSidebarContent(opts: { collapsed: boolean; logoutIconOnly: boolean }) {
@@ -153,7 +127,7 @@ export function AppShell({ children }: AppShellProps) {
         </div>
 
         <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4 pt-2">
-          {navSections.map((section) => (
+          {adminNavSections.map((section) => (
             <div key={section.labelKey}>
               {!c && (
                 <div className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
@@ -162,12 +136,12 @@ export function AppShell({ children }: AppShellProps) {
               )}
               <div className="flex flex-col gap-0.5">
                 {section.items.map((item) => {
-                  const active = isActive(item.href);
+                  const active = item.key === activeNavKey;
                   const Icon = item.icon;
                   return (
                     <Link
                       key={item.key}
-                      href={`/${locale}${item.href}`}
+                      href={hrefForItem(item)}
                       onClick={closeMobile}
                       title={c ? tNav(item.key as Parameters<typeof tNav>[0]) : undefined}
                       className={`group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors ${
@@ -206,6 +180,11 @@ export function AppShell({ children }: AppShellProps) {
     collapsed: false,
     logoutIconOnly: false,
   });
+  const shortcutItems = adminEventOpsShortcutKeys.map((key) => ({
+    key,
+    href: hrefForShortcut(key),
+    label: tNav(key as Parameters<typeof tNav>[0]),
+  }));
 
   return (
     <div className="flex min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
@@ -292,36 +271,15 @@ export function AppShell({ children }: AppShellProps) {
 
         <main className="flex-1 px-4 py-6 sm:px-6">
           <div className="mx-auto max-w-[1200px] space-y-4">
-            <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4">
-              {!selectedEvent ? (
-                <p className="text-[13px] text-[var(--color-text-muted)]">
-                  {tTopbar('noEventSelected')}
-                </p>
-              ) : (
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0">
-                    <p className="truncate text-[14px] font-semibold text-[var(--color-text)]">
-                      {selectedEvent.name}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
-                      {new Date(selectedEvent.competitionStartDate).toLocaleDateString()} -{' '}
-                      {new Date(selectedEvent.competitionEndDate).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {eventOpsShortcuts.map((shortcut) => (
-                      <Link
-                        key={shortcut.key}
-                        href={`/${locale}${shortcut.href}?eventId=${selectedEvent.id}`}
-                        className="rounded-[var(--radius-pill)] border border-[var(--color-border)] px-2.5 py-1 text-[12px] font-medium text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)]"
-                      >
-                        {tNav(shortcut.key as Parameters<typeof tNav>[0])}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </section>
+            {!routeEventMatch ? (
+              <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4">
+                <AdminSelectedEventSummary
+                  selectedEvent={selectedEvent}
+                  emptyLabel={tTopbar('noEventSelected')}
+                  shortcuts={shortcutItems}
+                />
+              </section>
+            ) : null}
             <div>{children}</div>
           </div>
         </main>

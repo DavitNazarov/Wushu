@@ -29,23 +29,19 @@ export const adminVariants = {
   } as Variants,
 
   staggerContainer: {
-    initial: 'initial',
-    animate: 'animate',
-    variants: {
-      initial: { opacity: 0 },
-      animate: {
-        opacity: 1,
-        transition: {
-          staggerChildren: 0.05,
-          delayChildren: 0,
-        },
+    initial: { opacity: 0 },
+    animate: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.05,
+        delayChildren: 0,
       },
     },
   } as Variants,
 
-  staggerItem: {
+  staggerChild: {
     initial: { opacity: 0, y: 10 },
-    animate: { opacity: 1, y: 0 },
+    animate: { opacity: 1, y: 0, transition: { duration: 0.3 } },
   } as Variants,
 
   hover: {

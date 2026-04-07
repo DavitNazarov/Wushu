@@ -670,6 +670,15 @@ export interface FightRow {
   confirmedAt?: string | null;
 }
 
+export interface ScheduleSessionRow {
+  id: string;
+  eventId: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  order: number;
+}
+
 export interface ScheduleFightRow {
   id: string;
   bracketRoundLabel: string;
@@ -687,6 +696,7 @@ export interface ScheduleFightRow {
   matName: string | null;
   orderInMat: number | null;
   scheduledAt: string | null;
+  sessionId: string | null;
 }
 
 export interface AutoScheduleConflict {

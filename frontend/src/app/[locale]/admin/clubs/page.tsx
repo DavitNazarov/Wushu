@@ -164,22 +164,32 @@ export default function ClubsPage() {
                         goToClubDetails(club.id);
                       }
                     }}
-                    className="cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40"
+                    className="group cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40"
                   >
-                    <td className="px-4 py-3 font-medium text-[var(--color-text)]">{club.name}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-subtle)] text-[11px] font-bold uppercase text-[var(--color-primary)] transition-transform duration-200 group-hover:scale-110">
+                          {club.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <span className="font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{club.name}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">{club.city || '—'}</td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">{club.country || '—'}</td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openEdit(club);
-                        }}
-                        className="text-[12px] font-medium text-[var(--color-primary)] hover:underline"
-                      >
-                        {tCommon('edit')}
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEdit(club);
+                          }}
+                          className="text-[12px] font-medium text-[var(--color-primary)] hover:underline"
+                        >
+                          {tCommon('edit')}
+                        </button>
+                        <span className="translate-x-0 text-[var(--color-text-muted)] opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--color-primary)] group-hover:opacity-100">→</span>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -200,24 +210,34 @@ export default function ClubsPage() {
                     goToClubDetails(club.id);
                   }
                 }}
-                className="w-full rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition hover:bg-[var(--color-surface-alt)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40"
+                className="group w-full rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="text-[13px] font-medium text-[var(--color-text)]">{club.name}</p>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openEdit(club);
-                    }}
-                    className="shrink-0 text-[12px] font-medium text-[var(--color-primary)] hover:underline"
-                  >
-                    {tCommon('edit')}
-                  </button>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-subtle)] text-[12px] font-bold uppercase text-[var(--color-primary)]">
+                      {club.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{club.name}</p>
+                      <p className="text-[12px] text-[var(--color-text-muted)]">
+                        {[club.city, club.country].filter(Boolean).join(', ') || '—'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openEdit(club);
+                      }}
+                      className="shrink-0 text-[12px] font-medium text-[var(--color-primary)] hover:underline"
+                    >
+                      {tCommon('edit')}
+                    </button>
+                    <span className="text-[var(--color-text-muted)] transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--color-primary)]">→</span>
+                  </div>
                 </div>
-                <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-                  {[club.city, club.country].filter(Boolean).join(', ') || '—'}
-                </p>
               </div>
             ))}
           </div>

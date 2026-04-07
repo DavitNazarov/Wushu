@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowRight, CalendarRange, ListChecks, Users } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/Card';
+import { getAdminEventPath } from '@/features/admin-events/lib/adminEventRoutes';
 import type { AthleteProfileRegistrationRow } from '@/types/api';
 
 type Props = {
@@ -20,12 +21,19 @@ export function AthleteProfileActions({ scope, registrations }: Props) {
     scope === 'admin'
       ? [
           { id: 'athletes', href: `/${locale}/admin/athletes`, label: t('admin.athletes'), description: t('admin.athletesDescription') },
-          { id: 'registrations', href: `/${locale}/admin/registrations`, label: t('admin.registrations'), description: t('admin.registrationsDescription') },
+          {
+            id: 'registrations',
+            href: latestRegistration
+              ? getAdminEventPath(locale, latestRegistration.eventId, 'registrations')
+              : `/${locale}/admin/events`,
+            label: t('admin.registrations'),
+            description: t('admin.registrationsDescription'),
+          },
           ...(latestRegistration
             ? [
                 {
                   id: 'event',
-                  href: `/${locale}/admin/events/${latestRegistration.eventId}`,
+                  href: getAdminEventPath(locale, latestRegistration.eventId),
                   label: t('admin.event'),
                   description: t('admin.eventDescription', { event: latestRegistration.eventName }),
                 },

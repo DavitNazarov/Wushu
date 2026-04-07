@@ -86,6 +86,13 @@ export class PublicController {
     return this.clubs.listPublic();
   }
 
+  @Get('clubs/:id')
+  async getPublicClub(@Param('id') id: string) {
+    const details = await this.clubs.getPublicDetails(id);
+    if (!details) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    return details;
+  }
+
   @Get('athletes/:id')
   async getPublicAthlete(@Param('id') id: string) {
     const profile = await this.athleteProfiles.getPublicProfile(id);

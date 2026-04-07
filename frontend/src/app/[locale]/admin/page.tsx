@@ -83,14 +83,14 @@ export default function AdminDashboardPage() {
       ) : (
         <motion.div
           className="grid gap-4 sm:grid-cols-3"
+          variants={adminVariants.staggerContainer}
           initial="initial"
           animate="animate"
-          variants={adminVariants.staggerContainer}
         >
           {kpis.map((kpi) => (
             <motion.div
               key={kpi.label}
-              variants={adminVariants.slideUp}
+              variants={adminVariants.staggerChild}
             >
               <KpiCard {...kpi} />
             </motion.div>
@@ -158,9 +158,9 @@ export default function AdminDashboardPage() {
         ) : (
           <motion.div
             className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)]"
+            variants={adminVariants.staggerContainer}
             initial="initial"
             animate="animate"
-            variants={adminVariants.staggerContainer}
           >
             {/* Desktop table */}
             <table className="hidden min-w-full text-[13px] sm:table">
@@ -176,7 +176,7 @@ export default function AdminDashboardPage() {
                   <motion.tr
                     key={ev.id}
                     className="bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]"
-                    variants={adminVariants.staggerItem}
+                    variants={adminVariants.staggerChild}
                   >
                     <td className="px-4 py-3 font-medium text-[var(--color-text)]">
                       <Link href={`/${locale}/admin/events`} className="hover:underline">{ev.name}</Link>
@@ -202,7 +202,7 @@ export default function AdminDashboardPage() {
                 <motion.div
                   key={ev.id}
                   className="flex items-center justify-between gap-3 bg-[var(--color-surface)] px-4 py-3"
-                  variants={adminVariants.staggerItem}
+                  variants={adminVariants.staggerChild}
                 >
                   <div className="min-w-0">
                     <p className="truncate text-[13px] font-medium text-[var(--color-text)]">{ev.name}</p>

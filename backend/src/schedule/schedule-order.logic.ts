@@ -66,6 +66,7 @@ export function buildScheduleRows(fights: ScheduleSourceFight[]): BuiltScheduleR
       matOrder: candidate.fight.mat?.order ?? null,
       orderInMat: candidate.fight.orderInMat,
       scheduledAt: candidate.fight.scheduledStartTime,
+      sessionId: candidate.fight.sessionId,
     };
   });
 }

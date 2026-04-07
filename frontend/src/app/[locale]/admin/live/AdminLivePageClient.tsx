@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
@@ -12,16 +11,14 @@ import { getCompactErrorMessage } from '@/lib/api/error';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
 import { resolveEventControlGate } from '@/domain/events/controlPageGate';
-import { useAdminEventSelection } from '@/hooks/useAdminEventSelection';
 import { useFightTimerDisplay } from '@/hooks/useFightTimerDisplay';
 import { useRealtimeQuerySync } from '@/hooks/useRealtimeQuerySync';
+import { useAdminEventRoute } from '@/features/admin-events/hooks/useAdminEventRoute';
 import type { LiveQueueBoardResponse, LiveQueueFightRow } from '@/types/live';
-import { LiveFightCard } from './LiveFightCard';
-import { LiveQueueList } from './LiveQueueList';
-import { LiveResultModal } from './LiveResultModal';
-
-const SEL =
-  'h-10 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
+import { LiveControlHeader } from '@/features/live/components/LiveControlHeader';
+import { LiveFightCard } from '@/features/live/components/LiveFightCard';
+import { LiveQueuePanel } from '@/features/live/components/LiveQueuePanel';
+import { LiveResultDialog } from '@/features/live/components/LiveResultDialog';
 
 function phaseLabel(
   fight: LiveQueueFightRow | null,
@@ -38,7 +35,11 @@ function phaseLabel(
   return t('phaseRound', { round: timer.currentRound });
 }
 
-export function AdminLivePageClient() {
+type Props = {
+  eventId: string;
+};
+
+export function AdminLivePageClient({ eventId }: Props) {
   const t = useTranslations('live');
   const tCommon = useTranslations('common');
   const tFight = useTranslations('common.fightStatus');
@@ -52,7 +53,11 @@ export function AdminLivePageClient() {
   const [winner, setWinner] = useState<'RED' | 'BLUE'>('RED');
   const [method, setMethod] = useState('POINTS');
   const [notes, setNotes] = useState('');
-  const { currentEventId, events, selectedEvent, setSelectedEventId } = useAdminEventSelection();
+  const { events, selectedEvent, setSelectedEventId } = useAdminEventRoute({
+    eventId,
+    page: 'live',
+  });
+  const currentEventId = eventId;
   const gate = resolveEventControlGate('live', selectedEvent);
   const showContent = gate.mode === 'active' || gate.mode === 'readonly';
   const isEditable = gate.mode === 'active';
@@ -153,24 +158,12 @@ export function AdminLivePageClient() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t('title')}
-        subtitle={t('controlRoom')}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <select className={SEL} value={currentEventId} onChange={(e) => setSelectedEventId(e.target.value)}>
-              {events.map((event) => (
-                <option key={event.id} value={event.id}>
-                  {event.name}
-                </option>
-              ))}
-            </select>
-            <div className="rounded-[var(--radius-pill)] border border-[var(--color-border)] px-3 py-2 text-[12px] text-[var(--color-text-muted)]">
-              <span className={isConnected ? 'text-emerald-400' : 'text-amber-400'}>● </span>
-              {t('realtime')}: {isConnected ? t('connected') : t('disconnected')} · {t('lastSync')}: {lastSyncLabel}
-            </div>
-          </div>
-        }
+      <LiveControlHeader
+        currentEventId={currentEventId}
+        events={events}
+        isConnected={isConnected}
+        lastSyncLabel={lastSyncLabel}
+        onEventChange={setSelectedEventId}
       />
 
       {currentEventId && gate.mode !== 'active' && (
@@ -259,7 +252,7 @@ export function AdminLivePageClient() {
               tFight={(key) => tFight(key as Parameters<typeof tFight>[0])}
               tSchedule={(key) => tSchedule(key as Parameters<typeof tSchedule>[0])}
             />
-            <LiveQueueList
+            <LiveQueuePanel
               fights={liveQuery.data?.nextFights ?? []}
               title={t('next')}
               emptyLabel={t('noUpcoming')}
@@ -268,13 +261,13 @@ export function AdminLivePageClient() {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <LiveQueueList
+            <LiveQueuePanel
               fights={liveQuery.data?.queuePreview ?? []}
               title={t('queuePreview')}
               emptyLabel={t('noQueue')}
               t={(key, values) => t(key as Parameters<typeof t>[0], values)}
             />
-            <LiveQueueList
+            <LiveQueuePanel
               fights={liveQuery.data?.completedFights ?? []}
               title={t('completedHistory')}
               emptyLabel={t('noCompleted')}
@@ -286,7 +279,7 @@ export function AdminLivePageClient() {
       ) : null}
 
       {isEditable && currentFight && (
-        <LiveResultModal
+        <LiveResultDialog
           open={resultOpen}
           fight={currentFight}
           winner={winner}

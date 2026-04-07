@@ -11,6 +11,7 @@ type Props = {
   error: unknown;
   fallbackMessage: string;
   retryLabel?: string;
+  codeLabel?: string;
   onRetry?: () => void;
 };
 
@@ -18,6 +19,7 @@ export function AdminErrorAlert({
   error,
   fallbackMessage,
   retryLabel,
+  codeLabel,
   onRetry,
 }: Props) {
   const message = getErrorMessage(error, fallbackMessage);
@@ -41,7 +43,7 @@ export function AdminErrorAlert({
       <div className="space-y-1.5">
         <p>{message}</p>
         {code && (
-          <p className="text-[12px] opacity-90">Code: {code}</p>
+          <p className="text-[12px] opacity-90">{codeLabel ?? 'Code'}: {code}</p>
         )}
         {issues.length > 0 && (
           <div className="space-y-0.5 text-[12px] opacity-95">

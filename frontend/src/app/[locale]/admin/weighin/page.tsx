@@ -1,5 +1,18 @@
-import { WeighInPageContainer } from './WeighInPageContainer';
+import { redirect } from 'next/navigation';
+import { getLegacyAdminEventRedirectTarget } from '@/features/admin-events/lib/legacyAdminEventRedirect';
 
-export default function WeighinPage() {
-  return <WeighInPageContainer />;
+type Props = {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function LegacyAdminWeighInPage({ params, searchParams }: Props) {
+  const { locale } = await params;
+  redirect(
+    getLegacyAdminEventRedirectTarget({
+      locale,
+      page: 'weighin',
+      searchParams: await searchParams,
+    }),
+  );
 }

@@ -87,20 +87,23 @@ export default function InboxPage() {
                   <tr
                     key={sub.id}
                     onClick={() => openDetail(sub)}
-                    className="cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]"
+                    className="group cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]"
                   >
                     <td className="px-4 py-3 text-[var(--color-text)]">{sub.type}</td>
-                    <td className="px-4 py-3 font-medium text-[var(--color-text)]">{sub.name}</td>
+                    <td className="px-4 py-3 font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{sub.name}</td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">{sub.email}</td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">
                       {new Date(sub.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-3">
-                      <StatusChip
-                        status={sub.status}
-                        label={t(`status.${sub.status}` as Parameters<typeof t>[0])}
-                        domain="submission"
-                      />
+                      <div className="flex items-center gap-2">
+                        <StatusChip
+                          status={sub.status}
+                          label={t(`status.${sub.status}` as Parameters<typeof t>[0])}
+                          domain="submission"
+                        />
+                        <span className="translate-x-0 text-[var(--color-text-muted)] opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--color-primary)] group-hover:opacity-100">→</span>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -114,15 +117,18 @@ export default function InboxPage() {
                 key={sub.id}
                 type="button"
                 onClick={() => openDetail(sub)}
-                className="w-full rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition hover:bg-[var(--color-surface-alt)]"
+                className="group w-full rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-[13px] font-medium text-[var(--color-text)]">{sub.name}</p>
-                  <StatusChip
-                    status={sub.status}
-                    label={t(`status.${sub.status}` as Parameters<typeof t>[0])}
-                    domain="submission"
-                  />
+                  <p className="truncate text-[13px] font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{sub.name}</p>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <StatusChip
+                      status={sub.status}
+                      label={t(`status.${sub.status}` as Parameters<typeof t>[0])}
+                      domain="submission"
+                    />
+                    <span className="text-[var(--color-text-muted)] transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--color-primary)]">→</span>
+                  </div>
                 </div>
                 <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
                   {sub.type} · {sub.email} · {new Date(sub.createdAt).toLocaleDateString()}

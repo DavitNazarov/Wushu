@@ -1,16 +1,29 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { AdminEventSelect } from '@/components/admin/AdminEventSelect';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonKpiRow, SkeletonRows } from '@/components/ui/Skeleton';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { useToast } from '@/components/ui/Toast';
-import { apiGet, ApiError } from '@/lib/api/client';
+import { ApiError } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
-import type { EventRow } from '@/types/api';
+import { useAdminEventRoute } from '@/features/admin-events/hooks/useAdminEventRoute';
+import { BracketCategoryFilters } from '@/features/brackets/components/BracketCategoryFilters';
+import { BracketCategoryList } from '@/features/brackets/components/BracketCategoryList';
+import { BracketDetailsPanel } from '@/features/brackets/components/BracketDetailsPanel';
+import { BracketPublishDialog } from '@/features/brackets/components/BracketPublishDialog';
+import { BracketRegenerateDialog } from '@/features/brackets/components/BracketRegenerateDialog';
+import { BracketsAuditList } from '@/features/brackets/components/BracketsAuditList';
+import { BracketsHeaderSummary } from '@/features/brackets/components/BracketsHeaderSummary';
+import {
+  filterAndSortBracketCategories,
+  type BracketCategoryFilter,
+  type BracketCategorySort,
+} from '@/features/brackets/lib/bracketDisplayMapper';
 import { useBracketsOverview } from './useBracketsOverview';
 import { useBracketCategoryDetails } from './useBracketCategoryDetails';
 import {
@@ -18,47 +31,29 @@ import {
   useRegenerateBrackets,
   useSetEventPublishState,
 } from './useBracketActions';
-import { BracketsHeaderSummary } from './BracketsHeaderSummary';
-import { BracketCategoryFilters } from './BracketCategoryFilters';
-import { BracketCategoryList } from './BracketCategoryList';
-import { BracketDetailsPanel } from './BracketDetailsPanel';
-import { BracketPublishDialog } from './BracketPublishDialog';
-import { BracketRegenerateDialog } from './BracketRegenerateDialog';
-import { formatDateTime } from './dateFormat';
-import {
-  filterAndSortBracketCategories,
-  type BracketCategoryFilter,
-  type BracketCategorySort,
-} from './bracketDisplayMapper';
+import { BracketsMobileTabs } from './BracketsMobileTabs';
 
-export function BracketsPageContainer() {
+type Props = {
+  eventId: string;
+};
+
+export function BracketsPageContainer({ eventId }: Props) {
   const t = useTranslations('brackets');
   const tCommon = useTranslations('common');
   const tFightStatus = useTranslations('common.fightStatus');
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [eventId, setEventId] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [filter, setFilter] = useState<BracketCategoryFilter>('ALL');
   const [sort, setSort] = useState<BracketCategorySort>('CATEGORY');
   const [publishDialogTarget, setPublishDialogTarget] = useState<boolean | null>(null);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'categories' | 'selected'>('categories');
 
-  const { data: events = [] } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => apiGet<EventRow[]>('/api/events'),
-  });
+  const { events, setSelectedEventId } = useAdminEventRoute({ eventId, page: 'brackets' });
 
-  const currentEventId = eventId || events[0]?.id || '';
-
-  useEffect(() => {
-    if (!currentEventId && events[0]?.id) {
-      setEventId(events[0].id);
-    }
-  }, [currentEventId, events]);
-
-  const overviewQuery = useBracketsOverview(currentEventId);
+  const overviewQuery = useBracketsOverview(eventId);
 
   const filteredCategories = useMemo(
     () =>
@@ -70,20 +65,17 @@ export function BracketsPageContainer() {
     [overviewQuery.data?.categories, filter, sort],
   );
 
-  useEffect(() => {
-    if (!filteredCategories.length) {
-      setSelectedCategoryId('');
-      return;
+  const resolvedSelectedCategoryId = useMemo(() => {
+    if (!filteredCategories.length) return '';
+    if (selectedCategoryId && filteredCategories.some((row) => row.id === selectedCategoryId)) {
+      return selectedCategoryId;
     }
-
-    if (!selectedCategoryId || !filteredCategories.some((row) => row.id === selectedCategoryId)) {
-      setSelectedCategoryId(filteredCategories[0].id);
-    }
+    return filteredCategories[0].id;
   }, [filteredCategories, selectedCategoryId]);
 
   const detailsQuery = useBracketCategoryDetails({
-    eventId: currentEventId,
-    eventWeightCategoryId: selectedCategoryId,
+    eventId,
+    eventWeightCategoryId: resolvedSelectedCategoryId,
   });
 
   const publishMutation = useSetEventPublishState();
@@ -100,18 +92,18 @@ export function BracketsPageContainer() {
 
   function refreshBracketsData() {
     void Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['brackets-overview', currentEventId] }),
-      queryClient.invalidateQueries({ queryKey: ['bracket-category-details', currentEventId] }),
+      queryClient.invalidateQueries({ queryKey: ['brackets-overview', eventId] }),
+      queryClient.invalidateQueries({ queryKey: ['bracket-category-details', eventId] }),
       queryClient.invalidateQueries({ queryKey: ['events'] }),
     ]);
   }
 
   function handleConfirmPublish() {
-    if (!currentEventId || publishDialogTarget == null) return;
+    if (!eventId || publishDialogTarget == null) return;
 
     publishMutation.mutate(
       {
-        eventId: currentEventId,
+        eventId,
         published: publishDialogTarget,
       },
       {
@@ -130,10 +122,10 @@ export function BracketsPageContainer() {
   }
 
   function handleExport() {
-    if (!currentEventId) return;
+    if (!eventId) return;
 
     exportMutation.mutate(
-      { eventId: currentEventId },
+      { eventId },
       {
         onSuccess: (result) => {
           const link = result.links.find((entry) => entry.type === 'brackets') ?? result.links[0];
@@ -148,10 +140,10 @@ export function BracketsPageContainer() {
   }
 
   function handleRegenerate(input: { reason: string }) {
-    if (!currentEventId) return;
+    if (!eventId) return;
 
     regenerateMutation.mutate(
-      { eventId: currentEventId, reason: input.reason },
+      { eventId, reason: input.reason },
       {
         onSuccess: () => {
           setRegenerateOpen(false);
@@ -164,25 +156,22 @@ export function BracketsPageContainer() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-32 md:pb-0">
       <PageHeader
         title={t('title')}
         subtitle={t('subtitle')}
         actions={
-          <select
-            value={currentEventId}
-            onChange={(event) => {
-              setEventId(event.target.value);
+          <AdminEventSelect
+            label={t('eventLabel')}
+            value={eventId}
+            placeholder={t('eventPlaceholder')}
+            events={events}
+            onValueChange={(value) => {
+              setSelectedEventId(value);
               setSelectedCategoryId('');
             }}
-            className="h-10 min-w-[220px] rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
-          >
-            {events.map((event) => (
-              <option key={event.id} value={event.id}>
-                {event.name}
-              </option>
-            ))}
-          </select>
+            className="w-full sm:min-w-[16rem]"
+          />
         }
       />
 
@@ -221,8 +210,14 @@ export function BracketsPageContainer() {
             t={t}
           />
 
-          <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
-            <div className="space-y-3">
+          <BracketsMobileTabs activeTab={mobileTab} onChange={setMobileTab} t={t} />
+
+          <div className="grid min-w-0 gap-4 xl:h-[calc(100vh-var(--topbar-height)-18rem)] xl:grid-cols-[380px_1fr] xl:overflow-hidden">
+            <div
+              className={`min-w-0 space-y-3 xl:h-full xl:overflow-y-auto ${
+                mobileTab === 'selected' ? 'hidden md:block' : ''
+              }`}
+            >
               <BracketCategoryFilters
                 filter={filter}
                 sort={sort}
@@ -232,13 +227,29 @@ export function BracketsPageContainer() {
               />
               <BracketCategoryList
                 rows={filteredCategories}
-                selectedId={selectedCategoryId}
-                onSelect={setSelectedCategoryId}
+                selectedId={resolvedSelectedCategoryId}
+                onSelect={(value) => {
+                  setSelectedCategoryId(value);
+                  setMobileTab('selected');
+                }}
                 t={t}
               />
             </div>
 
-            <div className="space-y-3">
+            <div
+              className={`min-w-0 space-y-3 xl:h-full xl:overflow-y-auto ${
+                mobileTab === 'categories' ? 'hidden md:block' : ''
+              }`}
+            >
+              <div className="md:hidden">
+                <button
+                  type="button"
+                  onClick={() => setMobileTab('categories')}
+                  className="min-h-[44px] rounded-[var(--radius-pill)] border border-[var(--color-border)] px-3 text-[13px] font-semibold text-[var(--color-text)]"
+                >
+                  {tCommon('back')}
+                </button>
+              </div>
               {detailsQuery.error && (
                 <AdminErrorAlert
                   error={detailsQuery.error}
@@ -247,43 +258,18 @@ export function BracketsPageContainer() {
                   onRetry={() => detailsQuery.refetch()}
                 />
               )}
-              <BracketDetailsPanel
-                details={detailsQuery.data ?? null}
-                isLoading={detailsQuery.isLoading}
-                t={t}
-                tFightStatus={tFightStatus}
-              />
+              <div className="xl:sticky xl:top-0">
+                <BracketDetailsPanel
+                  details={detailsQuery.data ?? null}
+                  isLoading={detailsQuery.isLoading}
+                  t={t}
+                  tFightStatus={tFightStatus}
+                />
+              </div>
             </div>
           </div>
 
-          <section
-            id="bracket-audit"
-            className="space-y-2 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
-          >
-            <h3 className="text-[13px] font-semibold text-[var(--color-text)]">{t('auditTitle')}</h3>
-            {overviewQuery.data.audit.recent.length === 0 ? (
-              <p className="text-[12px] text-[var(--color-text-muted)]">{t('auditEmpty')}</p>
-            ) : (
-              <div className="space-y-2">
-                {overviewQuery.data.audit.recent.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-2 text-[12px]"
-                  >
-                    <p className="font-medium text-[var(--color-text)]">
-                      {t(`auditAction.${entry.action}`)}
-                    </p>
-                    <p className="text-[var(--color-text-muted)]">
-                      {formatDateTime(entry.createdAt)} · {entry.actorDisplayName ?? t('unknownUser')}
-                    </p>
-                    {entry.reason && (
-                      <p className="text-[var(--color-text-muted)]">{t('reasonLabel')}: {entry.reason}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+          <BracketsAuditList entries={overviewQuery.data.audit.recent} t={t} />
         </>
       )}
 

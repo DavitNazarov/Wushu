@@ -40,6 +40,7 @@ export type ScheduleSourceFight = {
   matId: string | null;
   orderInMat: number | null;
   scheduledStartTime: Date | null;
+  sessionId: string | null;
   redAthlete?: FightAthlete | null;
   blueAthlete?: FightAthlete | null;
   winnerAthlete?: FightAthlete | null;
@@ -68,6 +69,7 @@ export type BuiltScheduleRow = {
   matOrder: number | null;
   orderInMat: number | null;
   scheduledAt: Date | null;
+  sessionId: string | null;
 };
 
 export type ScheduleDisplayAthlete = FightAthlete | null | undefined;

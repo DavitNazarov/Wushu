@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { Card as PrimitiveCard } from '@/components/ui/primitives/card';
 
 type CardProps = {
   children: ReactNode;
@@ -7,10 +8,8 @@ type CardProps = {
 
 export function Card({ children, className = '' }: CardProps) {
   return (
-    <div
-      className={`rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-soft)] ${className}`}
-    >
+    <PrimitiveCard className={`p-6 ${className}`}>
       {children}
-    </div>
+    </PrimitiveCard>
   );
 }

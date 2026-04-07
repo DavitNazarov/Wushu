@@ -161,19 +161,22 @@ export default function NewsPage() {
                   <tr
                     key={post.id}
                     onClick={() => openEdit(post)}
-                    className="cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]"
+                    className="group cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]"
                   >
-                    <td className="px-4 py-3 font-medium text-[var(--color-text)]">{post.title}</td>
+                    <td className="px-4 py-3 font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{post.title}</td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">{post.slug}</td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">{post.event?.name ?? '—'}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center rounded-[var(--radius-pill)] px-2.5 py-1 text-[11px] font-semibold ${
-                        post.published
-                          ? 'bg-[var(--color-success-subtle)] text-[var(--color-success)]'
-                          : 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]'
-                      }`}>
-                        {post.published ? tCommon('publish') : 'Draft'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center rounded-[var(--radius-pill)] px-2.5 py-1 text-[11px] font-semibold ${
+                          post.published
+                            ? 'bg-[var(--color-success-subtle)] text-[var(--color-success)]'
+                            : 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]'
+                        }`}>
+                          {post.published ? tCommon('publish') : 'Draft'}
+                        </span>
+                        <span className="translate-x-0 text-[var(--color-text-muted)] opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--color-primary)] group-hover:opacity-100">→</span>
+                      </div>
                     </td>
                   </tr>
                 ))}

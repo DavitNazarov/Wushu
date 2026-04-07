@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'fs/promises';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { randomUUID } from 'crypto';
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
@@ -89,8 +89,42 @@ export class ExportsService {
     return links;
   }
 
+  /**
+   * Verify that a DocumentLink with the given export URL belongs to the
+   * specified organisation. Returns true when ownership is confirmed.
+   */
+  async verifyExportOwnership(
+    id: string,
+    organisationId: string,
+  ): Promise<boolean> {
+    const url = `/api/exports/${id}/download`;
+    const link = await this.prisma.documentLink.findFirst({
+      where: { url, organisationId },
+      select: { id: true },
+    });
+    return link !== null;
+  }
+
   async readExportFile(id: string): Promise<string> {
-    return readFile(this.filePathForId(id), 'utf8');
+    // Validate that id is a canonical UUID — prevents path-traversal via
+    // crafted values like "../../etc/passwd" before joining the path.
+    const UUID_RE =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(id)) {
+      throw new BadRequestException('INVALID_EXPORT_ID');
+    }
+
+    const filePath = this.filePathForId(id);
+
+    // Double-check the resolved path stays inside EXPORT_DIR even after any
+    // OS-level path normalisation (defence in depth).
+    const resolved = resolve(filePath);
+    const exportDirResolved = resolve(EXPORT_DIR);
+    if (!resolved.startsWith(exportDirResolved + '/')) {
+      throw new BadRequestException('INVALID_EXPORT_ID');
+    }
+
+    return readFile(filePath, 'utf8');
   }
 
   private filePathForId(id: string) {

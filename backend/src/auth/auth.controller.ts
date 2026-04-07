@@ -79,6 +79,8 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async refresh(
     @Req() req: Express.Request,
     @Res({ passthrough: true }) res: Express.Response,
@@ -264,9 +266,36 @@ export class AuthController {
   }
 
   @Post('bootstrap-admin')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   async bootstrapAdmin(
-    @Body() body: { email: string; password: string; displayName: string },
+    @Body()
+    body: {
+      email: string;
+      password: string;
+      displayName: string;
+      bootstrapSecret?: string;
+    },
   ) {
+    // If BOOTSTRAP_SECRET is configured in the environment, the caller must
+    // present the matching value. This prevents an attacker who can reach the
+    // API before the operator from hijacking the initial admin account.
+    const requiredSecret = process.env.BOOTSTRAP_SECRET?.trim();
+    if (requiredSecret) {
+      if (!body.bootstrapSecret || body.bootstrapSecret !== requiredSecret) {
+        throw new HttpException('FORBIDDEN', HttpStatus.FORBIDDEN);
+      }
+    }
+
+    // Refuse the endpoint entirely in production when no secret is configured —
+    // the bootstrap should always be a deliberate, secret-guarded action.
+    if (process.env.NODE_ENV === 'production' && !requiredSecret) {
+      this.logger.error(
+        '[auth] bootstrap-admin called in production without BOOTSTRAP_SECRET — refusing',
+      );
+      throw new HttpException('FORBIDDEN', HttpStatus.FORBIDDEN);
+    }
+
     try {
       const result = await this.authUser.bootstrapInitialAdmin({
         email: body.email,

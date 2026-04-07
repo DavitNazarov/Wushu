@@ -65,7 +65,17 @@ export class ExportsController {
 
   @Get(':id/download')
   @Header('Content-Type', 'application/json; charset=utf-8')
-  async download(@Param('id') id: string) {
+  async download(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    // Verify the export belongs to the requesting user's organisation before
+    // serving the file — prevents cross-org IDOR even with a known UUID.
+    const owned = await this.exportsService.verifyExportOwnership(
+      id,
+      req.auth!.organisationId,
+    );
+    if (!owned) {
+      throw new HttpException('EXPORT_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
+
     try {
       const raw = await this.exportsService.readExportFile(id);
       return JSON.parse(raw) as unknown;

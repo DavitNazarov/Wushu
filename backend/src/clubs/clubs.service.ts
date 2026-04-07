@@ -71,4 +71,75 @@ export class ClubsService {
       orderBy: [{ name: 'asc' }],
     });
   }
+
+  async getPublicDetails(clubId: string) {
+    const org = await this.prisma.organisation.findFirst();
+    if (!org) return null;
+
+    const club = await this.prisma.club.findFirst({
+      where: { id: clubId, organisationId: org.id },
+    });
+    if (!club) return null;
+
+    const coaches = await this.prisma.user.findMany({
+      where: { clubId: club.id, role: 'coach' },
+      select: { id: true, displayName: true },
+      orderBy: { displayName: 'asc' },
+    });
+
+    const athletes = await this.prisma.athlete.findMany({
+      where: { clubId: club.id },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        registrations: {
+          select: {
+            eventWeightCategoryId: true,
+            eventWeightCategory: {
+              select: {
+                categoryTemplateWeight: { select: { name: true } },
+                eventAgeGroup: {
+                  select: {
+                    categoryTemplateAgeGroup: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+
+    return {
+      club: {
+        id: club.id,
+        name: club.name,
+        city: club.city,
+        country: club.country,
+      },
+      coaches: coaches.map((c) => ({
+        id: c.id,
+        displayName: c.displayName,
+      })),
+      athletes: athletes.map((a) => {
+        const reg = a.registrations[0];
+        const weightName = reg?.eventWeightCategory?.categoryTemplateWeight?.name ?? null;
+        const ageName = reg?.eventWeightCategory?.eventAgeGroup?.categoryTemplateAgeGroup?.name ?? null;
+        const category = [ageName, weightName].filter(Boolean).join(' · ') || null;
+        return {
+          id: a.id,
+          name: `${a.firstName} ${a.lastName}`,
+          category,
+        };
+      }),
+      stats: {
+        coachCount: coaches.length,
+        athleteCount: athletes.length,
+      },
+    };
+  }
 }
