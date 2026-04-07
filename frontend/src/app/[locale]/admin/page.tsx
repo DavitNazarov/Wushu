@@ -3,6 +3,7 @@
 import { useTranslations, useLocale } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 import { Calendar, FileText, ClipboardList, Scale, Shuffle, Trophy } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { KpiCard } from '@/components/ui/KpiCard';
@@ -10,6 +11,7 @@ import { StatusChip } from '@/components/ui/StatusChip';
 import { SkeletonKpiRow, SkeletonRows } from '@/components/ui/Skeleton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { apiGet } from '@/lib/api/client';
+import { adminVariants } from '@/lib/animations/variants';
 import type { EventRow } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
@@ -59,8 +61,8 @@ export default function AdminDashboardPage() {
       label: tNav('categoryTemplates'),
       desc: t('linkRulesetsDescription'),
     },
-    { key: 'weighin', href: '/admin/weighin', icon: Scale, label: tNav('weighin'), desc: tNav('weighin') },
-    { key: 'draw', href: '/admin/draw', icon: Shuffle, label: tNav('draw'), desc: tNav('draw') },
+    { key: 'weighin', href: '/admin/events', icon: Scale, label: tNav('weighin'), desc: tNav('weighin') },
+    { key: 'draw', href: '/admin/events', icon: Shuffle, label: tNav('draw'), desc: tNav('draw') },
   ];
 
   return (
@@ -79,39 +81,63 @@ export default function AdminDashboardPage() {
       {isLoading ? (
         <SkeletonKpiRow />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-3">
+        <motion.div
+          className="grid gap-4 sm:grid-cols-3"
+          initial="initial"
+          animate="animate"
+          variants={adminVariants.staggerContainer}
+        >
           {kpis.map((kpi) => (
-            <KpiCard key={kpi.label} {...kpi} />
+            <motion.div
+              key={kpi.label}
+              variants={adminVariants.slideUp}
+            >
+              <KpiCard {...kpi} />
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
 
-      <section>
+      <motion.section
+        initial="initial"
+        animate="animate"
+        variants={adminVariants.slideUp}
+      >
         <h2 className="mb-3 text-sm font-semibold text-[var(--color-text)]">{t('quickLinks')}</h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          {quickActions.map((qa) => {
+          {quickActions.map((qa, index) => {
             const Icon = qa.icon;
             return (
-              <Link
+              <motion.div
                 key={qa.key}
-                href={`/${locale}${qa.href}`}
-                className="group flex items-center gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05, duration: 0.3 }}
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary-subtle)] text-[var(--color-primary)]">
-                  <Icon className="h-4 w-4" strokeWidth={2} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-medium text-[var(--color-text)]">{qa.label}</p>
-                  <p className="text-[12px] text-[var(--color-text-muted)]">{qa.desc}</p>
-                </div>
-                <span className="text-[var(--color-text-muted)] transition group-hover:text-[var(--color-primary)]">→</span>
-              </Link>
+                <Link
+                  href={`/${locale}${qa.href}`}
+                  className="group flex items-center gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary-subtle)] text-[var(--color-primary)]">
+                    <Icon className="h-4 w-4" strokeWidth={2} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-medium text-[var(--color-text)]">{qa.label}</p>
+                    <p className="text-[12px] text-[var(--color-text-muted)]">{qa.desc}</p>
+                  </div>
+                  <span className="text-[var(--color-text-muted)] transition group-hover:text-[var(--color-primary)]">→</span>
+                </Link>
+              </motion.div>
             );
           })}
         </div>
-      </section>
+      </motion.section>
 
-      <section>
+      <motion.section
+        initial="initial"
+        animate="animate"
+        variants={adminVariants.slideUp}
+      >
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-[var(--color-text)]">{tEvents('recentTitle')}</h2>
           <Link href={`/${locale}/admin/events`}>
@@ -122,12 +148,20 @@ export default function AdminDashboardPage() {
         {isLoading ? (
           <SkeletonRows rows={3} cols={3} />
         ) : recentEvents.length === 0 ? (
-          <div className="flex flex-col items-center rounded-[var(--radius-card)] border border-dashed border-[var(--color-border)] py-12 text-center">
+          <motion.div
+            className="flex flex-col items-center rounded-[var(--radius-card)] border border-dashed border-[var(--color-border)] py-12 text-center"
+            variants={adminVariants.fadeIn}
+          >
             <p className="text-sm font-medium text-[var(--color-text)]">{tEvents('emptyTitle')}</p>
             <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{tEvents('emptyDescription')}</p>
-          </div>
+          </motion.div>
         ) : (
-          <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)]">
+          <motion.div
+            className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)]"
+            initial="initial"
+            animate="animate"
+            variants={adminVariants.staggerContainer}
+          >
             {/* Desktop table */}
             <table className="hidden min-w-full text-[13px] sm:table">
               <thead>
@@ -139,7 +173,11 @@ export default function AdminDashboardPage() {
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {recentEvents.map((ev) => (
-                  <tr key={ev.id} className="bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]">
+                  <motion.tr
+                    key={ev.id}
+                    className="bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]"
+                    variants={adminVariants.staggerItem}
+                  >
                     <td className="px-4 py-3 font-medium text-[var(--color-text)]">
                       <Link href={`/${locale}/admin/events`} className="hover:underline">{ev.name}</Link>
                     </td>
@@ -153,7 +191,7 @@ export default function AdminDashboardPage() {
                         domain="lifecycle"
                       />
                     </td>
-                  </tr>
+                  </motion.tr>
                 ))}
               </tbody>
             </table>
@@ -161,7 +199,11 @@ export default function AdminDashboardPage() {
             {/* Mobile stacked cards */}
             <div className="divide-y divide-[var(--color-border)] sm:hidden">
               {recentEvents.map((ev) => (
-                <div key={ev.id} className="flex items-center justify-between gap-3 bg-[var(--color-surface)] px-4 py-3">
+                <motion.div
+                  key={ev.id}
+                  className="flex items-center justify-between gap-3 bg-[var(--color-surface)] px-4 py-3"
+                  variants={adminVariants.staggerItem}
+                >
                   <div className="min-w-0">
                     <p className="truncate text-[13px] font-medium text-[var(--color-text)]">{ev.name}</p>
                     <p className="text-[12px] text-[var(--color-text-muted)]">
@@ -173,12 +215,12 @@ export default function AdminDashboardPage() {
                     label={tEvents(`lifecycle.${ev.lifecycle}` as Parameters<typeof tEvents>[0])}
                     domain="lifecycle"
                   />
-                </div>
+                </motion.div>
               ))}
             </div>
-          </div>
+          </motion.div>
         )}
-      </section>
+      </motion.section>
     </div>
   );
 }
