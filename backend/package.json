@@ -23,7 +23,7 @@
     "start:dev": "nest start --watch",
     "prestart:debug": "prisma generate",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/src/main.js",
+    "start:prod": "prisma migrate deploy && node dist/src/main.js",
     "dev": "nest start --watch",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
