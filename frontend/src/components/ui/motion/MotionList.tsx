@@ -7,7 +7,7 @@ interface MotionListProps extends MotionProps {
   children: React.ReactNode;
   containerVariants?: Variants;
   itemVariants?: Variants;
-  as?: keyof JSX.IntrinsicElements;
+  as?: React.ElementType;
 }
 
 /**
@@ -38,7 +38,7 @@ export function MotionList({
 interface MotionListItemProps extends MotionProps {
   children: React.ReactNode;
   itemVariants?: Variants;
-  as?: keyof JSX.IntrinsicElements;
+  as?: React.ElementType;
 }
 
 /**
