@@ -3,7 +3,7 @@
 import { type ReactNode, useEffect, useCallback } from 'react';
 import { X } from 'lucide-react';
 
-type ModalProps = {
+export type ModalProps = {
   open: boolean;
   onClose: () => void;
   title: string;

@@ -7,8 +7,8 @@ interface StaggerConfig {
 }
 
 /**
- * Hook to generate stagger animation variants for children
- * Useful for animating lists or grid items in sequence
+ * Hook to generate stagger animation variants for children.
+ * Useful for animating lists or grid items in sequence.
  */
 export function useStaggerChildren(config: StaggerConfig = {}) {
   const {
@@ -31,8 +31,13 @@ export function useStaggerChildren(config: StaggerConfig = {}) {
 
   const item: Variants = {
     initial: { opacity: 0, y: 10 },
-    animate: { opacity: 1, y: 0 },
-    ...(isSpring && { transition: { type: 'spring', stiffness: 120 } }),
+    animate: {
+      opacity: 1,
+      y: 0,
+      ...(isSpring && {
+        transition: { type: 'spring', stiffness: 120 },
+      }),
+    },
   };
 
   return { container, item };
