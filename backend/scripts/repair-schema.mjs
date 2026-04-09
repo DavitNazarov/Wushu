@@ -7,9 +7,6 @@
  * CREATE TYPE) must go through the direct connection, not the pooled one.
  */
 import pg from 'pg';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
 import { config } from 'dotenv';
 
 config();
@@ -57,6 +54,22 @@ const statements = [
 
 try {
   await client.connect();
+
+  // Kill any zombie sessions holding the Prisma migration advisory lock
+  // so that the subsequent `prisma migrate deploy` can acquire it immediately.
+  // pg_advisory_lock(72707369) stores as classid=0, objid=72707369 in pg_locks.
+  const { rows } = await client.query(`
+    SELECT pg_terminate_backend(pid) AS terminated, pid
+    FROM pg_locks
+    WHERE locktype = 'advisory'
+      AND classid = 0
+      AND objid = 72707369
+      AND pid <> pg_backend_pid()
+  `);
+  if (rows.length > 0) {
+    console.log(`repair-schema: released ${rows.length} stuck migration lock(s) — pids: ${rows.map(r => r.pid).join(', ')}`);
+  }
+
   console.log('repair-schema: connected, applying idempotent fixes…');
   for (const sql of statements) {
     await client.query(sql);
