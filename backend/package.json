@@ -23,7 +23,7 @@
     "start:dev": "nest start --watch",
     "prestart:debug": "prisma generate",
     "start:debug": "nest start --debug --watch",
-    "prestart:prod": "node scripts/repair-schema.mjs && (test -z \"$DIRECT_URL\" && echo 'Skipping migrate deploy: DIRECT_URL not set' || DATABASE_URL=$DIRECT_URL prisma migrate deploy)",
+    "prestart:prod": "node scripts/repair-schema.mjs && node scripts/migrate-deploy.mjs",
     "start:prod": "node dist/src/main.js",
     "dev": "nest start --watch",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
