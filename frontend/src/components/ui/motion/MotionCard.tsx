@@ -1,19 +1,24 @@
 'use client';
 
 import React from 'react';
-import { motion, type MotionProps } from 'framer-motion';
+import { motion } from 'framer-motion';
+import type { Variants, Transition, Target, VariantLabels } from 'framer-motion';
 import { Card, type CardProps } from '@/components/ui/primitives/card';
 
-interface MotionCardProps extends CardProps, MotionProps {
+type MotionCardProps = CardProps & {
   children: React.ReactNode;
-  variants?: any;
-  animate?: any;
-  initial?: any;
-}
+  variants?: Variants;
+  animate?: boolean | Target | VariantLabels;
+  initial?: boolean | Target | VariantLabels;
+  exit?: Target | VariantLabels;
+  transition?: Transition;
+  whileHover?: Target | VariantLabels;
+  whileTap?: Target | VariantLabels;
+};
 
 /**
  * Motion-wrapped Card component for animated card entrance
- * Supports all motion and card props
+ * Supports framer-motion animation props alongside card props.
  */
 export function MotionCard({
   children,
@@ -21,14 +26,20 @@ export function MotionCard({
   variants,
   animate,
   initial,
-  ...props
+  exit,
+  transition,
+  whileHover,
+  whileTap,
 }: MotionCardProps) {
   return (
     <motion.div
       initial={initial}
       animate={animate}
+      exit={exit}
       variants={variants}
-      {...props}
+      transition={transition}
+      whileHover={whileHover}
+      whileTap={whileTap}
     >
       <Card className={className}>
         {children}
