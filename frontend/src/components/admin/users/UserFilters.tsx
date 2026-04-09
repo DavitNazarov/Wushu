@@ -57,6 +57,8 @@ export function UserFilters({
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
         <TextInput
+          id="user-filters-search"
+          type="search"
           placeholder="Search by name or email..."
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
@@ -67,11 +69,13 @@ export function UserFilters({
       {/* Filter row */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-2">
         <Select
+          id="user-filters-role"
           value={role || ''}
           onChange={(v) => onRoleChange(v === '' ? undefined : (v as UserRole))}
           options={ROLE_OPTIONS}
         />
         <Select
+          id="user-filters-status"
           value={status || ''}
           onChange={(v) => onStatusChange(v === '' ? undefined : (v as UserStatus))}
           options={STATUS_OPTIONS}
@@ -79,7 +83,6 @@ export function UserFilters({
         {hasActiveFilters && (
           <SecondaryButton
             onClick={onClear}
-            size="sm"
             className="flex items-center justify-center gap-2"
           >
             <X className="h-4 w-4" />
