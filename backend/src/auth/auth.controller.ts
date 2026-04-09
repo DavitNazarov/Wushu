@@ -12,7 +12,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import Express from 'express';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard, SkipThrottle } from '@nestjs/throttler';
 import {
   AuthService,
   JWT_COOKIE_NAME,
@@ -146,6 +146,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @SkipThrottle()
   async me(
     @Req() req: Express.Request,
     @Res({ passthrough: true }) res: Express.Response,

@@ -61,12 +61,22 @@ export async function getAuthContext(): Promise<AuthContext> {
     return { userId: null, organisationId: null, role: null, capabilities: [], blocked: true };
   }
 
+  // 429 = throttled — never treat this as "logged out". Return a needsRefresh
+  // signal so the page can retry rather than bouncing the user to /login (which
+  // would cause an infinite redirect loop because the cookie is still valid).
+  if (res.status === 429) {
+    return { userId: null, organisationId: null, role: null, capabilities: [], needsRefresh: true };
+  }
+
   // Transient errors: retry once before treating as logout
   if (!res.ok) {
     try {
       res = await fetchMe();
     } catch {
       return { userId: null, organisationId: null, role: null, capabilities: [] };
+    }
+    if (res.status === 429) {
+      return { userId: null, organisationId: null, role: null, capabilities: [], needsRefresh: true };
     }
     if (!res.ok) {
       return { userId: null, organisationId: null, role: null, capabilities: [] };

@@ -6,7 +6,6 @@ import { useTranslations, useLocale } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, Menu } from 'lucide-react';
-import { StatusChip } from '@/components/ui/StatusChip';
 import { apiGet } from '@/lib/api/client';
 import type { EventRow } from '@/types/api';
 import { TopbarToggles } from './TopbarToggles';
@@ -44,7 +43,6 @@ export function AppShell({ children }: AppShellProps) {
   const tApp = useTranslations('app');
   const tNav = useTranslations('nav');
   const tTopbar = useTranslations('admin.topbar');
-  const tEvents = useTranslations('admin.events');
   const locale = useLocale();
   const pathname = usePathname() ?? '';
   const router = useRouter();
@@ -229,36 +227,6 @@ export function AppShell({ children }: AppShellProps) {
             >
               <Menu className="h-5 w-5" strokeWidth={2} />
             </button>
-            <div className="hidden min-w-0 items-center gap-2 sm:flex">
-              <select
-                className="h-9 max-w-[260px] rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 text-[12px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30"
-                aria-label={tTopbar('eventSelectLabel')}
-                value={selectedEvent?.id ?? ''}
-                onChange={(e) => setEventIdInUrl(e.target.value)}
-              >
-                {!events?.length && (
-                  <option value="">{tTopbar('noEventSelected')}</option>
-                )}
-                {events?.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.name}
-                  </option>
-                ))}
-              </select>
-              {selectedEvent ? (
-                <StatusChip
-                  status={selectedEvent.lifecycle}
-                  label={tEvents(
-                    `lifecycle.${selectedEvent.lifecycle}` as Parameters<typeof tEvents>[0],
-                  )}
-                  domain="lifecycle"
-                />
-              ) : (
-                <span className="text-[12px] text-[var(--color-text-muted)]">
-                  {tTopbar('noEventSelected')}
-                </span>
-              )}
-            </div>
             <span className="truncate text-[13px] font-semibold text-[var(--color-text)] sm:hidden">
               {tApp('title')}
             </span>

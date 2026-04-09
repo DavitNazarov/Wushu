@@ -62,7 +62,7 @@ export default function UsersPage() {
     return role === 'admin' ? t('roleAdmin') : t('roleCoach');
   }
 
-  function statusLabel(status: 'ACTIVE' | 'DQ' | 'ARCHIVED' | 'INACTIVE') {
+  function statusLabel(status: string) {
     if (status === 'DQ') return t('details.statusDq');
     if (status === 'ARCHIVED') return t('details.statusArchived');
     if (status === 'INACTIVE') return t('details.statusInactive');

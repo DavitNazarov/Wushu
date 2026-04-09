@@ -1,13 +1,13 @@
 'use client';
 
-import { notFound } from 'next/navigation';
+import { notFound, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
+import { motion } from 'framer-motion';
+import { ArrowLeft } from 'lucide-react';
 import { ApiError, apiGet } from '@/lib/api/client';
 import type { AthleteProfileResponse } from '@/types/api';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { InlineAlert } from '@/components/ui/InlineAlert';
-import { SkeletonRows } from '@/components/ui/Skeleton';
 import { AthleteProfileActions } from './AthleteProfileActions';
 import { AthleteProfileCompetition } from './AthleteProfileCompetition';
 import { AthleteProfileIdentity } from './AthleteProfileIdentity';
@@ -23,9 +23,40 @@ function endpointForScope(scope: Props['scope'], athleteId: string): string {
   return scope === 'public' ? `/api/public/athletes/${athleteId}` : `/api/athletes/${athleteId}`;
 }
 
+function backHref(scope: Props['scope'], locale: string): string {
+  if (scope === 'admin') return `/${locale}/admin/athletes`;
+  if (scope === 'coach') return `/${locale}/coach/athletes`;
+  return `/${locale}/events`;
+}
+
+function BackLabel({ scope }: { scope: Props['scope'] }) {
+  const t = useTranslations('athleteProfile');
+  return <>{t(`backLabel.${scope}`)}</>;
+}
+
+function ProfileSkeleton() {
+  return (
+    <div className="space-y-5 animate-pulse">
+      <div className="h-52 rounded-[var(--radius-card)] bg-[var(--color-surface-alt)]" />
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_360px]">
+        <div className="space-y-4">
+          <div className="h-36 rounded-[var(--radius-card)] bg-[var(--color-surface-alt)]" />
+          <div className="h-48 rounded-[var(--radius-card)] bg-[var(--color-surface-alt)]" />
+        </div>
+        <div className="space-y-4">
+          <div className="h-56 rounded-[var(--radius-card)] bg-[var(--color-surface-alt)]" />
+          <div className="h-32 rounded-[var(--radius-card)] bg-[var(--color-surface-alt)]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AthleteProfilePage({ athleteId, scope }: Props) {
   const t = useTranslations('athleteProfile');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
+  const router = useRouter();
 
   const query = useQuery({
     queryKey: ['athlete-profile', scope, athleteId],
@@ -38,8 +69,19 @@ export function AthleteProfilePage({ athleteId, scope }: Props) {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={query.data?.athlete.fullName ?? t('title')} subtitle={t(`subtitle.${scope}`)} />
+    <div className="space-y-5">
+      {/* Back nav */}
+      <motion.button
+        type="button"
+        onClick={() => router.back()}
+        className="inline-flex items-center gap-1.5 text-[13px] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+        initial={{ opacity: 0, x: -6 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        <ArrowLeft className="h-4 w-4" />
+        <BackLabel scope={scope} />
+      </motion.button>
 
       {query.error && !(query.error instanceof ApiError && query.error.status === 404) && (
         <InlineAlert
@@ -55,12 +97,14 @@ export function AthleteProfilePage({ athleteId, scope }: Props) {
       )}
 
       {query.isLoading ? (
-        <div className="space-y-6">
-          <SkeletonRows rows={4} cols={2} />
-          <SkeletonRows rows={4} cols={3} />
-        </div>
+        <ProfileSkeleton />
       ) : query.data ? (
-        <div className="space-y-6">
+        <motion.div
+          className="space-y-5"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
           <AthleteProfileOverview
             athlete={query.data.athlete}
             registrations={query.data.registrations}
@@ -68,17 +112,17 @@ export function AthleteProfilePage({ athleteId, scope }: Props) {
             scope={scope}
           />
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_360px]">
-            <div className="space-y-6">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_360px]">
+            <div className="space-y-5">
               <AthleteProfileRegistrations registrations={query.data.registrations} scope={scope} />
               <AthleteProfileCompetition athleteId={query.data.athlete.id} fights={query.data.fights} scope={scope} />
             </div>
-            <div className="space-y-6">
+            <div className="space-y-5">
               <AthleteProfileIdentity athlete={query.data.athlete} scope={scope} />
               {scope !== 'public' && <AthleteProfileActions scope={scope} registrations={query.data.registrations} />}
             </div>
           </div>
-        </div>
+        </motion.div>
       ) : null}
     </div>
   );

@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
+import { ChevronRight, Swords } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusChip } from '@/components/ui/StatusChip';
@@ -20,86 +22,108 @@ function eventHref(scope: Props['scope'], locale: string, row: AthleteProfileFig
   return `/${locale}/events/${row.eventSlug}`;
 }
 
+const outcomeStyle: Record<'win' | 'loss' | 'pending', { border: string; bg: string; badge: string; dot: string }> = {
+  win:     { border: 'border-l-[var(--color-success)]',  bg: '',  badge: 'bg-[var(--color-success-subtle)] text-[var(--color-success)]',   dot: 'bg-[var(--color-success)]' },
+  loss:    { border: 'border-l-[var(--color-danger)]',   bg: '',  badge: 'bg-[var(--color-danger-subtle)]  text-[var(--color-danger)]',    dot: 'bg-[var(--color-danger)]' },
+  pending: { border: 'border-l-[var(--color-warning)]',  bg: '',  badge: 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]',  dot: 'bg-[var(--color-warning)]' },
+};
+
+const container = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.06, delayChildren: 0.05 } },
+};
+
+const itemVariant = {
+  hidden: { opacity: 0, y: 6 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.25 } },
+};
+
 export function AthleteProfileCompetition({ athleteId, fights, scope }: Props) {
   const t = useTranslations('athleteProfile.competition');
   const tCommon = useTranslations('common');
   const locale = useLocale();
   const rows = sortFights(fights);
-  const wins = rows.filter((fight) => fightOutcomeForAthlete(fight, athleteId) === 'win').length;
-  const losses = rows.filter((fight) => fightOutcomeForAthlete(fight, athleteId) === 'loss').length;
-  const pending = rows.filter((fight) => fightOutcomeForAthlete(fight, athleteId) === 'pending').length;
+  const wins = rows.filter((f) => fightOutcomeForAthlete(f, athleteId) === 'win').length;
+  const losses = rows.filter((f) => fightOutcomeForAthlete(f, athleteId) === 'loss').length;
+  const pending = rows.filter((f) => fightOutcomeForAthlete(f, athleteId) === 'pending').length;
 
   if (rows.length === 0) {
     return <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />;
   }
 
   return (
-    <Card className="space-y-4 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('title')}</h2>
-          <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{t('subtitle')}</p>
-        </div>
-        <span className="rounded-full bg-[var(--color-primary-subtle)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-primary)]">
-          {rows.length}
-        </span>
-      </div>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+      <Card className="overflow-hidden p-0">
+        <div className="border-b border-[var(--color-border)]/60 px-5 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-[15px] font-semibold text-[var(--color-text)]">{t('title')}</h2>
+              <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">{t('subtitle')}</p>
+            </div>
+            <span className="rounded-full bg-[var(--color-primary-subtle)] px-2.5 py-1 text-[11px] font-bold text-[var(--color-primary)]">
+              {rows.length}
+            </span>
+          </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/35 px-3 py-2.5">
-          <p className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">{t('summary.fights')}</p>
-          <p className="mt-1 text-[18px] font-semibold text-[var(--color-text)]">{rows.length}</p>
+          {/* Record summary */}
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <RecordStat label={t('summary.fights')} value={rows.length} color="text-[var(--color-text)]" />
+            <RecordStat label={t('summary.record')} value={`${wins}–${losses}`} color="text-[var(--color-success)]" />
+            <RecordStat label={t('summary.pending')} value={pending} color="text-[var(--color-warning)]" />
+          </div>
         </div>
-        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/35 px-3 py-2.5">
-          <p className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">{t('summary.record')}</p>
-          <p className="mt-1 text-[18px] font-semibold text-[var(--color-text)]">{wins}-{losses}</p>
-        </div>
-        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/35 px-3 py-2.5">
-          <p className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">{t('summary.pending')}</p>
-          <p className="mt-1 text-[18px] font-semibold text-[var(--color-text)]">{pending}</p>
-        </div>
-      </div>
 
-      <div className="space-y-3">
-        {rows.map((fight) => {
-          const outcome = fightOutcomeForAthlete(fight, athleteId);
-          return (
-            <Link
-              key={fight.id}
-              href={eventHref(scope, locale, fight)}
-              className="block rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--color-surface-alt)_55%,transparent),transparent)] p-4 transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]/60"
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-[13px] font-medium text-[var(--color-text)]">{fight.eventName}</p>
-                  <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-                    {t('fightLine', {
-                      round: fight.round,
-                      bout: fight.boutNo,
-                      category: fight.categoryCode,
-                    })}
-                  </p>
-                  <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-                    {fight.opponentName ? t('opponent', { name: fight.opponentName }) : t('opponentPending')}
-                  </p>
-                  {fight.scheduledStartTime && (
-                    <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-                      {formatAthleteDate(fight.scheduledStartTime, locale)}
-                      {fight.matName ? ` · ${fight.matName}` : ''}
+        <motion.div className="divide-y divide-[var(--color-border)]/50" variants={container} initial="hidden" animate="show">
+          {rows.map((fight) => {
+            const outcome = fightOutcomeForAthlete(fight, athleteId);
+            const style = outcomeStyle[outcome];
+            return (
+              <motion.div key={fight.id} variants={itemVariant}>
+                <Link
+                  href={eventHref(scope, locale, fight)}
+                  className={`group flex items-start justify-between gap-4 border-l-2 px-5 py-4 transition-colors hover:bg-[var(--color-surface-alt)]/50 ${style.border}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-[13px] font-semibold text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">
+                        {fight.eventName}
+                      </p>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${style.badge}`}>
+                        {t(`outcome.${outcome}`)}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
+                      {t('fightLine', { round: fight.round, bout: fight.boutNo, category: fight.categoryCode })}
                     </p>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusChip status={fight.status} label={tCommon(`fightStatus.${fight.status}`)} domain="fight" />
-                  <span className="rounded-[var(--radius-pill)] bg-[var(--color-primary-subtle)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-primary)]">
-                    {t(`outcome.${outcome}`)}
-                  </span>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-    </Card>
+                    <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
+                      {fight.opponentName ? t('opponent', { name: fight.opponentName }) : t('opponentPending')}
+                    </p>
+                    {fight.scheduledStartTime && (
+                      <p className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
+                        {formatAthleteDate(fight.scheduledStartTime, locale)}
+                        {fight.matName ? ` · ${fight.matName}` : ''}
+                      </p>
+                    )}
+                    <div className="mt-2">
+                      <StatusChip status={fight.status} label={tCommon(`fightStatus.${fight.status}`)} domain="fight" />
+                    </div>
+                  </div>
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                </Link>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+      </Card>
+    </motion.div>
+  );
+}
+
+function RecordStat({ label, value, color }: { label: string; value: string | number; color: string }) {
+  return (
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-alt)]/40 px-3 py-2.5 text-center">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{label}</p>
+      <p className={`mt-1 text-[20px] font-semibold tracking-tight ${color}`}>{value}</p>
+    </div>
   );
 }

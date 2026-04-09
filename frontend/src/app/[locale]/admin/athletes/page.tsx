@@ -4,7 +4,8 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowRightLeft, Building2, CalendarDays, FileBadge2, Users } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { AlertTriangle, ArrowRightLeft, Building2, CalendarDays, ChevronRight, FileBadge2, Search, Users } from 'lucide-react';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { AdminFilterSelect } from '@/components/admin/AdminFilterSelect';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -15,19 +16,22 @@ import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { Input } from '@/components/ui/primitives/input';
-import { Label } from '@/components/ui/primitives/label';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import { apiGet, apiPost } from '@/lib/api/client';
 import type { AthleteRow, ClubRow } from '@/types/api';
 
-const INPUT_CLASS =
-  'h-11 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
-
 const CARD_CLASS =
   'rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]';
 
-const ACCENT_PANEL_CLASS =
-  'bg-[linear-gradient(135deg,var(--color-primary-subtle),color-mix(in_srgb,var(--color-surface)_84%,var(--color-surface-alt)_16%))]';
+const container = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.04, delayChildren: 0.05 } },
+};
+
+const rowItem = {
+  hidden: { opacity: 0, y: 5 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.2 } },
+};
 
 type StatCardProps = {
   label: string;
@@ -38,27 +42,36 @@ type StatCardProps = {
 };
 
 function StatCard({ label, value, tone = 'neutral', icon: Icon, hint }: StatCardProps) {
-  const accentClass =
+  const iconClass =
     tone === 'warning'
       ? 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]'
       : 'bg-[var(--color-primary-subtle)] text-[var(--color-primary)]';
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/55 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-            {label}
-          </p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-[var(--color-text)]">{value}</p>
-          <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{hint}</p>
-        </div>
-        <span className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${accentClass}`}>
-          <Icon className="h-5 w-5" />
+    <motion.div
+      className="group flex flex-col gap-1 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-shadow hover:shadow-md"
+      whileHover={{ y: -1 }}
+      transition={{ duration: 0.15 }}
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">{label}</p>
+        <span className={`flex h-7 w-7 items-center justify-center rounded-xl opacity-80 group-hover:opacity-100 transition-opacity ${iconClass}`}>
+          <Icon className="h-3.5 w-3.5" />
         </span>
       </div>
-    </div>
+      <p className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">{value}</p>
+      <p className="text-[11px] text-[var(--color-text-muted)]">{hint}</p>
+    </motion.div>
   );
+}
+
+type StatusChipProps = { label: string; tone: 'neutral' | 'warning' | 'muted' };
+function StatusChip({ label, tone }: StatusChipProps) {
+  const cls =
+    tone === 'warning' ? 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]'
+    : tone === 'muted'  ? 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]'
+    :                     'bg-[var(--color-primary-subtle)] text-[var(--color-primary)]';
+  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cls}`}>{label}</span>;
 }
 
 export default function AthletesPage() {
@@ -83,12 +96,7 @@ export default function AthletesPage() {
     return query ? `/api/athletes?${query}` : '/api/athletes';
   }, [search, selectedClubId]);
 
-  const {
-    data: athletes,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
+  const { data: athletes, isLoading, error, refetch } = useQuery({
     queryKey: ['athletes', search, selectedClubId],
     queryFn: () => apiGet<AthleteRow[]>(athleteQueryPath),
   });
@@ -98,26 +106,22 @@ export default function AthletesPage() {
     queryFn: () => apiGet<ClubRow[]>('/api/clubs'),
   });
 
-  const clubMap = useMemo(
-    () => new Map((clubs ?? []).map((club) => [club.id, club])),
-    [clubs],
-  );
+  const clubMap = useMemo(() => new Map((clubs ?? []).map((c) => [c.id, c])), [clubs]);
 
   const rows = athletes ?? [];
-  const selectedAthletes = rows.filter((athlete) => selectedIds.includes(athlete.id));
-  const selectedNames = selectedAthletes.map((athlete) => `${athlete.lastName} ${athlete.firstName}`);
-  const unassignedCount = rows.filter((athlete) => !athlete.clubId).length;
+  const selectedAthletes = rows.filter((a) => selectedIds.includes(a.id));
+  const selectedNames = selectedAthletes.map((a) => `${a.lastName} ${a.firstName}`);
+  const unassignedCount = rows.filter((a) => !a.clubId).length;
   const linkedClubCount = rows.length - unassignedCount;
-  const duplicateReviewCount = rows.filter((athlete) => getDuplicateCount(athlete) > 1).length;
+  const duplicateReviewCount = rows.filter((a) => getDuplicateCount(a) > 1).length;
   const canMerge = selectedIds.length === 2;
 
   const mergeMutation = useMutation({
-    mutationFn: () =>
-      apiPost<AthleteRow>('/api/athletes/merge', {
-        primaryId: selectedIds[0],
-        secondaryId: selectedIds[1],
-        reason: mergeReason.trim(),
-      }),
+    mutationFn: () => apiPost<AthleteRow>('/api/athletes/merge', {
+      primaryId: selectedIds[0],
+      secondaryId: selectedIds[1],
+      reason: mergeReason.trim(),
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['athletes'] });
       toast(tCommon('saveSuccess'));
@@ -125,14 +129,11 @@ export default function AthletesPage() {
       setMergeOpen(false);
       setMergeReason('');
     },
-    onError: (mutationError) =>
-      toast(getCompactErrorMessage(mutationError, t('merge.errorGeneric')), 'error'),
+    onError: (e) => toast(getCompactErrorMessage(e, t('merge.errorGeneric')), 'error'),
   });
 
   function toggleSelected(id: string) {
-    setSelectedIds((current) =>
-      current.includes(id) ? current.filter((value) => value !== id) : [...current, id].slice(-2),
-    );
+    setSelectedIds((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id].slice(-2));
   }
 
   function openMerge() {
@@ -144,11 +145,9 @@ export default function AthletesPage() {
   function formatDob(value: string | null | undefined) {
     if (!value) return '—';
     try {
-      const date = new Date(value);
-      return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString(locale);
-    } catch {
-      return '—';
-    }
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString(locale);
+    } catch { return '—'; }
   }
 
   function getClub(athlete: AthleteRow) {
@@ -173,15 +172,18 @@ export default function AthletesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t('title')}
-        subtitle={t('subtitle')}
-        actions={
-          <PrimaryButton disabled={!canMerge} onClick={openMerge}>
-            {t('merge.button')}
-          </PrimaryButton>
-        }
-      />
+      <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
+        <PageHeader
+          title={t('title')}
+          subtitle={t('subtitle')}
+          actions={
+            <PrimaryButton disabled={!canMerge} onClick={openMerge}>
+              <ArrowRightLeft className="mr-1.5 h-4 w-4" />
+              {t('merge.button')}
+            </PrimaryButton>
+          }
+        />
+      </motion.div>
 
       {error && (
         <AdminErrorAlert
@@ -192,335 +194,240 @@ export default function AthletesPage() {
         />
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
-        <section className={`${CARD_CLASS} overflow-hidden`}>
-          <div className={`border-b border-[var(--color-border)]/80 px-5 py-5 ${ACCENT_PANEL_CLASS}`}>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--color-text-muted)]">
-              {t('overview.eyebrow')}
-            </p>
-            <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-2xl">
-                <h2 className="text-xl font-semibold tracking-tight text-[var(--color-text)]">
-                  {t('overview.title')}
-                </h2>
-                <p className="mt-1 text-[13px] leading-6 text-[var(--color-text-muted)]">
-                  {t('overview.description')}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/82 px-4 py-3 text-[12px] text-[var(--color-text-muted)]">
-                <span className="font-medium text-[var(--color-text)]">{rows.length}</span>{' '}
-                {t('overview.loadedCount')}
-              </div>
-            </div>
-          </div>
+      {/* Stats */}
+      <motion.div
+        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.05 }}
+      >
+        <StatCard label={t('stats.total')} value={rows.length} icon={Users} hint={t('stats.totalHint')} />
+        <StatCard label={t('stats.linked')} value={linkedClubCount} icon={Building2} hint={t('stats.linkedHint')} />
+        <StatCard label={t('stats.needsClub')} value={unassignedCount} icon={AlertTriangle} tone={unassignedCount > 0 ? 'warning' : 'neutral'} hint={t('stats.needsClubHint')} />
+        <StatCard label={t('stats.duplicates')} value={duplicateReviewCount} icon={ArrowRightLeft} tone={duplicateReviewCount > 0 ? 'warning' : 'neutral'} hint={t('stats.duplicatesHint')} />
+      </motion.div>
 
-          <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              label={t('stats.total')}
-              value={rows.length}
-              icon={Users}
-              hint={t('stats.totalHint')}
-            />
-            <StatCard
-              label={t('stats.linked')}
-              value={linkedClubCount}
-              icon={Building2}
-              hint={t('stats.linkedHint')}
-            />
-            <StatCard
-              label={t('stats.needsClub')}
-              value={unassignedCount}
-              icon={AlertTriangle}
-              tone={unassignedCount > 0 ? 'warning' : 'neutral'}
-              hint={t('stats.needsClubHint')}
-            />
-            <StatCard
-              label={t('stats.duplicates')}
-              value={duplicateReviewCount}
-              icon={ArrowRightLeft}
-              tone={duplicateReviewCount > 0 ? 'warning' : 'neutral'}
-              hint={t('stats.duplicatesHint')}
+      {/* Filters + Merge panel */}
+      <motion.div
+        className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.1 }}
+      >
+        {/* Search + club filter */}
+        <div className={`${CARD_CLASS} flex flex-col gap-3 p-4 sm:flex-row sm:items-end`}>
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
+            <Input
+              type="search"
+              placeholder={t('searchPlaceholder')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-10 w-full bg-[var(--color-surface)] pl-9"
             />
           </div>
-        </section>
+          <AdminFilterSelect
+            label={t('columns.club')}
+            value={selectedClubId}
+            emptyLabel={t('filters.allClubs')}
+            options={(clubs ?? []).map((c) => ({ value: c.id, label: c.name }))}
+            onValueChange={setSelectedClubId}
+            className="sm:min-w-[180px]"
+          />
+        </div>
 
-        <aside className={`${CARD_CLASS} p-5`}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
-                {t('selection.eyebrow')}
-              </p>
-              <h2 className="mt-2 text-lg font-semibold text-[var(--color-text)]">{t('selection.title')}</h2>
-            </div>
-            <span className="rounded-full bg-[var(--color-primary-subtle)] px-2.5 py-1 text-[12px] font-medium text-[var(--color-primary)]">
+        {/* Merge widget */}
+        <div className={`${CARD_CLASS} p-4`}>
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] font-semibold text-[var(--color-text)]">{t('selection.title')}</p>
+            <span className="rounded-full bg-[var(--color-primary-subtle)] px-2 py-0.5 text-[11px] font-bold text-[var(--color-primary)]">
               {selectedIds.length}/2
             </span>
           </div>
-
-          <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-muted)]">{t('selection.description')}</p>
-
-          <div className="mt-4 space-y-2">
+          <div className="mt-2 space-y-1.5">
             {selectedNames.length > 0 ? (
-              selectedNames.map((name, index) => (
-                <div
-                  key={`${name}-${index}`}
-                  className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-2"
-                >
-                  <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
-                    {t('selection.slotLabel', { index: index + 1 })}
+              selectedNames.map((name, i) => (
+                <div key={`${name}-${i}`} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
+                    {t('selection.slotLabel', { index: i + 1 })}
                   </p>
-                  <p className="mt-1 text-[13px] font-medium text-[var(--color-text)]">{name}</p>
+                  <p className="mt-0.5 text-[13px] font-medium text-[var(--color-text)]">{name}</p>
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-[var(--color-border)] px-3 py-4 text-[13px] text-[var(--color-text-muted)]">
+              <div className="rounded-xl border border-dashed border-[var(--color-border)] px-3 py-3 text-[12px] text-[var(--color-text-muted)]">
                 {t('selection.empty')}
               </div>
             )}
           </div>
-
-          <div className="mt-4 flex gap-2">
-            <PrimaryButton disabled={!canMerge} onClick={openMerge}>
-              {t('merge.button')}
-            </PrimaryButton>
-            <SecondaryButton
-              disabled={selectedIds.length === 0}
-              onClick={() => setSelectedIds([])}
-            >
-              {t('selection.clear')}
-            </SecondaryButton>
-          </div>
-        </aside>
-      </div>
-
-      <section className={`${CARD_CLASS} p-5`}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
-              {t('filters.eyebrow')}
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-[var(--color-text)]">{t('filters.title')}</h2>
-            <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{t('dedupeHint')}</p>
-          </div>
-
-          <div className="flex w-full flex-col gap-3 lg:max-w-2xl sm:flex-row sm:items-end">
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <Label className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--color-text-muted)]">
-                {t('searchPlaceholder').replace('…', '')}
-              </Label>
-              <Input
-                type="search"
-                placeholder={t('searchPlaceholder')}
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="h-10 bg-[var(--color-surface)]"
-              />
-            </div>
-            <AdminFilterSelect
-              label={t('columns.club')}
-              value={selectedClubId}
-              emptyLabel={t('filters.allClubs')}
-              options={(clubs ?? []).map((club) => ({ value: club.id, label: club.name }))}
-              onValueChange={setSelectedClubId}
-              className="sm:min-w-[200px]"
-            />
+          <div className="mt-3 flex gap-2">
+            <PrimaryButton disabled={!canMerge} onClick={openMerge}>{t('merge.button')}</PrimaryButton>
+            <SecondaryButton disabled={selectedIds.length === 0} onClick={() => setSelectedIds([])}>{t('selection.clear')}</SecondaryButton>
           </div>
         </div>
-      </section>
+      </motion.div>
 
+      {/* Table / Cards */}
       {isLoading ? (
         <SkeletonRows rows={6} cols={5} />
       ) : rows.length === 0 ? (
         <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
       ) : (
         <>
+          {/* Desktop table */}
           <div className={`${CARD_CLASS} hidden overflow-hidden lg:block`}>
             <table className="min-w-full text-[13px]">
               <thead>
-                <tr className="bg-[var(--color-surface-alt)] text-left">
-                  <th className="w-14 px-4 py-3 font-medium text-[var(--color-text-muted)]">{t('columns.select')}</th>
-                  <th className="px-4 py-3 font-medium text-[var(--color-text-muted)]">{t('columns.name')}</th>
-                  <th className="px-4 py-3 font-medium text-[var(--color-text-muted)]">{t('columns.club')}</th>
-                  <th className="px-4 py-3 font-medium text-[var(--color-text-muted)]">{t('columns.identity')}</th>
-                  <th className="px-4 py-3 font-medium text-[var(--color-text-muted)]">{t('columns.status')}</th>
-                  <th className="px-4 py-3 font-medium text-[var(--color-text-muted)]">{t('columns.actions')}</th>
+                <tr className="border-b border-[var(--color-border)]/60 bg-[var(--color-surface-alt)]/50 text-left">
+                  <th className="w-12 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{t('columns.select')}</th>
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{t('columns.name')}</th>
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{t('columns.club')}</th>
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{t('columns.identity')}</th>
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{t('columns.status')}</th>
+                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{t('columns.actions')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--color-border)]">
+              <motion.tbody
+                className="divide-y divide-[var(--color-border)]/50"
+                variants={container}
+                initial="hidden"
+                animate="show"
+              >
                 {rows.map((athlete) => {
                   const selected = selectedIds.includes(athlete.id);
                   const duplicateCount = getDuplicateCount(athlete);
-                  const missingClub = !athlete.clubId;
-                  const missingDocument = !athlete.documentId;
-
                   return (
-                    <tr
+                    <motion.tr
                       key={athlete.id}
+                      variants={rowItem}
                       onClick={() => toggleSelected(athlete.id)}
-                      className={`cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)] ${
-                        selected ? 'ring-1 ring-inset ring-[var(--color-primary)]/35' : ''
-                      }`}
+                      className={`cursor-pointer transition-colors hover:bg-[var(--color-surface-alt)]/50 ${selected ? 'bg-[var(--color-primary-subtle)]/30' : 'bg-[var(--color-surface)]'}`}
                     >
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-3.5">
                         <input
                           type="checkbox"
                           checked={selected}
                           onChange={() => toggleSelected(athlete.id)}
-                          onClick={(event) => event.stopPropagation()}
-                          className="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-primary)]"
                         />
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--color-primary-subtle)] text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)]">
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-subtle)] text-[12px] font-bold uppercase text-[var(--color-primary)]">
                             {getInitials(athlete)}
                           </div>
-                          <div className="min-w-0">
+                          <div>
                             <Link
                               href={`/${locale}/admin/athletes/${athlete.id}`}
-                              onClick={(event) => event.stopPropagation()}
-                              className="block truncate text-[14px] font-semibold text-[var(--color-text)] hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[14px] font-semibold text-[var(--color-text)] hover:text-[var(--color-primary)] hover:underline transition-colors"
                             >
                               {athlete.lastName} {athlete.firstName}
                             </Link>
-                            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{getSexLabel(athlete)}</p>
+                            <p className="text-[12px] text-[var(--color-text-muted)]">{getSexLabel(athlete)}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-start gap-2">
-                          <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
-                          <div>
-                            <p className="font-medium text-[var(--color-text)]">{getClubLabel(athlete)}</p>
-                            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{getClubMeta(athlete) ?? '—'}</p>
+                      <td className="px-4 py-3.5">
+                        <p className="font-medium text-[var(--color-text)]">{getClubLabel(athlete)}</p>
+                        <p className="text-[12px] text-[var(--color-text-muted)]">{getClubMeta(athlete) ?? '—'}</p>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="space-y-1 text-[12px] text-[var(--color-text-muted)]">
+                          <div className="flex items-center gap-1.5">
+                            <CalendarDays className="h-3.5 w-3.5" />
+                            {formatDob(athlete.dateOfBirth)}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <FileBadge2 className="h-3.5 w-3.5" />
+                            {athlete.documentId ?? t('badges.missingDocument')}
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-[12px] text-[var(--color-text-muted)]">
-                            <CalendarDays className="h-4 w-4" />
-                            <span>{formatDob(athlete.dateOfBirth)}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-[12px] text-[var(--color-text-muted)]">
-                            <FileBadge2 className="h-4 w-4" />
-                            <span>{athlete.documentId ?? t('badges.missingDocument')}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap gap-2">
+                      <td className="px-4 py-3.5">
+                        <div className="flex flex-wrap gap-1.5">
                           <StatusChip
                             tone={duplicateCount > 1 ? 'warning' : 'neutral'}
-                            label={
-                              duplicateCount > 1
-                                ? t('badges.duplicateCount', { count: duplicateCount })
-                                : t('badges.noDuplicates')
-                            }
+                            label={duplicateCount > 1 ? t('badges.duplicateCount', { count: duplicateCount }) : t('badges.noDuplicates')}
                           />
-                          {missingClub ? (
-                            <StatusChip tone="warning" label={t('badges.missingClub')} />
-                          ) : null}
-                          {missingDocument ? (
-                            <StatusChip tone="muted" label={t('badges.missingDocument')} />
-                          ) : null}
+                          {!athlete.clubId && <StatusChip tone="warning" label={t('badges.missingClub')} />}
+                          {!athlete.documentId && <StatusChip tone="muted" label={t('badges.missingDocument')} />}
                         </div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-3.5">
                         <Link
                           href={`/${locale}/admin/athletes/${athlete.id}`}
-                          onClick={(event) => event.stopPropagation()}
-                          className="text-[13px] font-medium text-[var(--color-primary)] hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--color-primary)] hover:underline"
                         >
                           {t('actions.viewProfile')}
+                          <ChevronRight className="h-3.5 w-3.5" />
                         </Link>
                       </td>
-                    </tr>
+                    </motion.tr>
                   );
                 })}
-              </tbody>
+              </motion.tbody>
             </table>
           </div>
 
-          <div className="space-y-3 lg:hidden">
+          {/* Mobile cards */}
+          <motion.div className="space-y-2 lg:hidden" variants={container} initial="hidden" animate="show">
             {rows.map((athlete) => {
               const selected = selectedIds.includes(athlete.id);
               const duplicateCount = getDuplicateCount(athlete);
-              const missingClub = !athlete.clubId;
-              const missingDocument = !athlete.documentId;
 
               return (
-                <button
+                <motion.button
                   key={athlete.id}
                   type="button"
+                  variants={rowItem}
                   onClick={() => toggleSelected(athlete.id)}
-                  className={`${CARD_CLASS} w-full p-4 text-left transition ${
-                    selected ? 'border-[var(--color-primary)]/45 ring-1 ring-[var(--color-primary)]/20' : ''
-                  }`}
+                  className={`${CARD_CLASS} w-full p-4 text-left transition-colors ${selected ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary-subtle)]/20' : ''}`}
                 >
                   <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
                       checked={selected}
                       onChange={() => toggleSelected(athlete.id)}
-                      onClick={(event) => event.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
                       className="mt-1 h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-primary)]"
                     />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <Link
-                            href={`/${locale}/admin/athletes/${athlete.id}`}
-                            onClick={(event) => event.stopPropagation()}
-                            className="text-[14px] font-semibold text-[var(--color-text)] hover:underline"
-                          >
-                            {athlete.lastName} {athlete.firstName}
-                          </Link>
-                          <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{getSexLabel(athlete)}</p>
-                        </div>
-                        <span className="rounded-full bg-[var(--color-primary-subtle)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-primary)]">
+                      <div className="flex items-start justify-between gap-2">
+                        <Link
+                          href={`/${locale}/admin/athletes/${athlete.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-[14px] font-semibold text-[var(--color-text)] hover:underline"
+                        >
+                          {athlete.lastName} {athlete.firstName}
+                        </Link>
+                        <span className="rounded-xl bg-[var(--color-primary-subtle)] px-2.5 py-1 text-[11px] font-bold text-[var(--color-primary)]">
                           {getInitials(athlete)}
                         </span>
                       </div>
-
-                      <div className="mt-3 grid gap-2 text-[12px] text-[var(--color-text-muted)]">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="h-4 w-4" />
-                          <span>{getClubLabel(athlete)}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <CalendarDays className="h-4 w-4" />
-                          <span>{formatDob(athlete.dateOfBirth)}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <FileBadge2 className="h-4 w-4" />
-                          <span>{athlete.documentId ?? t('badges.missingDocument')}</span>
-                        </div>
+                      <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{getSexLabel(athlete)}</p>
+                      <div className="mt-2 grid gap-1 text-[12px] text-[var(--color-text-muted)]">
+                        <div className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />{getClubLabel(athlete)}</div>
+                        <div className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{formatDob(athlete.dateOfBirth)}</div>
+                        <div className="flex items-center gap-1.5"><FileBadge2 className="h-3.5 w-3.5" />{athlete.documentId ?? t('badges.missingDocument')}</div>
                       </div>
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <StatusChip
-                          tone={duplicateCount > 1 ? 'warning' : 'neutral'}
-                          label={
-                            duplicateCount > 1
-                              ? t('badges.duplicateCount', { count: duplicateCount })
-                              : t('badges.noDuplicates')
-                          }
-                        />
-                        {missingClub ? <StatusChip tone="warning" label={t('badges.missingClub')} /> : null}
-                        {missingDocument ? (
-                          <StatusChip tone="muted" label={t('badges.missingDocument')} />
-                        ) : null}
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <StatusChip tone={duplicateCount > 1 ? 'warning' : 'neutral'} label={duplicateCount > 1 ? t('badges.duplicateCount', { count: duplicateCount }) : t('badges.noDuplicates')} />
+                        {!athlete.clubId && <StatusChip tone="warning" label={t('badges.missingClub')} />}
+                        {!athlete.documentId && <StatusChip tone="muted" label={t('badges.missingDocument')} />}
                       </div>
                     </div>
                   </div>
-                </button>
+                </motion.button>
               );
             })}
-          </div>
+          </motion.div>
         </>
       )}
 
+      {/* Merge modal */}
       <Modal
         open={mergeOpen && canMerge}
         onClose={() => setMergeOpen(false)}
@@ -539,18 +446,18 @@ export default function AthletesPage() {
         }
       >
         <div className="space-y-4">
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-4 py-3">
-            <p className="text-[12px] font-medium text-[var(--color-text)]">{t('merge.selectionTitle')}</p>
-            <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{selectedNames.join('  /  ')}</p>
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-4 py-3">
+            <p className="text-[12px] font-semibold text-[var(--color-text)]">{t('merge.selectionTitle')}</p>
+            <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{selectedNames.join(' · ')}</p>
           </div>
           <div>
-            <label className="block text-[13px] font-medium text-[var(--color-text)]">
+            <label className="block text-[13px] font-semibold text-[var(--color-text)]">
               {t('merge.reasonLabel')}
             </label>
             <textarea
-              className="mt-1 h-24 w-full resize-none rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-2 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30"
+              className="mt-1.5 h-24 w-full resize-none rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-2 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30"
               value={mergeReason}
-              onChange={(event) => setMergeReason(event.target.value)}
+              onChange={(e) => setMergeReason(e.target.value)}
             />
           </div>
         </div>
@@ -565,20 +472,4 @@ function getDuplicateCount(athlete: AthleteRow) {
 
 function getInitials(athlete: AthleteRow) {
   return `${athlete.firstName.charAt(0)}${athlete.lastName.charAt(0)}`.toUpperCase();
-}
-
-type StatusChipProps = {
-  label: string;
-  tone: 'neutral' | 'warning' | 'muted';
-};
-
-function StatusChip({ label, tone }: StatusChipProps) {
-  const toneClass =
-    tone === 'warning'
-      ? 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]'
-      : tone === 'muted'
-        ? 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]'
-        : 'bg-[var(--color-primary-subtle)] text-[var(--color-primary)]';
-
-  return <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${toneClass}`}>{label}</span>;
 }

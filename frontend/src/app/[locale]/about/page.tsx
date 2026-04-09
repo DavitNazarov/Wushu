@@ -11,7 +11,7 @@ export default function AboutPage() {
     <PublicLayout>
       <div className="space-y-12 py-8">
         <div className="relative aspect-[1200/400] w-full overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
-          <Image
+           <Image
             src="/images/hero-action.svg"
             alt=""
             fill

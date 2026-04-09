@@ -5,21 +5,28 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
+import { ArrowLeft, GitBranch, Clock, Radio } from 'lucide-react';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
+import { Label } from '@/components/ui/primitives/label';
+import { Input } from '@/components/ui/primitives/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/primitives/select';
 import { ApiError, apiGet, apiPost } from '@/lib/api/client';
 import { publicVariants } from '@/lib/animations/variants';
 import type { EventRow, RegistrationRow, AthleteRow } from '@/types/api';
 import { CategoryPicker } from '@/components/registration/CategoryPicker';
 
 type Props = { params: Promise<{ locale: string; eventSlug: string }> };
-
-const INPUT_CLS =
-  'mt-1 h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -33,6 +40,12 @@ function athleteInitial(reg: RegistrationRow): string {
 function athleteName(reg: RegistrationRow): string {
   return reg.athlete ? `${reg.athlete.firstName} ${reg.athlete.lastName}` : reg.athleteId;
 }
+
+const SUB_NAV = [
+  { key: 'brackets', href: (slug: string, locale: string) => `/${locale}/coach/events/${slug}/brackets`, icon: GitBranch },
+  { key: 'schedule', href: (slug: string, locale: string) => `/${locale}/coach/events/${slug}/schedule`, icon: Clock },
+  { key: 'live', href: (slug: string, locale: string) => `/${locale}/coach/events/${slug}/live`, icon: Radio },
+];
 
 export default function CoachRegistrationsPage({ params }: Props) {
   const { locale, eventSlug } = use(params);
@@ -123,12 +136,6 @@ export default function CoachRegistrationsPage({ params }: Props) {
     statusMut.mutate({ id: withdrawId, status: 'WITHDRAWN', reason: withdrawReason.trim() || undefined });
   };
 
-  const navLinks = [
-    { href: `/${locale}/coach/events/${eventSlug}/brackets`, label: 'Brackets' },
-    { href: `/${locale}/coach/events/${eventSlug}/schedule`, label: 'Schedule' },
-    { href: `/${locale}/coach/events/${eventSlug}/live`, label: 'Live' },
-  ];
-
   return (
     <motion.div
       className="space-y-8 py-2"
@@ -136,17 +143,14 @@ export default function CoachRegistrationsPage({ params }: Props) {
       initial="initial"
       animate="animate"
     >
-
       {/* Back */}
       <motion.div variants={publicVariants.staggerItem}>
         <Link
           href={`/${locale}/coach/events`}
           className="group inline-flex items-center gap-1.5 text-[13px] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
         >
-          <svg className="h-3.5 w-3.5 transition-transform duration-150 group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          Events
+          <ArrowLeft className="h-3.5 w-3.5 transition-transform duration-150 group-hover:-translate-x-0.5" />
+          {tC('back')}
         </Link>
       </motion.div>
 
@@ -173,9 +177,7 @@ export default function CoachRegistrationsPage({ params }: Props) {
                         ? 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]'
                         : 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]'
                   }`}>
-                    {regStatus === 'UPCOMING' && 'Reg. upcoming'}
-                    {regStatus === 'OPEN' && 'Reg. open'}
-                    {regStatus === 'CLOSED' && 'Reg. closed'}
+                    {t(`regStatus.${regStatus}`)}
                   </span>
                 )}
               </div>
@@ -194,17 +196,15 @@ export default function CoachRegistrationsPage({ params }: Props) {
       </motion.div>
 
       {/* Event sub-nav */}
-      <motion.div
-        className="flex flex-wrap gap-1"
-        variants={publicVariants.staggerItem}
-      >
-        {navLinks.map((link) => (
+      <motion.div className="flex flex-wrap gap-1" variants={publicVariants.staggerItem}>
+        {SUB_NAV.map(({ key, href, icon: Icon }) => (
           <Link
-            key={link.href}
-            href={link.href}
-            className="rounded-[var(--radius-pill)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-primary)]/40 hover:text-[var(--color-primary)]"
+            key={key}
+            href={href(eventSlug, locale)}
+            className="inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-primary)]/40 hover:text-[var(--color-primary)]"
           >
-            {link.label}
+            <Icon className="h-3 w-3" />
+            {t(`nav.${key}`)}
           </Link>
         ))}
       </motion.div>
@@ -299,19 +299,27 @@ export default function CoachRegistrationsPage({ params }: Props) {
       {/* Add registration modal */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title={t('addRegistration')}>
         <div className="space-y-4">
-          <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">{t('pickAthlete')}</label>
-            <select value={selectedAthleteId} onChange={(e) => setSelectedAthleteId(e.target.value)} className={INPUT_CLS}>
-              <option value="">—</option>
-              {athletes?.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.firstName} {a.lastName}{a.dateOfBirth ? ` (${new Date(a.dateOfBirth).getFullYear()})` : ''}
-                </option>
-              ))}
-            </select>
+          <div className="space-y-1.5">
+            <Label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              {t('pickAthlete')}
+            </Label>
+            <Select value={selectedAthleteId} onValueChange={setSelectedAthleteId}>
+              <SelectTrigger className="h-10 w-full">
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                {athletes?.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.firstName} {a.lastName}{a.dateOfBirth ? ` (${new Date(a.dateOfBirth).getFullYear()})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">{t('pickCategory')}</label>
+          <div className="space-y-1.5">
+            <Label className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              {t('pickCategory')}
+            </Label>
             <CategoryPicker
               eventSlug={eventSlug}
               ageGroupId={selectedAgeGroupId}
@@ -321,9 +329,11 @@ export default function CoachRegistrationsPage({ params }: Props) {
               disabled={createMut.isPending}
             />
           </div>
-          <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">{t('notesOptional')}</label>
-            <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className={INPUT_CLS} />
+          <div className="space-y-1.5">
+            <Label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              {t('notesOptional')}
+            </Label>
+            <Input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="h-10 bg-[var(--color-surface)]" />
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <SecondaryButton onClick={() => setAddOpen(false)}>{tC('cancel')}</SecondaryButton>
@@ -342,9 +352,11 @@ export default function CoachRegistrationsPage({ params }: Props) {
       <Modal open={!!withdrawId} onClose={() => setWithdrawId(null)} title={t('withdraw')}>
         <div className="space-y-4">
           <p className="text-[14px] text-[var(--color-text-muted)]">{t('withdrawConfirm')}</p>
-          <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">{t('withdrawReason')}</label>
-            <input type="text" value={withdrawReason} onChange={(e) => setWithdrawReason(e.target.value)} className={INPUT_CLS} />
+          <div className="space-y-1.5">
+            <Label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              {t('withdrawReason')}
+            </Label>
+            <Input type="text" value={withdrawReason} onChange={(e) => setWithdrawReason(e.target.value)} className="h-10 bg-[var(--color-surface)]" />
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <SecondaryButton onClick={() => setWithdrawId(null)}>{tC('cancel')}</SecondaryButton>

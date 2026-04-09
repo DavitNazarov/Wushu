@@ -860,7 +860,8 @@
       "openEvent": "Open event",
       "searchPlaceholder": "Search by name or location…",
       "emptyTitle": "No events yet",
-      "emptyDescription": "No events are available for registration or viewing. Check back later."
+      "emptyDescription": "No events are available for registration or viewing. Check back later.",
+      "filterAll": "All statuses"
     },
     "registrations": {
       "title": "Registrations",
@@ -876,7 +877,17 @@
       "regStatusUpcoming": "Registration opens on {date}",
       "regStatusOpen": "Registration open — closes on {date}",
       "regStatusClosed": "Registration is closed for this event.",
-      "regClosedError": "Registration is not open for this event. The server rejected the request."
+      "regClosedError": "Registration is not open for this event. The server rejected the request.",
+      "regStatus": {
+        "OPEN": "Reg. open",
+        "UPCOMING": "Reg. upcoming",
+        "CLOSED": "Reg. closed"
+      },
+      "nav": {
+        "brackets": "Brackets",
+        "schedule": "Schedule",
+        "live": "Live"
+      }
     },
     "athletes": {
       "title": "Athletes",
@@ -884,7 +895,21 @@
       "addAthlete": "Add athlete",
       "askAdminHint": "Ask admin to add athletes to your club.",
       "emptyTitle": "No athletes yet",
-      "emptyDescription": "Add athletes to your club to register them for events."
+      "emptyDescription": "Add athletes to your club to register them for events.",
+      "fields": {
+        "firstName": "First name",
+        "lastName": "Last name",
+        "dateOfBirth": "Date of birth",
+        "documentId": "Document ID",
+        "sex": "Sex",
+        "sexOptions": {
+          "male": "Male",
+          "female": "Female"
+        }
+      },
+      "viewInfo": "View info",
+      "viewProfile": "View full profile",
+      "missingDocument": "No document"
     },
     "brackets": {
       "title": "Brackets",
@@ -894,7 +919,8 @@
     "schedule": {
       "title": "Schedule",
       "emptyTitle": "Schedule not available",
-      "emptyDescription": "The schedule will appear here once the draw is executed and published."
+      "emptyDescription": "The schedule will appear here once the draw is executed and published.",
+      "unassigned": "Unassigned"
     },
     "live": {
       "title": "Live mat",
@@ -957,7 +983,10 @@
       "club": "Club",
       "identity": "Identity",
       "status": "Status",
-      "actions": "Actions"
+      "actions": "Actions",
+      "dob": "Date of Birth",
+      "sex": "Sex",
+      "document": "Document"
     },
     "details": {
       "unspecified": "Not specified"
@@ -994,6 +1023,11 @@
       "admin": "Canonical athlete detail for tournament operations.",
       "coach": "Canonical athlete detail for your club workflow.",
       "public": "Public athlete competition profile."
+    },
+    "backLabel": {
+      "admin": "All athletes",
+      "coach": "Athletes",
+      "public": "Events"
     },
     "overview": {
       "eyebrow": "Athlete command view",

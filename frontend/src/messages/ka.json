@@ -855,67 +855,93 @@
       }
     },
     "events": {
-      "title": "Events",
-      "subtitle": "Pick an event to manage registrations or view tournament info.",
-      "openEvent": "Open event",
-      "searchPlaceholder": "Search by name or location…",
-      "emptyTitle": "No events yet",
-      "emptyDescription": "No events are available for registration or viewing. Check back later."
+      "title": "ღონისძიებები",
+      "subtitle": "აირჩიეთ ღონისძიება რეგისტრაციების სამართავად ან ტურნირის ინფორმაციის სანახავად.",
+      "openEvent": "ღონისძიების გახსნა",
+      "searchPlaceholder": "ძებნა სახელით ან ლოკაციით…",
+      "emptyTitle": "ღონისძიებები ჯერ არ არის",
+      "emptyDescription": "რეგისტრაციისა ან ნახვისთვის ხელმისაწვდომი ღონისძიებები არ არის. გადაამოწმეთ მოგვიანებით.",
+      "filterAll": "ყველა სტატუსი"
     },
     "registrations": {
-      "title": "Registrations",
-      "addRegistration": "Add registration",
-      "withdraw": "Withdraw",
-      "withdrawConfirm": "Are you sure you want to withdraw this registration?",
-      "withdrawReason": "Reason (optional)",
-      "emptyTitle": "No registrations yet",
-      "emptyDescription": "Register athletes from your club into this event.",
-      "pickAthlete": "Pick athlete",
-      "pickCategory": "Category",
-      "notesOptional": "Notes (optional)",
-      "regStatusUpcoming": "Registration opens on {date}",
-      "regStatusOpen": "Registration open — closes on {date}",
-      "regStatusClosed": "Registration is closed for this event.",
-      "regClosedError": "Registration is not open for this event. The server rejected the request."
+      "title": "რეგისტრაციები",
+      "addRegistration": "რეგისტრაციის დამატება",
+      "withdraw": "გაუქმება",
+      "withdrawConfirm": "ნამდვილად გსურთ ამ რეგისტრაციის გაუქმება?",
+      "withdrawReason": "მიზეზი (არასავალდებულო)",
+      "emptyTitle": "რეგისტრაციები ჯერ არ არის",
+      "emptyDescription": "დაარეგისტრირეთ კლუბის სპორტსმენები ამ ღონისძიებაში.",
+      "pickAthlete": "სპორტსმენის არჩევა",
+      "pickCategory": "კატეგორია",
+      "notesOptional": "შენიშვნები (არასავალდებულო)",
+      "regStatusUpcoming": "რეგისტრაცია იხსნება {date}-ს",
+      "regStatusOpen": "რეგისტრაცია ღიაა — იხურება {date}-ს",
+      "regStatusClosed": "ამ ღონისძიებაზე რეგისტრაცია დახურულია.",
+      "regClosedError": "ამ ღონისძიებაზე რეგისტრაცია ღია არ არის. სერვერმა მოთხოვნა უარყო.",
+      "regStatus": {
+        "OPEN": "რეგ. ღია",
+        "UPCOMING": "რეგ. მალე",
+        "CLOSED": "რეგ. დახურულია"
+      },
+      "nav": {
+        "brackets": "ბადეები",
+        "schedule": "განრიგი",
+        "live": "ლაივი"
+      }
     },
     "athletes": {
-      "title": "Athletes",
-      "subtitle": "Manage your club athlete roster.",
-      "addAthlete": "Add athlete",
-      "askAdminHint": "Ask admin to add athletes to your club.",
-      "emptyTitle": "No athletes yet",
-      "emptyDescription": "Add athletes to your club to register them for events."
+      "title": "სპორტსმენები",
+      "subtitle": "მართეთ კლუბის სპორტსმენების სია.",
+      "addAthlete": "სპორტსმენის დამატება",
+      "askAdminHint": "სპორტსმენების კლუბში დასამატებლად დაუკავშირდით ადმინისტრატორს.",
+      "emptyTitle": "სპორტსმენები ჯერ არ არის",
+      "emptyDescription": "დაამატეთ სპორტსმენები კლუბში, რომ ღონისძიებებში დაარეგისტრიროთ.",
+      "fields": {
+        "firstName": "სახელი",
+        "lastName": "გვარი",
+        "dateOfBirth": "დაბადების თარიღი",
+        "documentId": "დოკუმენტის ID",
+        "sex": "სქესი",
+        "sexOptions": {
+          "male": "მამრობითი",
+          "female": "მდედრობითი"
+        }
+      },
+      "viewInfo": "ინფო",
+      "viewProfile": "სრული პროფილი",
+      "missingDocument": "დოკუმენტი არ არის"
     },
     "brackets": {
-      "title": "Brackets",
-      "emptyTitle": "Brackets not published yet",
-      "emptyDescription": "Brackets will appear here once the draw is executed and published."
+      "title": "ბადეები",
+      "emptyTitle": "ბადეები ჯერ არ გამოქვეყნებულა",
+      "emptyDescription": "ბადეები აქ გამოჩნდება, როცა გათამაშება შესრულდება და გამოქვეყნდება."
     },
     "schedule": {
-      "title": "Schedule",
-      "emptyTitle": "Schedule not available",
-      "emptyDescription": "The schedule will appear here once the draw is executed and published."
+      "title": "განრიგი",
+      "emptyTitle": "განრიგი ხელმისაწვდომი არ არის",
+      "emptyDescription": "განრიგი აქ გამოჩნდება, როცა გათამაშება შესრულდება და გამოქვეყნდება.",
+      "unassigned": "განუსაზღვრელი"
     },
     "live": {
-      "title": "Live mat",
-      "now": "Now",
-      "next": "Next",
-      "onDeck": "On deck",
-      "refresh": "Refresh",
-      "emptyTitle": "No fights yet",
-      "emptyDescription": "Fights will appear here when the competition starts."
+      "title": "ლაივ ხალიჩა",
+      "now": "ახლა",
+      "next": "შემდეგი",
+      "onDeck": "მზადდება",
+      "refresh": "განახლება",
+      "emptyTitle": "ბრძოლები ჯერ არ არის",
+      "emptyDescription": "ბრძოლები აქ გამოჩნდება, როცა შეჯიბრი დაიწყება."
     },
     "me": {
-      "title": "My profile",
-      "subtitle": "Your account and club information.",
-      "name": "Name",
-      "role": "Role",
-      "club": "Club",
-      "organisation": "Organisation"
+      "title": "ჩემი პროფილი",
+      "subtitle": "თქვენი ანგარიშისა და კლუბის ინფორმაცია.",
+      "name": "სახელი",
+      "role": "როლი",
+      "club": "კლუბი",
+      "organisation": "ორგანიზაცია"
     },
     "noClub": {
-      "title": "No club assigned",
-      "description": "You must be assigned to a club to use the coach dashboard. Contact your administrator."
+      "title": "კლუბი მინიჭებული არ არის",
+      "description": "მწვრთნელის პანელის გამოყენებისთვის კლუბი უნდა გქონდეთ მინიჭებული. დაუკავშირდით ადმინისტრატორს."
     }
   },
   "athletes": {
@@ -957,7 +983,10 @@
       "club": "კლუბი",
       "identity": "იდენტობა",
       "status": "სტატუსი",
-      "actions": "ქმედებები"
+      "actions": "ქმედებები",
+      "dob": "დაბ. თარიღი",
+      "sex": "სქესი",
+      "document": "დოკუმენტი"
     },
     "details": {
       "unspecified": "არ არის მითითებული"
@@ -994,6 +1023,11 @@
       "admin": "სპორტსმენის მთავარი დეტალური ხედი საოპერაციო სამუშაოსთვის.",
       "coach": "სპორტსმენის მთავარი დეტალური ხედი თქვენი კლუბის სამუშაოსთვის.",
       "public": "სპორტსმენის საჯარო საკონკურსო პროფილი."
+    },
+    "backLabel": {
+      "admin": "ყველა სპორტსმენი",
+      "coach": "სპორტსმენები",
+      "public": "ღონისძიებები"
     },
     "overview": {
       "eyebrow": "სპორტსმენის საკონტროლო ხედი",
@@ -1118,19 +1152,19 @@
     "validationRequired": "Title and slug are required."
   },
   "clubs": {
-    "title": "Clubs",
-    "new": "New club",
-    "emptyTitle": "No clubs yet",
-    "emptyDescription": "Create clubs to organise athletes by their teams.",
+    "title": "კლუბები",
+    "new": "ახალი კლუბი",
+    "emptyTitle": "კლუბები ჯერ არ არის",
+    "emptyDescription": "შექმენით კლუბები სპორტსმენების გუნდების მიხედვით დასაჯგუფებლად.",
     "columns": {
-      "name": "Club",
-      "city": "City",
-      "country": "Country"
+      "name": "კლუბი",
+      "city": "ქალაქი",
+      "country": "ქვეყანა"
     },
     "fields": {
-      "name": "Club name",
-      "city": "City",
-      "country": "Country"
+      "name": "კლუბის სახელი",
+      "city": "ქალაქი",
+      "country": "ქვეყანა"
     },
     "detail": {
       "title": "კლუბის დეტალები",

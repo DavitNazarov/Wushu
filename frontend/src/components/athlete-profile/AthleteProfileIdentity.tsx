@@ -2,6 +2,7 @@
 
 import { Building2, CalendarDays, ShieldCheck, UserRound } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/Card';
 import type { AthleteProfileResponse } from '@/types/api';
 import { formatAthleteDate } from './athleteProfile.utils';
@@ -18,79 +19,97 @@ export function AthleteProfileIdentity({ athlete, scope }: Props) {
   const clubMeta = [athlete.club?.city, athlete.club?.country].filter(Boolean).join(', ');
 
   return (
-    <Card className="space-y-5 p-5">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
-          {t('eyebrow')}
-        </p>
-        <h2 className="mt-2 text-xl font-semibold text-[var(--color-text)]">{athlete.fullName}</h2>
-        <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{t('summary')}</p>
-      </div>
-
-      <div className="grid gap-3">
-        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[linear-gradient(135deg,var(--color-primary-subtle),color-mix(in_srgb,var(--color-surface)_86%,var(--color-surface-alt)_14%))] p-4">
-          <div className="flex items-start gap-3">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--color-primary-subtle)] text-[var(--color-primary)]">
-              <Building2 className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">{t('club')}</p>
-              <p className="mt-1 text-[15px] font-medium text-[var(--color-text)]">{athlete.club?.name ?? '—'}</p>
-              <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{clubMeta || t('clubMetaEmpty')}</p>
-            </div>
-          </div>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: 0.1 }}
+    >
+      <Card className="overflow-hidden p-0">
+        {/* Card header */}
+        <div className="border-b border-[var(--color-border)]/60 px-5 py-4">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+            {t('eyebrow')}
+          </p>
+          <h3 className="mt-1 text-[15px] font-semibold text-[var(--color-text)]">{t('summary')}</h3>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/35 p-4">
-            <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-              <ShieldCheck className="h-4 w-4" />
-              <p className="text-[11px] uppercase tracking-wide">{t('sex')}</p>
+        <div className="space-y-px">
+          {/* Club */}
+          <IdentityRow icon={Building2} label={t('club')}>
+            <div>
+              <p className="text-[14px] font-medium text-[var(--color-text)]">{athlete.club?.name ?? '—'}</p>
+              {clubMeta && <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">{clubMeta}</p>}
             </div>
-            <p className="mt-2 text-[14px] font-medium text-[var(--color-text)]">
+          </IdentityRow>
+
+          {/* Sex */}
+          <IdentityRow icon={ShieldCheck} label={t('sex')}>
+            <p className="text-[14px] font-medium text-[var(--color-text)]">
               {athlete.sex ? t(`sexValue.${athlete.sex}`) : '—'}
             </p>
-          </div>
+          </IdentityRow>
 
-          {scope !== 'public' ? (
-            <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/35 p-4">
-              <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-                <CalendarDays className="h-4 w-4" />
-                <p className="text-[11px] uppercase tracking-wide">{t('dateOfBirth')}</p>
-              </div>
-              <p className="mt-2 text-[14px] font-medium text-[var(--color-text)]">
+          {/* Date of birth — hidden for public */}
+          {scope !== 'public' && (
+            <IdentityRow icon={CalendarDays} label={t('dateOfBirth')}>
+              <p className="text-[14px] font-medium text-[var(--color-text)]">
                 {formatAthleteDate(athlete.dateOfBirth, locale)}
               </p>
-            </div>
-          ) : null}
-        </div>
+            </IdentityRow>
+          )}
 
-        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/35 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-              <UserRound className="h-4 w-4" />
-              <p className="text-[11px] uppercase tracking-wide">{t('coaches')}</p>
-            </div>
-            <span className="rounded-full bg-[var(--color-primary-subtle)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-primary)]">
-              {coachCount}
+          {/* Coaches */}
+          <IdentityRow icon={UserRound} label={t('coaches')} badge={coachCount}>
+            {coachCount > 0 ? (
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {athlete.coaches?.map((coach) => (
+                  <span
+                    key={coach.id}
+                    className="rounded-full bg-[var(--color-surface-alt)] px-2.5 py-1 text-[12px] font-medium text-[var(--color-text)]"
+                  >
+                    {coach.displayName}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[13px] text-[var(--color-text-muted)]">{t('noCoaches')}</p>
+            )}
+          </IdentityRow>
+        </div>
+      </Card>
+    </motion.div>
+  );
+}
+
+function IdentityRow({
+  icon: Icon,
+  label,
+  badge,
+  children,
+}: {
+  icon: typeof Building2;
+  label: string;
+  badge?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3 px-5 py-4 transition-colors hover:bg-[var(--color-surface-alt)]/40">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
+            {label}
+          </p>
+          {badge !== undefined && badge > 0 && (
+            <span className="rounded-full bg-[var(--color-primary-subtle)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-primary)]">
+              {badge}
             </span>
-          </div>
-          {coachCount > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {athlete.coaches?.map((coach) => (
-                <span
-                  key={coach.id}
-                  className="rounded-full bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text)]"
-                >
-                  {coach.displayName}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-3 text-[13px] text-[var(--color-text-muted)]">{t('noCoaches')}</p>
           )}
         </div>
+        <div className="mt-1">{children}</div>
       </div>
-    </Card>
+    </div>
   );
 }
