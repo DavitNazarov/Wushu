@@ -3,9 +3,11 @@
 
 import { FormEvent, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { Card } from '@/components/ui/Card';
 import { InlineAlert } from '@/components/ui/InlineAlert';
+import { publicVariants } from '@/lib/animations/variants';
 
 type FormState = 'idle' | 'submitting' | 'success' | 'error';
 
@@ -63,30 +65,40 @@ export default function ContactPage() {
   return (
     <PublicLayout>
       <div className="space-y-8 py-2">
-        <div>
+        <motion.div
+          initial="initial"
+          animate="animate"
+          variants={publicVariants.slideDown}
+        >
           <h1 className="text-2xl font-semibold text-[var(--color-text)]">
             {tPublic('contactTitle')}
           </h1>
           <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
             {tPublic('contactSubtitle')}
           </p>
-        </div>
+        </motion.div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <h2 className="text-[15px] font-semibold text-[var(--color-text)]">
-              {tPublic('contactFormTitle')}
-            </h2>
-            <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
-              {tPublic('contactBody')}
-            </p>
-            <form
-              className="mt-4 space-y-3"
-              onSubmit={(event) => {
-                void handleSubmit(event, 'contact');
-              }}
-            >
-              <div className="space-y-1">
+        <motion.div
+          className="grid gap-6 md:grid-cols-2"
+          variants={publicVariants.staggerContainer}
+          initial="initial"
+          animate="animate"
+        >
+          <motion.div variants={publicVariants.staggerItem}>
+            <Card>
+              <h2 className="text-[15px] font-semibold text-[var(--color-text)]">
+                {tPublic('contactFormTitle')}
+              </h2>
+              <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
+                {tPublic('contactBody')}
+              </p>
+              <form
+                className="mt-4 space-y-3"
+                onSubmit={(event) => {
+                  void handleSubmit(event, 'contact');
+                }}
+              >
+              <motion.div variants={publicVariants.staggerItem} className="space-y-1">
                 <label className="block text-[12px] font-medium text-[var(--color-text)]">
                   {tPublic('contactName')}
                 </label>
@@ -96,8 +108,8 @@ export default function ContactPage() {
                   onChange={(event) => setName(event.target.value)}
                   required
                 />
-              </div>
-              <div className="space-y-1">
+              </motion.div>
+              <motion.div variants={publicVariants.staggerItem} className="space-y-1">
                 <label className="block text-[12px] font-medium text-[var(--color-text)]">
                   {tPublic('contactEmail')}
                 </label>
@@ -108,8 +120,8 @@ export default function ContactPage() {
                   onChange={(event) => setEmail(event.target.value)}
                   required
                 />
-              </div>
-              <div className="space-y-1">
+              </motion.div>
+              <motion.div variants={publicVariants.staggerItem} className="space-y-1">
                 <label className="block text-[12px] font-medium text-[var(--color-text)]">
                   {tPublic('contactClubName')}
                 </label>
@@ -118,8 +130,8 @@ export default function ContactPage() {
                   value={clubName}
                   onChange={(event) => setClubName(event.target.value)}
                 />
-              </div>
-              <div className="space-y-1">
+              </motion.div>
+              <motion.div variants={publicVariants.staggerItem} className="space-y-1">
                 <label className="block text-[12px] font-medium text-[var(--color-text)]">
                   {tPublic('contactMessage')}
                 </label>
@@ -129,7 +141,7 @@ export default function ContactPage() {
                   onChange={(event) => setMessage(event.target.value)}
                   required
                 />
-              </div>
+              </motion.div>
               <div className="hidden">
                 <label>
                   Website
@@ -140,37 +152,45 @@ export default function ContactPage() {
                 </label>
               </div>
               {formState === 'success' && (
-                <InlineAlert variant="success">{tPublic('contactSuccess')}</InlineAlert>
+                <motion.div variants={publicVariants.staggerItem}>
+                  <InlineAlert variant="success">{tPublic('contactSuccess')}</InlineAlert>
+                </motion.div>
               )}
               {formState === 'error' && (
-                <InlineAlert variant="error">
-                  {error ?? tPublic('contactError')}
-                </InlineAlert>
+                <motion.div variants={publicVariants.staggerItem}>
+                  <InlineAlert variant="error">
+                    {error ?? tPublic('contactError')}
+                  </InlineAlert>
+                </motion.div>
               )}
-              <button
+              <motion.button
                 type="submit"
                 disabled={formState === 'submitting'}
                 className="mt-2 inline-flex h-11 items-center justify-center rounded-[var(--radius-input)] bg-[var(--color-primary)] px-4 text-[13px] font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-70"
+                variants={publicVariants.staggerItem}
+                whileHover={{ scale: 1.05, transition: { type: 'spring', stiffness: 300, damping: 20 } }}
               >
                 {formState === 'submitting' ? tPublic('contactSubmitting') : tPublic('contactSubmit')}
-              </button>
+              </motion.button>
             </form>
-          </Card>
+            </Card>
+          </motion.div>
 
-          <Card>
-            <h2 className="text-[15px] font-semibold text-[var(--color-text)]">
-              {tPublic('membershipTitle')}
-            </h2>
-            <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
-              {tPublic('membershipSubtitle')}
-            </p>
-            <form
-              className="mt-4 space-y-3"
-              onSubmit={(event) => {
-                void handleSubmit(event, 'membership');
-              }}
-            >
-              <div className="space-y-1">
+          <motion.div variants={publicVariants.staggerItem}>
+            <Card>
+              <h2 className="text-[15px] font-semibold text-[var(--color-text)]">
+                {tPublic('membershipTitle')}
+              </h2>
+              <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
+                {tPublic('membershipSubtitle')}
+              </p>
+              <form
+                className="mt-4 space-y-3"
+                onSubmit={(event) => {
+                  void handleSubmit(event, 'membership');
+                }}
+              >
+              <motion.div variants={publicVariants.staggerItem} className="space-y-1">
                 <label className="block text-[12px] font-medium text-[var(--color-text)]">
                   {tPublic('membershipClubName')}
                 </label>
@@ -180,8 +200,8 @@ export default function ContactPage() {
                   onChange={(event) => setClubName(event.target.value)}
                   required
                 />
-              </div>
-              <div className="space-y-1">
+              </motion.div>
+              <motion.div variants={publicVariants.staggerItem} className="space-y-1">
                 <label className="block text-[12px] font-medium text-[var(--color-text)]">
                   {tPublic('contactName')}
                 </label>
@@ -191,8 +211,8 @@ export default function ContactPage() {
                   onChange={(event) => setName(event.target.value)}
                   required
                 />
-              </div>
-              <div className="space-y-1">
+              </motion.div>
+              <motion.div variants={publicVariants.staggerItem} className="space-y-1">
                 <label className="block text-[12px] font-medium text-[var(--color-text)]">
                   {tPublic('contactEmail')}
                 </label>
@@ -203,7 +223,7 @@ export default function ContactPage() {
                   onChange={(event) => setEmail(event.target.value)}
                   required
                 />
-              </div>
+              </motion.div>
               <div className="hidden" aria-hidden="true">
                 <label>
                   Website
@@ -215,7 +235,7 @@ export default function ContactPage() {
                   />
                 </label>
               </div>
-              <div className="space-y-1">
+              <motion.div variants={publicVariants.staggerItem} className="space-y-1">
                 <label className="block text-[12px] font-medium text-[var(--color-text)]">
                   {tPublic('membershipNotes')}
                 </label>
@@ -225,27 +245,34 @@ export default function ContactPage() {
                   onChange={(event) => setMessage(event.target.value)}
                   required
                 />
-              </div>
+              </motion.div>
               {formState === 'success' && (
-                <InlineAlert variant="success">{tPublic('membershipSuccess')}</InlineAlert>
+                <motion.div variants={publicVariants.staggerItem}>
+                  <InlineAlert variant="success">{tPublic('membershipSuccess')}</InlineAlert>
+                </motion.div>
               )}
               {formState === 'error' && (
-                <InlineAlert variant="error">
-                  {error ?? tPublic('contactError')}
-                </InlineAlert>
+                <motion.div variants={publicVariants.staggerItem}>
+                  <InlineAlert variant="error">
+                    {error ?? tPublic('contactError')}
+                  </InlineAlert>
+                </motion.div>
               )}
-              <button
+              <motion.button
                 type="submit"
                 disabled={formState === 'submitting'}
                 className="mt-2 inline-flex h-11 items-center justify-center rounded-[var(--radius-input)] bg-[var(--color-primary)] px-4 text-[13px] font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-70"
+                variants={publicVariants.staggerItem}
+                whileHover={{ scale: 1.05, transition: { type: 'spring', stiffness: 300, damping: 20 } }}
               >
                 {formState === 'submitting'
                   ? tPublic('membershipSubmitting')
                   : tPublic('membershipSubmit')}
-              </button>
+              </motion.button>
             </form>
-          </Card>
-        </div>
+            </Card>
+          </motion.div>
+        </motion.div>
       </div>
     </PublicLayout>
   );

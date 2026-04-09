@@ -1,10 +1,12 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SkeletonKpiRow, SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { publicVariants } from '@/lib/animations/variants';
 import { CoachDashboardPendingActions } from './CoachDashboardPendingActions';
 import { CoachDashboardRecentUpdates } from './CoachDashboardRecentUpdates';
 import { CoachDashboardSidebar } from './CoachDashboardSidebar';
@@ -25,17 +27,28 @@ export function CoachDashboardClient({ context }: Props) {
   const baseError = athletesQuery.error ?? eventsQuery.error;
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+    <motion.div
+      className="space-y-6"
+      variants={publicVariants.staggerContainer}
+      initial="initial"
+      animate="animate"
+    >
+      <motion.div variants={publicVariants.staggerItem}>
+        <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      </motion.div>
 
       {baseError && (
-        <InlineAlert variant="error">
-          {tCommon('loadError')}
-        </InlineAlert>
+        <motion.div variants={publicVariants.staggerItem}>
+          <InlineAlert variant="error">
+            {tCommon('loadError')}
+          </InlineAlert>
+        </motion.div>
       )}
 
       {registrationErrors > 0 && !baseError && (
-        <InlineAlert variant="warning">{t('partialRegistrationsWarning')}</InlineAlert>
+        <motion.div variants={publicVariants.staggerItem}>
+          <InlineAlert variant="warning">{t('partialRegistrationsWarning')}</InlineAlert>
+        </motion.div>
       )}
 
       {isBaseLoading || isLoading || !model ? (
@@ -53,9 +66,14 @@ export function CoachDashboardClient({ context }: Props) {
         <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
       ) : (
         <>
-          <CoachDashboardSummaryCards summary={model.summary} />
+          <motion.div variants={publicVariants.staggerItem}>
+            <CoachDashboardSummaryCards summary={model.summary} />
+          </motion.div>
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_360px]">
+          <motion.div
+            className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_360px]"
+            variants={publicVariants.staggerItem}
+          >
             <div className="space-y-6">
               <CoachDashboardPendingActions actions={model.pendingActions} />
               <CoachDashboardUpcomingEvents events={model.upcomingEvents} />
@@ -69,9 +87,9 @@ export function CoachDashboardClient({ context }: Props) {
               athleteCount={model.summary.totalAthletes}
               quickActions={model.quickActions}
             />
-          </div>
+          </motion.div>
         </>
       )}
-    </div>
+    </motion.div>
   );
 }

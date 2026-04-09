@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/Toast';
 import { ApiError } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import { useAdminEventRoute } from '@/features/admin-events/hooks/useAdminEventRoute';
+import { AdminEventSelect } from '@/components/admin/AdminEventSelect';
 import { useDrawOverview } from './useDrawOverview';
 import { useDrawCategoryDetails } from './useDrawCategoryDetails';
 import { useGenerateDraw } from './useGenerateDraw';
@@ -148,20 +149,17 @@ export function DrawPageContainer({ eventId }: Props) {
         title={t('title')}
         subtitle={t('subtitle')}
         actions={
-          <select
+          <AdminEventSelect
+            label={t('title')}
             value={currentEventId}
-            onChange={(event) => {
-              setSelectedEventId(event.target.value);
+            placeholder={t('emptyTitle')}
+            events={events}
+            onValueChange={(value) => {
+              setSelectedEventId(value);
               setSelectedCategoryId('');
             }}
-            className="h-10 min-w-[220px] rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
-          >
-            {events.map((event) => (
-              <option key={event.id} value={event.id}>
-                {event.name}
-              </option>
-            ))}
-          </select>
+            className="min-w-[14rem]"
+          />
         }
       />
 

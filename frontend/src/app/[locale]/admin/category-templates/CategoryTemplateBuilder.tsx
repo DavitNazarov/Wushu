@@ -2,9 +2,16 @@
 
 import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
-import { INPUT_CLASS, SELECT_CLASS } from './categoryTemplate.constants';
+import { INPUT_CLASS } from './categoryTemplate.constants';
 import { formatWeightLabel } from './categoryTemplate.utils';
 import type { CategoryOptionGroupRow, CategoryTemplateStatus } from '@/types/api';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/primitives/select';
 
 type Props = {
   name: string;
@@ -66,15 +73,19 @@ export function CategoryTemplateBuilder({
           <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">
             {t('columns.status')}
           </label>
-          <select
-            className={SELECT_CLASS}
+          <Select
             value={status}
             disabled={disableStatus}
-            onChange={(event) => onStatusChange(event.target.value as CategoryTemplateStatus)}
+            onValueChange={(v) => onStatusChange(v as CategoryTemplateStatus)}
           >
-            <option value="DRAFT">{t('status.draft')}</option>
-            <option value="ACTIVE">{t('status.active')}</option>
-          </select>
+            <SelectTrigger className="h-10 bg-[var(--color-surface)] px-3">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="DRAFT">{t('status.draft')}</SelectItem>
+              <SelectItem value="ACTIVE">{t('status.active')}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

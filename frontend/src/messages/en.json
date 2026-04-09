@@ -258,6 +258,7 @@
     "language": "Language",
     "contactTitle": "Contact",
     "contactSubtitle": "How to reach organisers and federation contacts.",
+    "contactFormTitle": "Send a message",
     "contactBody": "For event-related questions, use this form and your message will be forwarded to the relevant organiser.",
     "contactName": "Your name",
     "contactEmail": "Email",

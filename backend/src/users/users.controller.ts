@@ -148,6 +148,32 @@ export class UsersController {
     }
   }
 
+  @Get(':id/activity')
+  @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
+  async getActivity(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+  ) {
+    try {
+      return await this.users.getActivity(req.auth!.organisationId, id);
+    } catch (error) {
+      this.rethrowKnownError(error);
+    }
+  }
+
+  @Get(':id/capabilities')
+  @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
+  async getCapabilities(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+  ) {
+    try {
+      return await this.users.getCapabilities(req.auth!.organisationId, id);
+    } catch (error) {
+      this.rethrowKnownError(error);
+    }
+  }
+
   private parseBody<T extends z.ZodTypeAny>(
     schema: T,
     body: unknown,

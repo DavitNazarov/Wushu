@@ -23,6 +23,7 @@ import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
 import { resolveEventControlGate } from '@/domain/events/controlPageGate';
 import { useRealtimeQuerySync } from '@/hooks/useRealtimeQuerySync';
 import { useAdminEventRoute } from '@/features/admin-events/hooks/useAdminEventRoute';
+import { AdminEventSelect } from '@/components/admin/AdminEventSelect';
 import { ScheduleFightGrid } from './ScheduleFightGrid';
 
 const SEL =
@@ -231,12 +232,15 @@ export function SchedulePageClient({ eventId }: Props) {
       <PageHeader
         title={t('title')}
         actions={
-          <div className="flex gap-2">
-            <select className={SEL} value={eid} onChange={(e) => setSelectedEventId(e.target.value)}>
-              {events?.map((ev) => (
-                <option key={ev.id} value={ev.id}>{ev.name}</option>
-              ))}
-            </select>
+          <div className="flex flex-wrap items-end gap-2">
+            <AdminEventSelect
+              label={t('title')}
+              value={eid}
+              placeholder={t('title')}
+              events={events}
+              onValueChange={setSelectedEventId}
+              className="min-w-[14rem]"
+            />
             {isEditable && (
               <>
                 <SecondaryButton onClick={openAddSession}>

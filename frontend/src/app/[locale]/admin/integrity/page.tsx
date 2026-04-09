@@ -18,6 +18,7 @@ import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
 import { resolveEventControlGate } from '@/domain/events/controlPageGate';
 import { useAdminEventSelection } from '@/hooks/useAdminEventSelection';
+import { AdminEventSelect } from '@/components/admin/AdminEventSelect';
 
 type IntegrityIssue = {
   code: string;
@@ -101,14 +102,15 @@ export default function IntegrityPage() {
         title={t('title')}
         subtitle={t('subtitle')}
         actions={
-          <div className="flex items-center gap-3">
-            <select className={SEL} value={eid} onChange={(e) => setSelectedEventId(e.target.value)}>
-              {events?.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-wrap items-end gap-3">
+            <AdminEventSelect
+              label={t('title')}
+              value={eid}
+              placeholder={t('title')}
+              events={events}
+              onValueChange={setSelectedEventId}
+              className="min-w-[14rem]"
+            />
             {canLockEvent && (
               <PrimaryButton
                 disabled={!eid || isLoading}

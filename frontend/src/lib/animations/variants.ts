@@ -83,25 +83,24 @@ export const publicVariants = {
   } as Variants,
 
   staggerContainer: {
-    initial: 'initial',
-    animate: 'animate',
-    variants: {
-      initial: { opacity: 0 },
-      animate: {
-        opacity: 1,
-        transition: {
-          staggerChildren: 0.08,
-          delayChildren: 0,
-          type: 'spring',
-        },
+    initial: { opacity: 0 },
+    animate: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.08,
+        delayChildren: 0,
       },
     },
   } as Variants,
 
   staggerItem: {
-    initial: { opacity: 0, scale: 0.9 },
-    animate: { opacity: 1, scale: 1 },
-    transition: { type: 'spring', stiffness: 120, damping: 20 },
+    initial: { opacity: 0, scale: 0.9, y: 8 },
+    animate: {
+      opacity: 1,
+      scale: 1,
+      y: 0,
+      transition: { type: 'spring', stiffness: 120, damping: 20 },
+    },
   } as Variants,
 
   hover: {

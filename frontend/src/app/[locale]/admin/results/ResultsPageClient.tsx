@@ -12,6 +12,7 @@ import { apiGet, apiPost } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import type { ResultsSummaryResponse } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
+import { AdminEventSelect } from '@/components/admin/AdminEventSelect';
 import { useAdminEventRoute } from '@/features/admin-events/hooks/useAdminEventRoute';
 import { ResultsExportDrawer, type ResultsExportType } from './ResultsExportDrawer';
 import { ResultsSummaryCards } from './ResultsSummaryCards';
@@ -86,14 +87,15 @@ export function ResultsPageClient({ eventId }: Props) {
         title={t('title')}
         actions={
           <>
-            <select className={SEL} value={eid} onChange={(event) => setSelectedEventId(event.target.value)}>
-              {events.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.name}
-                </option>
-              ))}
-            </select>
-            <SecondaryButton className="h-10" onClick={() => setExportOpen(true)} disabled={!eid}>
+            <AdminEventSelect
+              label={t('title')}
+              value={eid}
+              placeholder={t('title')}
+              events={events}
+              onValueChange={setSelectedEventId}
+              className="min-w-[14rem]"
+            />
+            <SecondaryButton className="h-10 self-end" onClick={() => setExportOpen(true)} disabled={!eid}>
               {t('export')}
             </SecondaryButton>
           </>
@@ -151,32 +153,60 @@ export function ResultsPageClient({ eventId }: Props) {
             {categories.map((category) => (
               <section
                 key={category.eventWeightCategoryId}
-                className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+                className={`rounded-[var(--radius-card)] border bg-[var(--color-surface)] overflow-hidden ${
+                  category.needsReview
+                    ? 'border-[var(--color-warning)]/30'
+                    : category.completionState === 'COMPLETED'
+                      ? 'border-emerald-500/25'
+                      : 'border-[var(--color-border)]'
+                }`}
               >
-                <div className="flex flex-wrap items-start justify-between gap-2">
+                {/* Header */}
+                <div className={`flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 ${
+                  category.needsReview
+                    ? 'border-[var(--color-warning)]/20 bg-[var(--color-warning)]/5'
+                    : category.completionState === 'COMPLETED'
+                      ? 'border-emerald-500/15 bg-emerald-500/5'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface-alt)]'
+                }`}>
                   <div>
-                    <p className="text-[16px] font-semibold text-[var(--color-text)]">{category.categoryName}</p>
-                    <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+                    <p className="text-[15px] font-semibold text-[var(--color-text)]">{category.categoryName}</p>
+                    <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
                       {category.ageGroupName ?? '—'}
                     </p>
                   </div>
-                  <span className="rounded-[var(--radius-pill)] border border-[var(--color-border)] px-2.5 py-1 text-[12px] font-semibold">
-                    {tBrackets(`format.${category.competitionFormat}`)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-[var(--radius-pill)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--color-text-muted)]">
+                      {tBrackets(`format.${category.competitionFormat}`)}
+                    </span>
+                    <span className={`rounded-[var(--radius-pill)] px-2.5 py-0.5 text-[11px] font-semibold ${
+                      category.completionState === 'COMPLETED'
+                        ? 'bg-emerald-500/15 text-emerald-400'
+                        : category.needsReview
+                          ? 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
+                          : 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]'
+                    }`}>
+                      {t(`completionState.${category.completionState}`)}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="mt-3 grid gap-2 text-[12px] sm:grid-cols-2 lg:grid-cols-4">
+                {/* Stats row */}
+                <div className="p-4">
+                <div className="mb-3 grid gap-2 text-[12px] sm:grid-cols-3">
                   <div className="rounded-[var(--radius-input)] bg-[var(--color-surface-alt)] px-3 py-2">
-                    {t('athletes')}: {category.athleteCount}
+                    <span className="text-[var(--color-text-muted)]">{t('athletes')}: </span>
+                    <span className="font-semibold text-[var(--color-text)]">{category.athleteCount}</span>
                   </div>
                   <div className="rounded-[var(--radius-input)] bg-[var(--color-surface-alt)] px-3 py-2">
-                    {t('progress')}: {category.completedFights}/{category.totalFights}
+                    <span className="text-[var(--color-text-muted)]">{t('progress')}: </span>
+                    <span className="font-semibold text-[var(--color-text)]">{category.completedFights}/{category.totalFights}</span>
                   </div>
-                  <div className="rounded-[var(--radius-input)] bg-[var(--color-surface-alt)] px-3 py-2">
-                    {t('completion')}: {t(`completionState.${category.completionState}`)}
-                  </div>
-                  <div className="rounded-[var(--radius-input)] bg-[var(--color-surface-alt)] px-3 py-2">
-                    {t('needsReview')}: {category.needsReview ? t('needsReviewYes') : t('needsReviewNo')}
+                  <div className={`rounded-[var(--radius-input)] px-3 py-2 ${category.needsReview ? 'bg-[var(--color-warning)]/10' : 'bg-[var(--color-surface-alt)]'}`}>
+                    <span className="text-[var(--color-text-muted)]">{t('needsReview')}: </span>
+                    <span className={`font-semibold ${category.needsReview ? 'text-[var(--color-warning)]' : 'text-[var(--color-text)]'}`}>
+                      {category.needsReview ? t('needsReviewYes') : t('needsReviewNo')}
+                    </span>
                   </div>
                 </div>
 
@@ -245,6 +275,7 @@ export function ResultsPageClient({ eventId }: Props) {
                     {category.finalFight.redAthleteName ?? '—'} vs {category.finalFight.blueAthleteName ?? '—'}
                   </div>
                 )}
+                </div>
               </section>
             ))}
           </div>

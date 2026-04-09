@@ -1,1 +1,5 @@
-npx lint-staged
+#!/bin/sh
+# Run lint-staged only if a config is present
+if [ -f .lintstagedrc ] || [ -f .lintstagedrc.json ] || [ -f .lintstagedrc.js ] || grep -q '"lint-staged"' package.json 2>/dev/null; then
+  npx lint-staged
+fi

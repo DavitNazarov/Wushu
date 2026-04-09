@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowRightLeft, Building2, CalendarDays, FileBadge2, Users } from 'lucide-react';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
+import { AdminFilterSelect } from '@/components/admin/AdminFilterSelect';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -13,6 +14,8 @@ import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
+import { Input } from '@/components/ui/primitives/input';
+import { Label } from '@/components/ui/primitives/label';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import { apiGet, apiPost } from '@/lib/api/client';
 import type { AthleteRow, ClubRow } from '@/types/api';
@@ -300,26 +303,27 @@ export default function AthletesPage() {
             <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{t('dedupeHint')}</p>
           </div>
 
-          <div className="grid w-full gap-3 lg:max-w-2xl lg:grid-cols-[minmax(0,1fr)_220px]">
-            <input
-              type="search"
-              placeholder={t('searchPlaceholder')}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className={INPUT_CLASS}
-            />
-            <select
+          <div className="flex w-full flex-col gap-3 lg:max-w-2xl sm:flex-row sm:items-end">
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <Label className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--color-text-muted)]">
+                {t('searchPlaceholder').replace('…', '')}
+              </Label>
+              <Input
+                type="search"
+                placeholder={t('searchPlaceholder')}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-10 bg-[var(--color-surface)]"
+              />
+            </div>
+            <AdminFilterSelect
+              label={t('columns.club')}
               value={selectedClubId}
-              onChange={(event) => setSelectedClubId(event.target.value)}
-              className={INPUT_CLASS}
-            >
-              <option value="">{t('filters.allClubs')}</option>
-              {(clubs ?? []).map((club) => (
-                <option key={club.id} value={club.id}>
-                  {club.name}
-                </option>
-              ))}
-            </select>
+              emptyLabel={t('filters.allClubs')}
+              options={(clubs ?? []).map((club) => ({ value: club.id, label: club.name }))}
+              onValueChange={setSelectedClubId}
+              className="sm:min-w-[200px]"
+            />
           </div>
         </div>
       </section>

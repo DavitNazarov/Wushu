@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from '@/i18n/navigation';
+import { LayoutDashboard, GitBranch, Clock, Radio, Trophy, HelpCircle } from 'lucide-react';
 
 type TabId = 'overview' | 'brackets' | 'schedule' | 'live' | 'results' | 'faq';
 
@@ -17,6 +18,15 @@ type EventTabsProps = {
 };
 
 const TAB_IDS: TabId[] = ['overview', 'brackets', 'schedule', 'live', 'results', 'faq'];
+
+const TAB_ICONS: Record<TabId, typeof LayoutDashboard> = {
+  overview: LayoutDashboard,
+  brackets: GitBranch,
+  schedule: Clock,
+  live: Radio,
+  results: Trophy,
+  faq: HelpCircle,
+};
 
 function isTabId(value: string | null): value is TabId {
   return TAB_IDS.includes((value ?? '') as TabId);
@@ -52,26 +62,34 @@ export function EventTabs({ overview, brackets, schedule, live, results, faq }: 
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-1 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-1">
-        {tabs.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setActive(id)}
-            aria-pressed={active === id}
-            className={`
-              min-w-[96px] flex-1 rounded-md px-3 py-2 text-[13px] font-medium transition
-              ${active === id
-                ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
-              }
-            `}
-          >
-            {label}
-          </button>
-        ))}
+    <div className="space-y-5">
+      {/* Tab bar — horizontally scrollable on mobile */}
+      <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex min-w-max gap-1 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-1">
+          {tabs.map(({ id, label }) => {
+            const Icon = TAB_ICONS[id];
+            const isActive = active === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActive(id)}
+                aria-pressed={isActive}
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
+                  isActive
+                    ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Tab content */}
       {active === 'overview' && overview}
       {active === 'brackets' && brackets}
       {active === 'schedule' && schedule}

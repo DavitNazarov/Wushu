@@ -1,9 +1,20 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { INPUT_CLASS, SELECT_CLASS } from './categoryTemplate.constants';
+import { INPUT_CLASS } from './categoryTemplate.constants';
 import type { CategoryTemplateStatus, CategoryTemplateType } from '@/types/api';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
+import { Label } from '@/components/ui/primitives/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/primitives/select';
+
+const EMPTY_STATUS = '__all_status__';
+const EMPTY_TYPE = '__all_type__';
 
 type Props = {
   search: string;
@@ -31,9 +42,9 @@ export function CategoryTemplateFilters({
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
       <div className="flex-1">
-        <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+        <Label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--color-text-muted)]">
           {tCommon('search')}
-        </label>
+        </Label>
         <input
           type="search"
           className={INPUT_CLASS}
@@ -43,34 +54,46 @@ export function CategoryTemplateFilters({
         />
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:w-[340px]">
-        <div>
-          <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+        <div className="flex flex-col gap-1">
+          <Label className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--color-text-muted)]">
             {t('filters.status')}
-          </label>
-          <select
-            className={SELECT_CLASS}
-            value={status}
-            onChange={(event) => onStatusChange(event.target.value as CategoryTemplateStatus | 'ALL')}
+          </Label>
+          <Select
+            value={status === 'ALL' ? EMPTY_STATUS : status}
+            onValueChange={(v) =>
+              onStatusChange(v === EMPTY_STATUS ? 'ALL' : (v as CategoryTemplateStatus))
+            }
           >
-            <option value="ALL">{t('filters.allStatuses')}</option>
-            <option value="ACTIVE">{t('status.active')}</option>
-            <option value="DRAFT">{t('status.draft')}</option>
-          </select>
+            <SelectTrigger className="h-10 bg-[var(--color-surface)] px-3">
+              <SelectValue placeholder={t('filters.allStatuses')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={EMPTY_STATUS}>{t('filters.allStatuses')}</SelectItem>
+              <SelectItem value="ACTIVE">{t('status.active')}</SelectItem>
+              <SelectItem value="DRAFT">{t('status.draft')}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <div>
-          <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+        <div className="flex flex-col gap-1">
+          <Label className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--color-text-muted)]">
             {t('filters.type')}
-          </label>
-          <select
-            className={SELECT_CLASS}
-            value={type}
-            onChange={(event) => onTypeChange(event.target.value as CategoryTemplateType | 'ALL')}
+          </Label>
+          <Select
+            value={type === 'ALL' ? EMPTY_TYPE : type}
+            onValueChange={(v) =>
+              onTypeChange(v === EMPTY_TYPE ? 'ALL' : (v as CategoryTemplateType))
+            }
           >
-            <option value="ALL">{t('filters.allTypes')}</option>
-            <option value="CUSTOM">{t('type.custom')}</option>
-            <option value="SYSTEM">{t('type.system')}</option>
-            <option value="OFFICIAL">{t('type.official')}</option>
-          </select>
+            <SelectTrigger className="h-10 bg-[var(--color-surface)] px-3">
+              <SelectValue placeholder={t('filters.allTypes')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={EMPTY_TYPE}>{t('filters.allTypes')}</SelectItem>
+              <SelectItem value="CUSTOM">{t('type.custom')}</SelectItem>
+              <SelectItem value="SYSTEM">{t('type.system')}</SelectItem>
+              <SelectItem value="OFFICIAL">{t('type.official')}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
       {hasFilters && (

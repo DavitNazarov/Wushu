@@ -4,7 +4,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { AuthUserService } from '../auth/auth-user.service';
 import { isUserDqActive } from './users.state';
-import type { UserDetailRow, UserListRow } from './users.types';
+import type {
+  UserActivityEntry,
+  UserCapabilityRow,
+  UserDetailRow,
+  UserListRow,
+} from './users.types';
 import {
   auditSnapshot,
   type ManagedUserRecord,
@@ -12,6 +17,7 @@ import {
   toListRow,
   userSelect,
 } from './users.mapper';
+import { CAPABILITIES, getCapabilitiesForRole } from '../auth/capabilities';
 
 @Injectable()
 export class UsersService {
@@ -273,6 +279,64 @@ export class UsersService {
     });
 
     return toDetailRow(updated);
+  }
+
+  async getActivity(
+    organisationId: string,
+    userId: string,
+  ): Promise<UserActivityEntry[]> {
+    const user = await this.findManagedUser(organisationId, userId);
+    if (!user) throw new Error('USER_NOT_FOUND');
+
+    const logs = await this.prisma.auditLog.findMany({
+      where: {
+        organisationId,
+        OR: [
+          { actorUserId: userId },
+          { entityType: 'user', entityId: userId },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 15,
+      select: {
+        id: true,
+        action: true,
+        entityType: true,
+        entityId: true,
+        actorUserId: true,
+        ipAddress: true,
+        createdAt: true,
+      },
+    });
+
+    return logs.map((log) => ({
+      ...log,
+      createdAt: log.createdAt.toISOString(),
+    }));
+  }
+
+  async getCapabilities(
+    organisationId: string,
+    userId: string,
+  ): Promise<UserCapabilityRow[]> {
+    const user = await this.findManagedUser(organisationId, userId);
+    if (!user) throw new Error('USER_NOT_FOUND');
+
+    const customCaps = await this.prisma.userCapability.findMany({
+      where: { userId },
+      select: { capabilityId: true },
+    });
+
+    const defaultCaps = getCapabilitiesForRole(user.role);
+    const customCapIds = new Set(customCaps.map((c) => c.capabilityId));
+    const allCapabilities = Object.values(CAPABILITIES);
+
+    return allCapabilities.map((code) => ({
+      code,
+      granted: defaultCaps.includes(code) || customCapIds.has(code),
+      isDefault: defaultCaps.includes(code),
+      isCustom: customCapIds.has(code) && !defaultCaps.includes(code),
+    }));
   }
 
   private async findManagedUser(

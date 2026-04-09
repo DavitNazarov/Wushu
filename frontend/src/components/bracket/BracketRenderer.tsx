@@ -34,6 +34,7 @@ export function BracketRenderer({ data, tBracket, tFightStatus, getAthleteHref }
         <BracketRoundColumn
           key={round.id}
           round={round}
+          roundIndex={index}
           title={labelForRound({ label: round.label, roundNumber: round.roundNumber, t: tBracket })}
           isFirst={index === 0}
           isLast={index === data.rounds.length - 1}

@@ -35,6 +35,23 @@ export type UserDetailRow = {
   updatedAt: string;
 };
 
+export type UserActivityEntry = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  actorUserId: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+};
+
+export type UserCapabilityRow = {
+  code: string;
+  granted: boolean;
+  isDefault: boolean;
+  isCustom: boolean;
+};
+
 export type AuthGuardValidationResult =
   | {
       ok: true;

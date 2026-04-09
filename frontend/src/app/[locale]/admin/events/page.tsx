@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import { Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
@@ -13,6 +14,7 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Modal } from '@/components/ui/Modal';
 import { apiGet, apiDelete } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
+import { adminVariants } from '@/lib/animations/variants';
 import { CreateEventModal } from '@/features/events/components/CreateEventModal';
 import type { EventRow } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
@@ -85,7 +87,11 @@ export default function EventsPage() {
         />
       )}
 
-      <div>
+      <motion.div
+        initial="initial"
+        animate="animate"
+        variants={adminVariants.slideDown}
+      >
         <input
           type="text"
           placeholder={tCommon('search')}
@@ -93,20 +99,28 @@ export default function EventsPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="h-10 w-full max-w-xs rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30"
         />
-      </div>
+      </motion.div>
 
       {isLoading ? (
         <SkeletonRows rows={5} cols={4} />
       ) : filtered.length === 0 ? (
         <EmptyState title={tEvents('emptyTitle')} description={tEvents('emptyDescription')} />
       ) : (
-        <div className="space-y-8">
+        <motion.div
+          className="space-y-8"
+          variants={adminVariants.staggerContainer}
+          initial="initial"
+          animate="animate"
+        >
           {[
             { label: tEvents('sectionPublished'), rows: publishedEvents },
             { label: tEvents('sectionUnpublished'), rows: unpublishedEvents },
           ].map(({ label, rows }) =>
             rows.length === 0 ? null : (
-              <section key={label}>
+              <motion.section
+                key={label}
+                variants={adminVariants.staggerChild}
+              >
                 <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
                   {label}
                 </h2>
@@ -125,10 +139,11 @@ export default function EventsPage() {
                     </thead>
                     <tbody className="divide-y divide-[var(--color-border)]">
                       {rows.map((ev) => (
-                        <tr
+                        <motion.tr
                           key={ev.id}
                           onClick={() => router.push(`/${locale}/admin/events/${ev.id}`)}
                           className="group cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]"
+                          variants={adminVariants.staggerChild}
                         >
                           <td className="px-4 py-3 font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{ev.name}</td>
                           <td className="px-4 py-3 text-[var(--color-text-muted)]">
@@ -157,7 +172,7 @@ export default function EventsPage() {
                               <span className="translate-x-0 text-[var(--color-text-muted)] opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--color-primary)] group-hover:opacity-100">→</span>
                             </div>
                           </td>
-                        </tr>
+                        </motion.tr>
                       ))}
                     </tbody>
                   </table>
@@ -166,9 +181,10 @@ export default function EventsPage() {
                 {/* Mobile stacked cards */}
                 <div className="space-y-2 sm:hidden">
                   {rows.map((ev) => (
-                    <div
+                    <motion.div
                       key={ev.id}
                       className="group relative rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-surface-alt)]"
+                      variants={adminVariants.staggerChild}
                     >
                       <button
                         type="button"
@@ -195,13 +211,13 @@ export default function EventsPage() {
                       >
                         <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
                       </button>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
-              </section>
+              </motion.section>
             ),
           )}
-        </div>
+        </motion.div>
       )}
 
       <Modal

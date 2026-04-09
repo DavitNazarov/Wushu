@@ -4,6 +4,7 @@ import { useState, use } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { InlineAlert } from '@/components/ui/InlineAlert';
@@ -11,6 +12,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { ApiError, apiGet, apiPost } from '@/lib/api/client';
+import { publicVariants } from '@/lib/animations/variants';
 import type { EventRow, RegistrationRow, AthleteRow } from '@/types/api';
 import { CategoryPicker } from '@/components/registration/CategoryPicker';
 
@@ -128,62 +130,74 @@ export default function CoachRegistrationsPage({ params }: Props) {
   ];
 
   return (
-    <div className="space-y-8 py-2">
+    <motion.div
+      className="space-y-8 py-2"
+      variants={publicVariants.staggerContainer}
+      initial="initial"
+      animate="animate"
+    >
 
       {/* Back */}
-      <Link
-        href={`/${locale}/coach/events`}
-        className="group inline-flex items-center gap-1.5 text-[13px] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
-      >
-        <svg className="h-3.5 w-3.5 transition-transform duration-150 group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
-        Events
-      </Link>
+      <motion.div variants={publicVariants.staggerItem}>
+        <Link
+          href={`/${locale}/coach/events`}
+          className="group inline-flex items-center gap-1.5 text-[13px] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+        >
+          <svg className="h-3.5 w-3.5 transition-transform duration-150 group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          Events
+        </Link>
+      </motion.div>
 
       {/* Header */}
-      {eventLoading ? (
-        <div className="space-y-2">
-          <Skeleton width="50%" height="28px" />
-          <Skeleton width="30%" height="16px" />
-        </div>
-      ) : (
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">
-              {event?.name ?? eventSlug}
-            </h1>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <p className="text-[13px] text-[var(--color-text-muted)]">{t('title')}</p>
-              {event && regStatus && (
-                <span className={`inline-flex items-center rounded-[var(--radius-pill)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                  regStatus === 'OPEN'
-                    ? 'bg-[var(--color-success-subtle)] text-[var(--color-success)]'
-                    : regStatus === 'UPCOMING'
-                      ? 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]'
-                      : 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]'
-                }`}>
-                  {regStatus === 'UPCOMING' && 'Reg. upcoming'}
-                  {regStatus === 'OPEN' && 'Reg. open'}
-                  {regStatus === 'CLOSED' && 'Reg. closed'}
-                </span>
-              )}
-            </div>
+      <motion.div variants={publicVariants.staggerItem}>
+        {eventLoading ? (
+          <div className="space-y-2">
+            <Skeleton width="50%" height="28px" />
+            <Skeleton width="30%" height="16px" />
           </div>
+        ) : (
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">
+                {event?.name ?? eventSlug}
+              </h1>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <p className="text-[13px] text-[var(--color-text-muted)]">{t('title')}</p>
+                {event && regStatus && (
+                  <span className={`inline-flex items-center rounded-[var(--radius-pill)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                    regStatus === 'OPEN'
+                      ? 'bg-[var(--color-success-subtle)] text-[var(--color-success)]'
+                      : regStatus === 'UPCOMING'
+                        ? 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]'
+                        : 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]'
+                  }`}>
+                    {regStatus === 'UPCOMING' && 'Reg. upcoming'}
+                    {regStatus === 'OPEN' && 'Reg. open'}
+                    {regStatus === 'CLOSED' && 'Reg. closed'}
+                  </span>
+                )}
+              </div>
+            </div>
 
-          <button
-            onClick={() => { setRegClosedError(false); setAddOpen(true); }}
-            disabled={!eventId || !isRegOpen}
-            title={!isRegOpen ? t('regStatusClosed') : undefined}
-            className="shrink-0 h-9 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-[13px] font-medium text-[var(--color-text)] transition-colors hover:border-[var(--color-primary)]/50 hover:text-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            + {t('addRegistration')}
-          </button>
-        </div>
-      )}
+            <button
+              onClick={() => { setRegClosedError(false); setAddOpen(true); }}
+              disabled={!eventId || !isRegOpen}
+              title={!isRegOpen ? t('regStatusClosed') : undefined}
+              className="shrink-0 h-9 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-[13px] font-medium text-[var(--color-text)] transition-colors hover:border-[var(--color-primary)]/50 hover:text-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              + {t('addRegistration')}
+            </button>
+          </div>
+        )}
+      </motion.div>
 
       {/* Event sub-nav */}
-      <div className="flex flex-wrap gap-1">
+      <motion.div
+        className="flex flex-wrap gap-1"
+        variants={publicVariants.staggerItem}
+      >
         {navLinks.map((link) => (
           <Link
             key={link.href}
@@ -193,85 +207,94 @@ export default function CoachRegistrationsPage({ params }: Props) {
             {link.label}
           </Link>
         ))}
-      </div>
+      </motion.div>
 
       {/* Registration window banner */}
       {event && regStatus && (
-        <InlineAlert variant={regStatus === 'OPEN' ? 'success' : regStatus === 'UPCOMING' ? 'warning' : 'error'}>
-          {regStatus === 'UPCOMING' && t('regStatusUpcoming', { date: formatDate(event.registrationOpensAt) })}
-          {regStatus === 'OPEN' && t('regStatusOpen', { date: formatDate(event.registrationClosesAt) })}
-          {regStatus === 'CLOSED' && t('regStatusClosed')}
-        </InlineAlert>
+        <motion.div variants={publicVariants.staggerItem}>
+          <InlineAlert variant={regStatus === 'OPEN' ? 'success' : regStatus === 'UPCOMING' ? 'warning' : 'error'}>
+            {regStatus === 'UPCOMING' && t('regStatusUpcoming', { date: formatDate(event.registrationOpensAt) })}
+            {regStatus === 'OPEN' && t('regStatusOpen', { date: formatDate(event.registrationClosesAt) })}
+            {regStatus === 'CLOSED' && t('regStatusClosed')}
+          </InlineAlert>
+        </motion.div>
       )}
 
       {regClosedError && (
-        <InlineAlert variant="error">{t('regClosedError')}</InlineAlert>
+        <motion.div variants={publicVariants.staggerItem}>
+          <InlineAlert variant="error">{t('regClosedError')}</InlineAlert>
+        </motion.div>
       )}
 
       {error && (
-        <InlineAlert variant="error" actions={<button onClick={() => refetch()} className="text-[13px] font-medium underline">{tC('retry')}</button>}>
-          {tC('loadError')}
-        </InlineAlert>
+        <motion.div variants={publicVariants.staggerItem}>
+          <InlineAlert variant="error" actions={<button onClick={() => refetch()} className="text-[13px] font-medium underline">{tC('retry')}</button>}>
+            {tC('loadError')}
+          </InlineAlert>
+        </motion.div>
       )}
 
       {/* List */}
-      {isLoading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} height="56px" className="w-full rounded-[var(--radius-card)]" />
-          ))}
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-8 text-center">
-          <p className="text-[14px] font-medium text-[var(--color-text)]">{t('emptyTitle')}</p>
-          <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{t('emptyDescription')}</p>
-        </div>
-      ) : (
-        <section className="space-y-3">
-          <h2 className="text-[13px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
-            {t('title')} <span className="ml-1 font-normal normal-case tracking-normal">({rows.length})</span>
-          </h2>
-          <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)]">
-            {rows.map((reg, i) => (
-              <div
-                key={reg.id}
-                className={`flex items-center justify-between gap-4 px-4 py-3 ${
-                  i !== 0 ? 'border-t border-[var(--color-border)]' : ''
-                } bg-[var(--color-surface)]`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-alt)] text-[11px] font-semibold text-[var(--color-text-muted)]">
-                    {athleteInitial(reg)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-[14px] font-medium text-[var(--color-text)]">
-                      {athleteName(reg)}
-                    </p>
-                    {reg.notes && (
-                      <p className="mt-0.5 truncate text-[12px] text-[var(--color-text-muted)]">{reg.notes}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-3">
-                  <span className="hidden text-[12px] text-[var(--color-text-muted)] sm:block">
-                    {reg.categoryCode}
-                  </span>
-                  <StatusChip status={reg.status} label={tReg(`status.${reg.status}`)} domain="registration" />
-                  {reg.status !== 'WITHDRAWN' && (
-                    <button
-                      onClick={() => setWithdrawId(reg.id)}
-                      className="text-[12px] font-medium text-[var(--color-danger,#ef4444)] opacity-70 transition-opacity hover:opacity-100"
-                    >
-                      {t('withdraw')}
-                    </button>
-                  )}
-                </div>
-              </div>
+      <motion.div variants={publicVariants.staggerItem}>
+        {isLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} height="56px" className="w-full rounded-[var(--radius-card)]" />
             ))}
           </div>
-        </section>
-      )}
+        ) : rows.length === 0 ? (
+          <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-8 text-center">
+            <p className="text-[14px] font-medium text-[var(--color-text)]">{t('emptyTitle')}</p>
+            <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{t('emptyDescription')}</p>
+          </div>
+        ) : (
+          <section className="space-y-3">
+            <h2 className="text-[13px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+              {t('title')} <span className="ml-1 font-normal normal-case tracking-normal">({rows.length})</span>
+            </h2>
+            <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)]">
+              {rows.map((reg, i) => (
+                <motion.div
+                  key={reg.id}
+                  className={`flex items-center justify-between gap-4 px-4 py-3 ${
+                    i !== 0 ? 'border-t border-[var(--color-border)]' : ''
+                  } bg-[var(--color-surface)]`}
+                  variants={publicVariants.staggerItem}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-alt)] text-[11px] font-semibold text-[var(--color-text-muted)]">
+                      {athleteInitial(reg)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[14px] font-medium text-[var(--color-text)]">
+                        {athleteName(reg)}
+                      </p>
+                      {reg.notes && (
+                        <p className="mt-0.5 truncate text-[12px] text-[var(--color-text-muted)]">{reg.notes}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span className="hidden text-[12px] text-[var(--color-text-muted)] sm:block">
+                      {reg.categoryCode}
+                    </span>
+                    <StatusChip status={reg.status} label={tReg(`status.${reg.status}`)} domain="registration" />
+                    {reg.status !== 'WITHDRAWN' && (
+                      <button
+                        onClick={() => setWithdrawId(reg.id)}
+                        className="text-[12px] font-medium text-[var(--color-danger,#ef4444)] opacity-70 transition-opacity hover:opacity-100"
+                      >
+                        {t('withdraw')}
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </section>
+        )}
+      </motion.div>
 
       {/* Add registration modal */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title={t('addRegistration')}>
@@ -335,6 +358,6 @@ export default function CoachRegistrationsPage({ params }: Props) {
           </div>
         </div>
       </Modal>
-    </div>
+    </motion.div>
   );
 }

@@ -994,6 +994,23 @@ export interface UserDetailRow {
   updatedAt: string;
 }
 
+export interface UserActivityEntry {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  actorUserId: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
+export interface UserCapabilityRow {
+  code: string;
+  granted: boolean;
+  isDefault: boolean;
+  isCustom: boolean;
+}
+
 export interface TimerState {
   state: 'IDLE' | 'RUNNING' | 'PAUSED' | 'FINISHED';
   phase: 'ROUND' | 'REST' | 'FINISHED';

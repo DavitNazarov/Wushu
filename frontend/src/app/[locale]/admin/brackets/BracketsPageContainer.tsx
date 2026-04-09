@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useQueryClient } from '@tanstack/react-query';
-import { AdminEventSelect } from '@/components/admin/AdminEventSelect';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonKpiRow, SkeletonRows } from '@/components/ui/Skeleton';
@@ -160,19 +159,6 @@ export function BracketsPageContainer({ eventId }: Props) {
       <PageHeader
         title={t('title')}
         subtitle={t('subtitle')}
-        actions={
-          <AdminEventSelect
-            label={t('eventLabel')}
-            value={eventId}
-            placeholder={t('eventPlaceholder')}
-            events={events}
-            onValueChange={(value) => {
-              setSelectedEventId(value);
-              setSelectedCategoryId('');
-            }}
-            className="w-full sm:min-w-[16rem]"
-          />
-        }
       />
 
       {events.length === 0 && (

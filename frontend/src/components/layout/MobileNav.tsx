@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, Users, Newspaper, CalendarDays, Info, BookOpen, Mail } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { NavItem } from './NavItem';
 import { Link } from '@/i18n/navigation';
@@ -10,16 +10,16 @@ import { LanguageToggle } from './LanguageToggle';
 import { MobileDrawer } from './MobileDrawer';
 
 const PRIMARY_LINKS = [
-  { href: '/clubs', key: 'clubs', exact: true },
-  { href: '/news', key: 'news', exact: true },
-  { href: '/events', key: 'viewEvents', exact: false },
+  { href: '/clubs', key: 'clubs', exact: true, icon: Users },
+  { href: '/news', key: 'news', exact: true, icon: Newspaper },
+  { href: '/events', key: 'viewEvents', exact: false, icon: CalendarDays },
 ] as const;
 
 const MORE_LINKS = [
-  { href: '/about', key: 'about' },
-  { href: '/rules', key: 'rules' },
-  { href: '/contact', key: 'contact', exact: true },
-] as const;
+  { href: '/about', key: 'about', icon: Info, exact: false as boolean },
+  { href: '/rules', key: 'rules', icon: BookOpen, exact: false as boolean },
+  { href: '/contact', key: 'contact', icon: Mail, exact: true as boolean },
+];
 
 type MobileNavProps = {
   /** For use in dashboard header - different overlay offset, works on desktop */
@@ -66,21 +66,20 @@ export function MobileNav({ variant = 'public' }: MobileNavProps) {
         hideOnDesktop={!isDashboard}
       >
         <nav className="flex flex-col gap-0.5 px-3 py-4" aria-label="Main">
-          {PRIMARY_LINKS.map(({ href, key, exact }) => (
+          {PRIMARY_LINKS.map(({ href, key, exact, icon: Icon }) => (
             <NavItem key={href} href={href} exact={exact} size="touch">
+              <Icon className="h-4 w-4 shrink-0 opacity-70" />
               {t(key)}
             </NavItem>
           ))}
+
           <div className="my-3 h-px bg-[var(--color-border)]" />
-          {MORE_LINKS.map(({ href, key }) => (
-            <Link
-              key={href}
-              href={href}
-              onClick={() => setOpen(false)}
-              className="flex min-h-[48px] items-center rounded-[var(--radius-input)] px-4 text-[15px] font-semibold text-[var(--color-text)] transition-colors hover:bg-[var(--color-primary-subtle)] active:bg-[var(--color-primary-subtle)]"
-            >
+
+          {MORE_LINKS.map(({ href, key, icon: Icon, exact }) => (
+            <NavItem key={href} href={href} exact={exact} size="touch">
+              <Icon className="h-4 w-4 shrink-0 opacity-70" />
               {t(key)}
-            </Link>
+            </NavItem>
           ))}
         </nav>
 

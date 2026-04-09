@@ -19,7 +19,7 @@ export function NavItem({ href, children, exact, size = 'default' }: NavItemProp
     <Link
       href={href}
       className={`
-        flex items-center rounded-[var(--radius-input)] px-4 py-2 font-medium
+        flex items-center gap-2.5 rounded-[var(--radius-input)] px-4 py-2 font-medium
         ${size === 'touch' ? 'min-h-[48px] text-[15px]' : 'text-sm'}
         transition-colors duration-150 ease-out
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]

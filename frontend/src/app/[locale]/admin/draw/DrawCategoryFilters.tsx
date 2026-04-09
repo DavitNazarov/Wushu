@@ -1,5 +1,13 @@
 'use client';
 
+import { Label } from '@/components/ui/primitives/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/primitives/select';
 import type {
   DrawCategoryFilter,
   DrawCategorySort,
@@ -61,7 +69,7 @@ export function DrawCategoryFilters({
         </span>
       </div>
 
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {FILTERS.map((item) => {
             const active = filter === item;
@@ -81,18 +89,23 @@ export function DrawCategoryFilters({
             );
           })}
         </div>
-        <select
-          value={sort}
-          onChange={(event) => onSort(event.target.value as DrawCategorySort)}
-          className="h-11 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] lg:w-[220px]"
-          aria-label={t('sortLabel')}
-        >
-          {SORTS.map((option) => (
-            <option key={option} value={option}>
-              {t(`sort.${option}`)}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-col gap-1 lg:w-[220px]">
+          <Label className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--color-text-muted)]">
+            {t('sortLabel')}
+          </Label>
+          <Select value={sort} onValueChange={(v) => onSort(v as DrawCategorySort)}>
+            <SelectTrigger className="h-10 bg-[var(--color-surface)] px-3">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORTS.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {t(`sort.${option}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   );
