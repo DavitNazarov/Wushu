@@ -126,6 +126,15 @@ export default function CoachRegistrationsPage({ params }: Props) {
 
   const rows = regs ?? [];
 
+  const selectedAthlete = athletes?.find((a) => a.id === selectedAthleteId) ?? null;
+
+  function handleAthleteChange(id: string) {
+    setSelectedAthleteId(id);
+    // Reset category when athlete changes — eligibility may differ
+    setSelectedAgeGroupId('');
+    setEventWeightCategoryId('');
+  }
+
   const handleAdd = () => {
     if (!eventId || !selectedAthleteId || !eventWeightCategoryId) return;
     createMut.mutate({ eventId, athleteId: selectedAthleteId, eventWeightCategoryId, notes: notes.trim() || undefined });
@@ -303,7 +312,7 @@ export default function CoachRegistrationsPage({ params }: Props) {
             <Label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
               {t('pickAthlete')}
             </Label>
-            <Select value={selectedAthleteId} onValueChange={setSelectedAthleteId}>
+            <Select value={selectedAthleteId} onValueChange={handleAthleteChange}>
               <SelectTrigger className="h-10 w-full">
                 <SelectValue placeholder="—" />
               </SelectTrigger>
@@ -327,6 +336,7 @@ export default function CoachRegistrationsPage({ params }: Props) {
               onAgeGroupChange={setSelectedAgeGroupId}
               onWeightCategoryChange={setEventWeightCategoryId}
               disabled={createMut.isPending}
+              athlete={selectedAthlete}
             />
           </div>
           <div className="space-y-1.5">
