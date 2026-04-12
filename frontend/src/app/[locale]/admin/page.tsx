@@ -278,7 +278,7 @@ function EventListRow({
     <motion.div
       variants={adminVariants.staggerChild}
       whileHover={{ x: 2 }}
-      className="flex items-center gap-3 border-t border-[var(--color-border)] px-4 py-3 transition-colors hover:bg-[var(--color-surface-alt)]"
+      className="flex items-center gap-3 border-t border-[var(--color-border)] px-4 py-3 transition-colors first:border-t-0 hover:bg-[var(--color-surface-alt)]"
     >
       <div className="min-w-0 flex-1">
         <Link
@@ -319,13 +319,20 @@ export default function AdminDashboardPage() {
     staleTime: 30_000,
   });
 
-  const liveEvents    = events?.filter((e) => e.lifecycle === 'LIVE') ?? [];
-  const activeEvents  = liveEvents.length;
-  const upcomingCount = events?.filter((e) => ['REG_OPEN', 'WEIGHIN', 'LOCKED', 'DRAWN', 'PUBLISHED'].includes(e.lifecycle)).length ?? 0;
+  const liveEvents     = events?.filter((e) => e.lifecycle === 'LIVE') ?? [];
+  const activeEvents   = liveEvents.length;
+  const upcomingCount  = events?.filter((e) => ['REG_OPEN', 'WEIGHIN', 'LOCKED', 'DRAWN', 'PUBLISHED'].includes(e.lifecycle)).length ?? 0;
   const completedCount = events?.filter((e) => e.lifecycle === 'COMPLETED').length ?? 0;
-  const totalEvents   = events?.length ?? 0;
+  const totalEvents    = events?.length ?? 0;
 
-  const sortedEvents  = [...(events ?? [])].sort(
+  const pipelineStageKeys = PIPELINE_STAGES.map((s) => s.key);
+  const hasPipelineEvents  = (events ?? []).some((e) => pipelineStageKeys.includes(e.lifecycle));
+
+  const hasNextEvent = (events ?? []).some(
+    (e) => !['LIVE', 'COMPLETED'].includes(e.lifecycle),
+  );
+
+  const sortedEvents = [...(events ?? [])].sort(
     (a, b) => new Date(b.competitionStartDate).getTime() - new Date(a.competitionStartDate).getTime(),
   );
 
@@ -339,7 +346,7 @@ export default function AdminDashboardPage() {
   ];
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
 
       {error && (
@@ -381,15 +388,15 @@ export default function AdminDashboardPage() {
         </motion.div>
       )}
 
-      {/* Next event countdown */}
-      {!isLoading && events && events.length > 0 && (
+      {/* Next event countdown — only if there's an upcoming event */}
+      {!isLoading && hasNextEvent && events && (
         <motion.div variants={adminVariants.slideUp} initial="initial" animate="animate">
           <NextEventCountdown events={events} locale={locale} t={t} />
         </motion.div>
       )}
 
-      {/* Event pipeline */}
-      {!isLoading && events && events.length > 0 && (
+      {/* Event pipeline — only when at least one event is in an active stage */}
+      {!isLoading && hasPipelineEvents && events && (
         <motion.section variants={adminVariants.slideUp} initial="initial" animate="animate">
           <h2 className="mb-3 flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text)]">
             <Zap className="h-3.5 w-3.5 text-[var(--color-primary)]" />
