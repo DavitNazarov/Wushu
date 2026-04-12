@@ -27,6 +27,8 @@ type EventCandidate = {
   registrationClosesAt: Date | null;
   registrationEndDate: Date;
   weighInStartDate: Date | null;
+  competitionStartDate: Date;
+  competitionEndDate: Date;
 };
 
 @Injectable()
@@ -63,6 +65,8 @@ export class EventStageAutomationService {
         registrationClosesAt: true,
         registrationEndDate: true,
         weighInStartDate: true,
+        competitionStartDate: true,
+        competitionEndDate: true,
       },
     });
 
@@ -82,12 +86,11 @@ export class EventStageAutomationService {
           {
             autoAdvanceStage: true,
             lifecycle: {
-              in: ['REG_OPEN', 'LOCKED', 'WEIGH_IN_COMPLETED'],
+              in: ['REG_OPEN', 'LOCKED', 'WEIGH_IN_COMPLETED', 'DRAWN', 'PUBLISHED'],
             },
           },
-          {
-            lifecycle: 'WEIGHIN',
-          },
+          { lifecycle: 'WEIGHIN' },
+          { lifecycle: 'LIVE' },
         ],
       },
       select: {
@@ -102,6 +105,8 @@ export class EventStageAutomationService {
         registrationClosesAt: true,
         registrationEndDate: true,
         weighInStartDate: true,
+        competitionStartDate: true,
+        competitionEndDate: true,
       },
     });
 
@@ -184,6 +189,42 @@ export class EventStageAutomationService {
           to: 'DRAWN',
           reason: 'Auto-advance: weigh-in completed',
         });
+      }
+
+      const competitionStartStr = formatInTimeZone(
+        event.competitionStartDate,
+        timezone,
+        'yyyy-MM-dd',
+      );
+
+      if (
+        (event.lifecycle === 'DRAWN' || event.lifecycle === 'PUBLISHED') &&
+        event.autoAdvanceStage &&
+        todayStr >= competitionStartStr
+      ) {
+        return this.advanceLifecycle({
+          event,
+          from: event.lifecycle,
+          to: 'LIVE',
+          reason: `Auto-advance: today (${todayStr}) >= competitionStartDate (${competitionStartStr}) tz=${timezone}`,
+        });
+      }
+
+      if (event.lifecycle === 'LIVE') {
+        const competitionEndStr = formatInTimeZone(
+          event.competitionEndDate,
+          timezone,
+          'yyyy-MM-dd',
+        );
+        if (todayStr > competitionEndStr) {
+          return this.advanceLifecycle({
+            event,
+            from: 'LIVE',
+            to: 'COMPLETED',
+            reason: `Auto-advance: today (${todayStr}) > competitionEndDate (${competitionEndStr}) tz=${timezone}`,
+          });
+        }
+        return false;
       }
 
       return false;

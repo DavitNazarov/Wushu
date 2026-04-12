@@ -794,6 +794,38 @@ export class FightsService {
 
     const advanced = await this.propagateWinnerToNextFight(tx, updated);
 
+    // Auto-complete the event when all playable fights are done
+    if (input.fight.event.lifecycle === 'LIVE') {
+      const remainingPlayable = await tx.fight.count({
+        where: {
+          eventId: input.fight.eventId,
+          redAthleteId: { not: null },
+          blueAthleteId: { not: null },
+          winnerAthleteId: null,
+          status: { notIn: ['COMPLETE', 'CONFIRMED'] },
+        },
+      });
+      if (remainingPlayable === 0) {
+        await tx.event.update({
+          where: { id: input.fight.eventId },
+          data: { lifecycle: 'COMPLETED' },
+        });
+        await this.audit.write(
+          {
+            organisationId: input.fight.organisationId,
+            eventId: input.fight.eventId,
+            actorUserId: input.actorUserId,
+            action: 'EVENT_STAGE_AUTO_ADVANCED',
+            entityType: 'event',
+            entityId: input.fight.eventId,
+            before: { lifecycle: 'LIVE' } as Prisma.JsonValue,
+            after: { lifecycle: 'COMPLETED', reason: 'All fights confirmed' } as Prisma.JsonValue,
+          },
+          tx,
+        );
+      }
+    }
+
     await this.audit.write(
       {
         organisationId: input.fight.organisationId,
