@@ -54,7 +54,7 @@ function StatCard({
 }) {
   return (
     <motion.div
-      whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}
+      whileHover={{ y: -3, boxShadow: `0 8px 28px ${accent}30`, backgroundColor: `${accent}12` }}
       transition={{ duration: 0.18 }}
       className="relative flex h-[108px] flex-col justify-between overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]"
     >
