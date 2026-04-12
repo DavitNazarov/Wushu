@@ -239,15 +239,6 @@ export function AppShell({ children }: AppShellProps) {
 
         <main className="flex-1 px-4 py-6 sm:px-6">
           <div className="mx-auto max-w-[1200px] space-y-4">
-            {!routeEventMatch ? (
-              <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4">
-                <AdminSelectedEventSummary
-                  selectedEvent={selectedEvent}
-                  emptyLabel={tTopbar('noEventSelected')}
-                  shortcuts={shortcutItems}
-                />
-              </section>
-            ) : null}
             <div>{children}</div>
           </div>
         </main>

@@ -27,13 +27,13 @@ export function AthleteProfileIdentity({ athlete, scope }: Props) {
       <Card className="overflow-hidden p-0">
         {/* Card header */}
         <div className="border-b border-[var(--color-border)]/60 px-5 py-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+          <p className="text-[9px] font-bold uppercase tracking-[0.28em] text-[var(--color-text-muted)]/60">
             {t('eyebrow')}
           </p>
           <h3 className="mt-1 text-[15px] font-semibold text-[var(--color-text)]">{t('summary')}</h3>
         </div>
 
-        <div className="space-y-px">
+        <div className="divide-y divide-[var(--color-border)]/50">
           {/* Club */}
           <IdentityRow icon={Building2} label={t('club')}>
             <div>
@@ -93,10 +93,8 @@ function IdentityRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start gap-3 px-5 py-4 transition-colors hover:bg-[var(--color-surface-alt)]/40">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]">
-        <Icon className="h-4 w-4" />
-      </span>
+    <div className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-[var(--color-surface-alt)]/30">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-text-muted)]/50" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
@@ -108,7 +106,7 @@ function IdentityRow({
             </span>
           )}
         </div>
-        <div className="mt-1">{children}</div>
+        <div className="mt-0.5">{children}</div>
       </div>
     </div>
   );

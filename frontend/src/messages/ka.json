@@ -1000,6 +1000,9 @@
     "actions": {
       "viewProfile": "პროფილის გახსნა"
     },
+    "pagination": {
+      "showing": "{from}–{to} / {total}"
+    },
     "merge": {
       "button": "არჩეულის გაერთიანება",
       "dialogTitle": "სპორტსმენების გაერთიანება",

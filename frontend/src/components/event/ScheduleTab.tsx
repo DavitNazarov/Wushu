@@ -2,8 +2,6 @@
 
 import { useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { MapPin, Swords } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -12,34 +10,20 @@ import { useRealtimeQuerySync } from '@/hooks/useRealtimeQuerySync';
 import type { ScheduleFight } from '@/lib/api/public';
 import { groupScheduleFightsByDate } from '@/lib/public-schedule';
 
-function formatTime(iso: string | null, locale: string): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+function liveStatusLabel(status: ScheduleFight['liveStatus'], t: ReturnType<typeof useTranslations>): string {
+  return t(`liveStatus.${status ?? 'PENDING'}`);
 }
 
-function statusStyle(status: ScheduleFight['liveStatus']): { chip: string; dot: string } {
+function liveStatusCls(status: ScheduleFight['liveStatus']): string {
   switch (status) {
     case 'RUNNING':
-      return {
-        chip: 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/20',
-        dot: 'bg-[var(--color-primary)] animate-pulse',
-      };
+      return 'bg-[var(--color-primary-subtle)] text-[var(--color-primary)]';
     case 'UPCOMING':
-      return {
-        chip: 'bg-[var(--color-warning)]/15 text-[var(--color-warning)] border border-[var(--color-warning)]/20',
-        dot: 'bg-[var(--color-warning)]',
-      };
+      return 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]';
     case 'FINISHED':
-      return {
-        chip: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
-        dot: 'bg-emerald-400',
-      };
+      return 'bg-emerald-500/10 text-emerald-400';
     default:
-      return {
-        chip: 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)] border border-[var(--color-border)]',
-        dot: 'bg-[var(--color-text-muted)]',
-      };
+      return 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]';
   }
 }
 
@@ -85,86 +69,56 @@ export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton width="100%" height="80px" />
-        <Skeleton width="100%" height="80px" />
-        <Skeleton width="100%" height="80px" />
+      <div className="space-y-3">
+        <Skeleton width="100%" height="20px" />
+        <Skeleton width="100%" height="160px" />
+        <Skeleton width="100%" height="20px" />
+        <Skeleton width="100%" height="120px" />
       </div>
     );
   }
 
   if (!fights || fights.length === 0) {
-    return (
-      <Card>
-        <EmptyState title={tPublic('scheduleNotPublished')} description={undefined} />
-      </Card>
-    );
+    return <EmptyState title={tPublic('scheduleNotPublished')} description={undefined} />;
   }
 
   return (
     <div className="space-y-6">
       {groupedFights.map(({ label, fights: items }) => (
         <div key={label}>
-          <div className="mb-3 flex items-center gap-3">
-            <h3 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]">
-              {label}
-            </h3>
-            <div className="h-px flex-1 bg-[var(--color-border)]" />
-            <span className="text-[12px] text-[var(--color-text-muted)]">{items.length} fights</span>
-          </div>
+          {/* Section header — matches athlete profile section headers */}
+          <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+            {label}
+            <span className="ml-2 font-normal normal-case tracking-normal">({items.length})</span>
+          </h3>
 
-          <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)]">
-            {items.map((f, idx) => {
-              const style = statusStyle(f.liveStatus);
-              return (
-                <div
-                  key={f.id}
-                  className={`flex items-center gap-3 px-4 py-3 ${
-                    idx < items.length - 1 ? 'border-b border-[var(--color-border)]' : ''
-                  } ${f.liveStatus === 'RUNNING' ? 'bg-[var(--color-primary)]/5' : ''}`}
-                >
-                  {/* Time */}
-                  <div className="w-12 shrink-0 text-center">
-                    <p className="text-[13px] font-semibold tabular-nums text-[var(--color-text)]">
-                      {formatTime(f.scheduledAt, locale)}
-                    </p>
-                    <p className="text-[10px] text-[var(--color-text-muted)]">
-                      #{f.scheduleOrder ?? '—'}
-                    </p>
-                  </div>
-
-                  {/* Divider */}
-                  <div className="h-8 w-px shrink-0 bg-[var(--color-border)]" />
-
-                  {/* Athletes */}
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="truncate text-[13px] font-medium text-[var(--color-text)]">
-                      {f.redDisplayName}
-                    </span>
-                    <Swords className="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" />
-                    <span className="truncate text-[13px] font-medium text-[var(--color-text)]">
-                      {f.blueDisplayName}
-                    </span>
-                  </div>
-
-                  {/* Meta */}
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span
-                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${style.chip}`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
-                      {tPublic(`liveStatus.${f.liveStatus ?? 'PENDING'}`)}
-                    </span>
-                    {f.matName && (
-                      <span className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)]">
-                        <MapPin className="h-2.5 w-2.5" />
-                        {f.matName}
-                      </span>
-                    )}
-                  </div>
+          <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)]">
+            {items.map((f, idx) => (
+              <div
+                key={f.id}
+                className={`flex items-center justify-between gap-4 bg-[var(--color-surface)] px-4 py-3 ${
+                  idx < items.length - 1 ? 'border-b border-[var(--color-border)]' : ''
+                }`}
+              >
+                {/* Order + names */}
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-medium text-[var(--color-text)]">
+                    {f.redDisplayName} vs {f.blueDisplayName}
+                  </p>
+                  <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
+                    #{f.scheduleOrder ?? '—'}
+                    {f.matName ? ` · ${f.matName}` : ''}
+                  </p>
                 </div>
-              );
-            })}
+
+                {/* Status */}
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${liveStatusCls(f.liveStatus)}`}
+                >
+                  {liveStatusLabel(f.liveStatus, tPublic)}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       ))}

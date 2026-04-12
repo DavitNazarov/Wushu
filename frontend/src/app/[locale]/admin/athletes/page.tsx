@@ -3,25 +3,22 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { AlertTriangle, ArrowRightLeft, Building2, CalendarDays, ChevronRight, FileBadge2, Search, Users } from 'lucide-react';
+import { AlertTriangle, Building2, ChevronLeft, ChevronRight, Search, Users } from 'lucide-react';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { AdminFilterSelect } from '@/components/admin/AdminFilterSelect';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { PrimaryButton } from '@/components/ui/PrimaryButton';
-import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { useToast } from '@/components/ui/Toast';
 import { Input } from '@/components/ui/primitives/input';
-import { getCompactErrorMessage } from '@/lib/api/error';
-import { apiGet, apiPost } from '@/lib/api/client';
+import { apiGet } from '@/lib/api/client';
 import type { AthleteRow, ClubRow } from '@/types/api';
 
+const PAGE_SIZE = 10;
+
 const CARD_CLASS =
-  'rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]';
+  'rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)]';
 
 const container = {
   hidden: {},
@@ -29,8 +26,8 @@ const container = {
 };
 
 const rowItem = {
-  hidden: { opacity: 0, y: 5 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.2 } },
+  hidden: { opacity: 0, y: 4 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.18 } },
 };
 
 type StatCardProps = {
@@ -42,25 +39,22 @@ type StatCardProps = {
 };
 
 function StatCard({ label, value, tone = 'neutral', icon: Icon, hint }: StatCardProps) {
-  const iconClass =
-    tone === 'warning'
-      ? 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]'
-      : 'bg-[var(--color-primary-subtle)] text-[var(--color-primary)]';
-
+  const iconColor = tone === 'warning' ? 'text-[var(--color-warning)]' : 'text-[var(--color-primary)]';
+  const valueColor = tone === 'warning' ? 'text-[var(--color-warning)]' : 'text-[var(--color-primary)]';
   return (
     <motion.div
-      className="group flex flex-col gap-1 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-shadow hover:shadow-md"
-      whileHover={{ y: -1 }}
+      className="flex items-center gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4 transition-shadow"
+      whileHover={{ y: -2, boxShadow: '0 6px 24px -6px rgba(0,0,0,0.18)' }}
       transition={{ duration: 0.15 }}
     >
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">{label}</p>
-        <span className={`flex h-7 w-7 items-center justify-center rounded-xl opacity-80 group-hover:opacity-100 transition-opacity ${iconClass}`}>
-          <Icon className="h-3.5 w-3.5" />
-        </span>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-alt)] transition-colors group-hover:bg-[var(--color-primary-subtle)]">
+        <Icon className={`h-4 w-4 ${iconColor}`} />
+      </span>
+      <div className="min-w-0">
+        <p className={`text-[24px] font-bold tabular-nums leading-none tracking-tight ${valueColor}`}>{value}</p>
+        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{label}</p>
+        <p className="mt-0.5 text-[11px] text-[var(--color-text-muted)]/70">{hint}</p>
       </div>
-      <p className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">{value}</p>
-      <p className="text-[11px] text-[var(--color-text-muted)]">{hint}</p>
     </motion.div>
   );
 }
@@ -79,14 +73,14 @@ export default function AthletesPage() {
   const tCommon = useTranslations('common');
   const tProfile = useTranslations('athleteProfile.identity');
   const locale = useLocale();
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const [search, setSearch] = useState('');
   const [selectedClubId, setSelectedClubId] = useState('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [mergeOpen, setMergeOpen] = useState(false);
-  const [mergeReason, setMergeReason] = useState('');
+  const [page, setPage] = useState(1);
+
+  // Reset to page 1 on filter change
+  function setSearchAndReset(v: string) { setSearch(v); setPage(1); }
+  function setClubAndReset(v: string) { setSelectedClubId(v); setPage(1); }
 
   const athleteQueryPath = useMemo(() => {
     const params = new URLSearchParams();
@@ -109,38 +103,13 @@ export default function AthletesPage() {
   const clubMap = useMemo(() => new Map((clubs ?? []).map((c) => [c.id, c])), [clubs]);
 
   const rows = athletes ?? [];
-  const selectedAthletes = rows.filter((a) => selectedIds.includes(a.id));
-  const selectedNames = selectedAthletes.map((a) => `${a.lastName} ${a.firstName}`);
   const unassignedCount = rows.filter((a) => !a.clubId).length;
   const linkedClubCount = rows.length - unassignedCount;
   const duplicateReviewCount = rows.filter((a) => getDuplicateCount(a) > 1).length;
-  const canMerge = selectedIds.length === 2;
 
-  const mergeMutation = useMutation({
-    mutationFn: () => apiPost<AthleteRow>('/api/athletes/merge', {
-      primaryId: selectedIds[0],
-      secondaryId: selectedIds[1],
-      reason: mergeReason.trim(),
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['athletes'] });
-      toast(tCommon('saveSuccess'));
-      setSelectedIds([]);
-      setMergeOpen(false);
-      setMergeReason('');
-    },
-    onError: (e) => toast(getCompactErrorMessage(e, t('merge.errorGeneric')), 'error'),
-  });
-
-  function toggleSelected(id: string) {
-    setSelectedIds((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id].slice(-2));
-  }
-
-  function openMerge() {
-    if (!canMerge) return;
-    setMergeReason('');
-    setMergeOpen(true);
-  }
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   function formatDob(value: string | null | undefined) {
     if (!value) return '—';
@@ -173,16 +142,7 @@ export default function AthletesPage() {
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
-        <PageHeader
-          title={t('title')}
-          subtitle={t('subtitle')}
-          actions={
-            <PrimaryButton disabled={!canMerge} onClick={openMerge}>
-              <ArrowRightLeft className="mr-1.5 h-4 w-4" />
-              {t('merge.button')}
-            </PrimaryButton>
-          }
-        />
+        <PageHeader title={t('title')} subtitle={t('subtitle')} />
       </motion.div>
 
       {error && (
@@ -204,124 +164,86 @@ export default function AthletesPage() {
         <StatCard label={t('stats.total')} value={rows.length} icon={Users} hint={t('stats.totalHint')} />
         <StatCard label={t('stats.linked')} value={linkedClubCount} icon={Building2} hint={t('stats.linkedHint')} />
         <StatCard label={t('stats.needsClub')} value={unassignedCount} icon={AlertTriangle} tone={unassignedCount > 0 ? 'warning' : 'neutral'} hint={t('stats.needsClubHint')} />
-        <StatCard label={t('stats.duplicates')} value={duplicateReviewCount} icon={ArrowRightLeft} tone={duplicateReviewCount > 0 ? 'warning' : 'neutral'} hint={t('stats.duplicatesHint')} />
+        <StatCard label={t('stats.duplicates')} value={duplicateReviewCount} icon={AlertTriangle} tone={duplicateReviewCount > 0 ? 'warning' : 'neutral'} hint={t('stats.duplicatesHint')} />
       </motion.div>
 
-      {/* Filters + Merge panel */}
+      {/* Filters */}
       <motion.div
-        className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]"
+        className={`${CARD_CLASS} flex flex-col gap-3 p-4 sm:flex-row sm:items-end`}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.1 }}
       >
-        {/* Search + club filter */}
-        <div className={`${CARD_CLASS} flex flex-col gap-3 p-4 sm:flex-row sm:items-end`}>
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
-            <Input
-              type="search"
-              placeholder={t('searchPlaceholder')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-10 w-full bg-[var(--color-surface)] pl-9"
-            />
-          </div>
-          <AdminFilterSelect
-            label={t('columns.club')}
-            value={selectedClubId}
-            emptyLabel={t('filters.allClubs')}
-            options={(clubs ?? []).map((c) => ({ value: c.id, label: c.name }))}
-            onValueChange={setSelectedClubId}
-            className="sm:min-w-[180px]"
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
+          <Input
+            type="search"
+            placeholder={t('searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearchAndReset(e.target.value)}
+            className="h-10 w-full bg-[var(--color-surface)] pl-9"
           />
         </div>
-
-        {/* Merge widget */}
-        <div className={`${CARD_CLASS} p-4`}>
-          <div className="flex items-center justify-between">
-            <p className="text-[12px] font-semibold text-[var(--color-text)]">{t('selection.title')}</p>
-            <span className="rounded-full bg-[var(--color-primary-subtle)] px-2 py-0.5 text-[11px] font-bold text-[var(--color-primary)]">
-              {selectedIds.length}/2
-            </span>
-          </div>
-          <div className="mt-2 space-y-1.5">
-            {selectedNames.length > 0 ? (
-              selectedNames.map((name, i) => (
-                <div key={`${name}-${i}`} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
-                    {t('selection.slotLabel', { index: i + 1 })}
-                  </p>
-                  <p className="mt-0.5 text-[13px] font-medium text-[var(--color-text)]">{name}</p>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-xl border border-dashed border-[var(--color-border)] px-3 py-3 text-[12px] text-[var(--color-text-muted)]">
-                {t('selection.empty')}
-              </div>
-            )}
-          </div>
-          <div className="mt-3 flex gap-2">
-            <PrimaryButton disabled={!canMerge} onClick={openMerge}>{t('merge.button')}</PrimaryButton>
-            <SecondaryButton disabled={selectedIds.length === 0} onClick={() => setSelectedIds([])}>{t('selection.clear')}</SecondaryButton>
-          </div>
-        </div>
+        <AdminFilterSelect
+          label={t('columns.club')}
+          value={selectedClubId}
+          emptyLabel={t('filters.allClubs')}
+          options={(clubs ?? []).map((c) => ({ value: c.id, label: c.name }))}
+          onValueChange={setClubAndReset}
+          className="sm:min-w-[200px]"
+        />
       </motion.div>
 
       {/* Table / Cards */}
       {isLoading ? (
-        <SkeletonRows rows={6} cols={5} />
+        <SkeletonRows rows={10} cols={4} />
       ) : rows.length === 0 ? (
         <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
       ) : (
-        <>
+        <div className="space-y-3">
           {/* Desktop table */}
           <div className={`${CARD_CLASS} hidden overflow-hidden lg:block`}>
             <table className="min-w-full text-[13px]">
               <thead>
-                <tr className="border-b border-[var(--color-border)]/60 bg-[var(--color-surface-alt)]/50 text-left">
-                  <th className="w-12 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{t('columns.select')}</th>
-                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{t('columns.name')}</th>
-                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{t('columns.club')}</th>
-                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{t('columns.identity')}</th>
-                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{t('columns.status')}</th>
-                  <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{t('columns.actions')}</th>
+                <tr className="border-b border-[var(--color-border)]/60 bg-[var(--color-surface-alt)]/40 text-left">
+                  <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">{t('columns.name')}</th>
+                  <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">{t('columns.club')}</th>
+                  <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">{t('columns.identity')}</th>
+                  <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">{t('columns.status')}</th>
+                  <th className="w-10 px-5 py-3" />
                 </tr>
               </thead>
               <motion.tbody
+                key={safePage}
                 className="divide-y divide-[var(--color-border)]/50"
                 variants={container}
                 initial="hidden"
                 animate="show"
               >
-                {rows.map((athlete) => {
-                  const selected = selectedIds.includes(athlete.id);
+                {pageRows.map((athlete) => {
                   const duplicateCount = getDuplicateCount(athlete);
                   return (
                     <motion.tr
                       key={athlete.id}
                       variants={rowItem}
-                      onClick={() => toggleSelected(athlete.id)}
-                      className={`cursor-pointer transition-colors hover:bg-[var(--color-surface-alt)]/50 ${selected ? 'bg-[var(--color-primary-subtle)]/30' : 'bg-[var(--color-surface)]'}`}
+                      whileHover={{ backgroundColor: 'var(--color-surface-alt)', x: 1 }}
+                      transition={{ duration: 0.12 }}
+                      className="group bg-[var(--color-surface)]"
                     >
-                      <td className="px-4 py-3.5">
-                        <input
-                          type="checkbox"
-                          checked={selected}
-                          onChange={() => toggleSelected(athlete.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-primary)]"
-                        />
-                      </td>
-                      <td className="px-4 py-3.5">
+                      {/* Name */}
+                      <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-subtle)] text-[12px] font-bold uppercase text-[var(--color-primary)]">
+                          <motion.div
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-subtle)] text-[11px] font-bold uppercase text-[var(--color-primary)]"
+                            whileHover={{ scale: 1.08 }}
+                            transition={{ duration: 0.15 }}
+                          >
                             {getInitials(athlete)}
-                          </div>
+                          </motion.div>
                           <div>
                             <Link
                               href={`/${locale}/admin/athletes/${athlete.id}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-[14px] font-semibold text-[var(--color-text)] hover:text-[var(--color-primary)] hover:underline transition-colors"
+                              className="font-semibold text-[var(--color-text)] transition-colors hover:text-[var(--color-primary)]"
                             >
                               {athlete.lastName} {athlete.firstName}
                             </Link>
@@ -329,40 +251,32 @@ export default function AthletesPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3.5">
+                      {/* Club */}
+                      <td className="px-5 py-3.5">
                         <p className="font-medium text-[var(--color-text)]">{getClubLabel(athlete)}</p>
                         <p className="text-[12px] text-[var(--color-text-muted)]">{getClubMeta(athlete) ?? '—'}</p>
                       </td>
-                      <td className="px-4 py-3.5">
-                        <div className="space-y-1 text-[12px] text-[var(--color-text-muted)]">
-                          <div className="flex items-center gap-1.5">
-                            <CalendarDays className="h-3.5 w-3.5" />
-                            {formatDob(athlete.dateOfBirth)}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <FileBadge2 className="h-3.5 w-3.5" />
-                            {athlete.documentId ?? t('badges.missingDocument')}
-                          </div>
-                        </div>
+                      {/* DOB + Document */}
+                      <td className="px-5 py-3.5">
+                        <p className="text-[var(--color-text)]">{formatDob(athlete.dateOfBirth)}</p>
+                        <p className="text-[12px] text-[var(--color-text-muted)]/70">
+                          {athlete.documentId ?? t('badges.missingDocument')}
+                        </p>
                       </td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex flex-wrap gap-1.5">
-                          <StatusChip
-                            tone={duplicateCount > 1 ? 'warning' : 'neutral'}
-                            label={duplicateCount > 1 ? t('badges.duplicateCount', { count: duplicateCount }) : t('badges.noDuplicates')}
-                          />
+                      {/* Status badges */}
+                      <td className="px-5 py-3.5">
+                        <div className="flex flex-wrap gap-1">
+                          {duplicateCount > 1 && (
+                            <StatusChip tone="warning" label={t('badges.duplicateCount', { count: duplicateCount })} />
+                          )}
                           {!athlete.clubId && <StatusChip tone="warning" label={t('badges.missingClub')} />}
                           {!athlete.documentId && <StatusChip tone="muted" label={t('badges.missingDocument')} />}
                         </div>
                       </td>
-                      <td className="px-4 py-3.5">
-                        <Link
-                          href={`/${locale}/admin/athletes/${athlete.id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--color-primary)] hover:underline"
-                        >
-                          {t('actions.viewProfile')}
-                          <ChevronRight className="h-3.5 w-3.5" />
+                      {/* Arrow */}
+                      <td className="px-5 py-3.5 text-right">
+                        <Link href={`/${locale}/admin/athletes/${athlete.id}`}>
+                          <ChevronRight className="h-4 w-4 text-[var(--color-primary)] opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100" />
                         </Link>
                       </td>
                     </motion.tr>
@@ -373,95 +287,107 @@ export default function AthletesPage() {
           </div>
 
           {/* Mobile cards */}
-          <motion.div className="space-y-2 lg:hidden" variants={container} initial="hidden" animate="show">
-            {rows.map((athlete) => {
-              const selected = selectedIds.includes(athlete.id);
+          <motion.div key={`mobile-${safePage}`} className="space-y-2 lg:hidden" variants={container} initial="hidden" animate="show">
+            {pageRows.map((athlete) => {
               const duplicateCount = getDuplicateCount(athlete);
-
               return (
-                <motion.button
+                <motion.div
                   key={athlete.id}
-                  type="button"
                   variants={rowItem}
-                  onClick={() => toggleSelected(athlete.id)}
-                  className={`${CARD_CLASS} w-full p-4 text-left transition-colors ${selected ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary-subtle)]/20' : ''}`}
+                  whileHover={{ y: -2, boxShadow: '0 6px 20px -6px rgba(0,0,0,0.18)' }}
+                  transition={{ duration: 0.15 }}
                 >
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={() => toggleSelected(athlete.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="mt-1 h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-primary)]"
-                    />
+                  <Link
+                    href={`/${locale}/admin/athletes/${athlete.id}`}
+                    className={`${CARD_CLASS} group flex items-start gap-3 p-4 transition-colors hover:bg-[var(--color-surface-alt)]/30`}
+                  >
+                    <motion.div
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-subtle)] text-[11px] font-bold uppercase text-[var(--color-primary)]"
+                      whileHover={{ scale: 1.08 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      {getInitials(athlete)}
+                    </motion.div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <Link
-                          href={`/${locale}/admin/athletes/${athlete.id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-[14px] font-semibold text-[var(--color-text)] hover:underline"
-                        >
-                          {athlete.lastName} {athlete.firstName}
-                        </Link>
-                        <span className="rounded-xl bg-[var(--color-primary-subtle)] px-2.5 py-1 text-[11px] font-bold text-[var(--color-primary)]">
-                          {getInitials(athlete)}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{getSexLabel(athlete)}</p>
-                      <div className="mt-2 grid gap-1 text-[12px] text-[var(--color-text-muted)]">
-                        <div className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />{getClubLabel(athlete)}</div>
-                        <div className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{formatDob(athlete.dateOfBirth)}</div>
-                        <div className="flex items-center gap-1.5"><FileBadge2 className="h-3.5 w-3.5" />{athlete.documentId ?? t('badges.missingDocument')}</div>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        <StatusChip tone={duplicateCount > 1 ? 'warning' : 'neutral'} label={duplicateCount > 1 ? t('badges.duplicateCount', { count: duplicateCount }) : t('badges.noDuplicates')} />
-                        {!athlete.clubId && <StatusChip tone="warning" label={t('badges.missingClub')} />}
-                        {!athlete.documentId && <StatusChip tone="muted" label={t('badges.missingDocument')} />}
-                      </div>
+                      <p className="font-semibold text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{athlete.lastName} {athlete.firstName}</p>
+                      <p className="text-[12px] text-[var(--color-text-muted)]">{getClubLabel(athlete)} · {getSexLabel(athlete)}</p>
+                      <p className="text-[12px] text-[var(--color-text-muted)]">{formatDob(athlete.dateOfBirth)}</p>
+                      {(duplicateCount > 1 || !athlete.clubId || !athlete.documentId) && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {duplicateCount > 1 && <StatusChip tone="warning" label={t('badges.duplicateCount', { count: duplicateCount })} />}
+                          {!athlete.clubId && <StatusChip tone="warning" label={t('badges.missingClub')} />}
+                          {!athlete.documentId && <StatusChip tone="muted" label={t('badges.missingDocument')} />}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </motion.button>
+                    <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary)] opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100" />
+                  </Link>
+                </motion.div>
               );
             })}
           </motion.div>
-        </>
-      )}
 
-      {/* Merge modal */}
-      <Modal
-        open={mergeOpen && canMerge}
-        onClose={() => setMergeOpen(false)}
-        title={t('merge.dialogTitle')}
-        description={t('merge.dialogDescription')}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setMergeOpen(false)}>{t('merge.cancel')}</SecondaryButton>
-            <PrimaryButton
-              disabled={mergeMutation.isPending || !mergeReason.trim()}
-              onClick={() => mergeMutation.mutate()}
-            >
-              {mergeMutation.isPending ? tCommon('loading') : t('merge.confirm')}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-4 py-3">
-            <p className="text-[12px] font-semibold text-[var(--color-text)]">{t('merge.selectionTitle')}</p>
-            <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{selectedNames.join(' · ')}</p>
-          </div>
-          <div>
-            <label className="block text-[13px] font-semibold text-[var(--color-text)]">
-              {t('merge.reasonLabel')}
-            </label>
-            <textarea
-              className="mt-1.5 h-24 w-full resize-none rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-2 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30"
-              value={mergeReason}
-              onChange={(e) => setMergeReason(e.target.value)}
-            />
-          </div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-1 pt-1">
+              <p className="text-[12px] text-[var(--color-text-muted)]">
+                {t('pagination.showing', {
+                  from: (safePage - 1) * PAGE_SIZE + 1,
+                  to: Math.min(safePage * PAGE_SIZE, rows.length),
+                  total: rows.length,
+                })}
+              </p>
+              <div className="flex items-center gap-1">
+                <motion.button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  whileHover={{ scale: 1.08 }}
+                  whileTap={{ scale: 0.94 }}
+                  transition={{ duration: 0.12 }}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </motion.button>
+
+                {getPaginationPages(safePage, totalPages).map((item, i) =>
+                  item === '…' ? (
+                    <span key={`ellipsis-${i}`} className="flex h-8 w-8 items-center justify-center text-[12px] text-[var(--color-text-muted)]">…</span>
+                  ) : (
+                    <motion.button
+                      key={item}
+                      type="button"
+                      onClick={() => setPage(item as number)}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.94 }}
+                      transition={{ duration: 0.12 }}
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg border text-[13px] font-medium transition-colors ${
+                        item === safePage
+                          ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                          : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-alt)]'
+                      }`}
+                    >
+                      {item}
+                    </motion.button>
+                  )
+                )}
+
+                <motion.button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  whileHover={{ scale: 1.08 }}
+                  whileTap={{ scale: 0.94 }}
+                  transition={{ duration: 0.12 }}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] disabled:opacity-40"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </motion.button>
+              </div>
+            </div>
+          )}
         </div>
-      </Modal>
+      )}
     </div>
   );
 }
@@ -472,4 +398,15 @@ function getDuplicateCount(athlete: AthleteRow) {
 
 function getInitials(athlete: AthleteRow) {
   return `${athlete.firstName.charAt(0)}${athlete.lastName.charAt(0)}`.toUpperCase();
+}
+
+/** Returns page numbers and '…' ellipsis markers for the pagination bar. */
+function getPaginationPages(current: number, total: number): (number | '…')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | '…')[] = [1];
+  if (current > 3) pages.push('…');
+  for (let p = Math.max(2, current - 1); p <= Math.min(total - 1, current + 1); p++) pages.push(p);
+  if (current < total - 2) pages.push('…');
+  pages.push(total);
+  return pages;
 }

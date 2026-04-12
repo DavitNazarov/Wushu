@@ -1000,6 +1000,9 @@
     "actions": {
       "viewProfile": "Open profile"
     },
+    "pagination": {
+      "showing": "Showing {from}–{to} of {total}"
+    },
     "merge": {
       "button": "Merge selected",
       "dialogTitle": "Merge athletes",

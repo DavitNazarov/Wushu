@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
-import { ChevronRight, Swords } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusChip } from '@/components/ui/StatusChip';
@@ -65,8 +65,8 @@ export function AthleteProfileCompetition({ athleteId, fights, scope }: Props) {
             </span>
           </div>
 
-          {/* Record summary */}
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          {/* Record summary — flat inline stats */}
+          <div className="mt-3 flex gap-5">
             <RecordStat label={t('summary.fights')} value={rows.length} color="text-[var(--color-text)]" />
             <RecordStat label={t('summary.record')} value={`${wins}–${losses}`} color="text-[var(--color-success)]" />
             <RecordStat label={t('summary.pending')} value={pending} color="text-[var(--color-warning)]" />
@@ -121,9 +121,9 @@ export function AthleteProfileCompetition({ athleteId, fights, scope }: Props) {
 
 function RecordStat({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-alt)]/40 px-3 py-2.5 text-center">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{label}</p>
-      <p className={`mt-1 text-[20px] font-semibold tracking-tight ${color}`}>{value}</p>
+    <div>
+      <p className={`text-[20px] font-bold tabular-nums leading-none tracking-tight ${color}`}>{value}</p>
+      <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]/70">{label}</p>
     </div>
   );
 }

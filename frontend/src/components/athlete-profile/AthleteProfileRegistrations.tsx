@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
-import { CalendarDays, ChevronRight, Scale } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusChip } from '@/components/ui/StatusChip';
@@ -81,10 +81,7 @@ export function AthleteProfileRegistrations({ registrations, scope }: Props) {
                       {row.eventName}
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-[var(--color-text-muted)]">
-                      <span className="inline-flex items-center gap-1">
-                        <CalendarDays className="h-3.5 w-3.5" />
-                        {formatAthleteDate(row.competitionStartDate, locale)}
-                      </span>
+                      <span>{formatAthleteDate(row.competitionStartDate, locale)}</span>
                       <span>{row.ageGroupName ?? t('unknownAgeGroup')}</span>
                       <span>{row.finalWeightCategoryName ?? row.categoryCode}</span>
                     </div>
@@ -114,12 +111,11 @@ export function AthleteProfileRegistrations({ registrations, scope }: Props) {
                     <div className="grid gap-2 sm:grid-cols-3">
                       {[
                         {
-                          icon: Scale,
                           label: t('columns.weighIn'),
                           value: row.weighInStatus ? tWeighIn(WEIGH_IN_STATUS_LABEL_KEY[row.weighInStatus]) : '—',
                         },
-                        { icon: null, label: t('columns.initialCategory'), value: row.initialWeightCategoryName ?? '—' },
-                        { icon: null, label: t('columns.latestDecision'), value: row.latestWeighInDecision ? tWeighIn(`decisionOption${row.latestWeighInDecision}`) : '—' },
+                        { label: t('columns.initialCategory'), value: row.initialWeightCategoryName ?? '—' },
+                        { label: t('columns.latestDecision'), value: row.latestWeighInDecision ? tWeighIn(`decisionOption${row.latestWeighInDecision}`) : '—' },
                       ].map(({ label, value }) => (
                         <div key={label} className="rounded-lg bg-[var(--color-surface-alt)]/60 px-3 py-2">
                           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{label}</p>

@@ -46,10 +46,10 @@ export function ClubProfileInfo({ club, overview }: Props) {
 
         {overview.representedCategoryCodes.length > 0 && (
           <div className="border-t border-[var(--color-border)]/50 px-5 py-4">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
+            <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--color-text-muted)]/60">
               {t('info.fields.categories')}
             </p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
               {overview.representedCategoryCodes.map((code) => (
                 <span
                   key={code}
@@ -68,11 +68,9 @@ export function ClubProfileInfo({ club, overview }: Props) {
 
 function InfoRow({ icon: Icon, label, value }: { icon: typeof Building2; label: string; value: string }) {
   return (
-    <div className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-[var(--color-surface-alt)]/40">
-      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]">
-        <Icon className="h-3.5 w-3.5" />
-      </span>
-      <div className="min-w-0">
+    <div className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-[var(--color-surface-alt)]/30">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-text-muted)]/50" />
+      <div className="min-w-0 flex-1">
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{label}</p>
         <p className="mt-0.5 text-[13px] font-medium text-[var(--color-text)] break-words">{value}</p>
       </div>

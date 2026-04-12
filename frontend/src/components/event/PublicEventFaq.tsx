@@ -6,27 +6,27 @@ import { useLocale, useTranslations } from 'next-intl';
 import type { PublicEvent } from '@/lib/api/public';
 
 function formatDateRange(start: string, end: string, locale: string): string {
-  const startDate = new Date(start);
-  const endDate = new Date(end);
-  return `${startDate.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })} - ${endDate.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  const s = new Date(start);
+  const e = new Date(end);
+  return `${s.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })} – ${e.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
 function FaqItem({ question, answer }: { question: string; answer: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border-b border-[var(--color-border)] last:border-b-0">
+    <div className={`border-b border-[var(--color-border)] last:border-b-0`}>
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-[var(--color-surface-alt)]"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-[var(--color-surface-alt)]"
       >
-        <span className="text-[14px] font-semibold text-[var(--color-text)]">{question}</span>
+        <span className="text-[14px] font-medium text-[var(--color-text)]">{question}</span>
         <ChevronDown
-          className={`h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
         />
       </button>
       {open && (
-        <p className="px-5 pb-4 text-[14px] leading-relaxed text-[var(--color-text-muted)]">
+        <p className="px-4 pb-4 text-[13px] leading-relaxed text-[var(--color-text-muted)]">
           {answer}
         </p>
       )}
