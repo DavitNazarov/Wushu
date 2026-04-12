@@ -317,11 +317,24 @@ export default function CoachRegistrationsPage({ params }: Props) {
                 <SelectValue placeholder="—" />
               </SelectTrigger>
               <SelectContent>
-                {athletes?.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.firstName} {a.lastName}{a.dateOfBirth ? ` (${new Date(a.dateOfBirth).getFullYear()})` : ''}
-                  </SelectItem>
-                ))}
+                {athletes?.map((a) => {
+                  const reg = rows.find((r) => r.athleteId === a.id && r.status !== 'WITHDRAWN');
+                  return (
+                    <SelectItem key={a.id} value={a.id}>
+                      <span className="flex items-center gap-2">
+                        <span>
+                          {a.firstName} {a.lastName}{a.dateOfBirth ? ` (${new Date(a.dateOfBirth).getFullYear()})` : ''}
+                        </span>
+                        {reg && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-success-subtle)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-success)]">
+                            <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
+                            {reg.categoryCode}
+                          </span>
+                        )}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
