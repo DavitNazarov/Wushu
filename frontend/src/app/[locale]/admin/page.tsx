@@ -245,6 +245,15 @@ function QuickTile({
   accent: string;
   delay: number;
 }) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  const [spot, setSpot] = useState<{ x: number; y: number } | null>(null);
+
+  function handleMouseMove(e: React.MouseEvent<HTMLAnchorElement>) {
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+    setSpot({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -253,9 +262,20 @@ function QuickTile({
       whileHover={{ y: -2 }}
     >
       <Link
+        ref={ref}
         href={href}
-        className="group flex h-[68px] items-center gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 shadow-[var(--shadow-card)] transition-all hover:border-transparent hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setSpot(null)}
+        className="group relative flex h-[68px] items-center gap-3 overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 shadow-[var(--shadow-card)] transition-all hover:border-transparent hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]"
       >
+        {spot && (
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background: `radial-gradient(120px circle at ${spot.x}px ${spot.y}px, ${accent}28, transparent 80%)`,
+            }}
+          />
+        )}
         <div
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-110"
           style={{ background: `${accent}22`, color: accent }}
@@ -266,7 +286,7 @@ function QuickTile({
           <p className="text-[13px] font-semibold text-[var(--color-text)]">{label}</p>
           <p className="text-[11px] text-[var(--color-text-muted)]">{desc}</p>
         </div>
-        <ArrowRight className="h-3.5 w-3.5 translate-x-0 text-[var(--color-text-muted)] opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100" style={{ color: accent }} />
+        <ArrowRight className="h-3.5 w-3.5 translate-x-0 opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100" style={{ color: accent }} />
       </Link>
     </motion.div>
   );
