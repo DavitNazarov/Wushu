@@ -74,7 +74,8 @@
       "PAUSED": "შეჩერებულია",
       "COMPLETE": "დასრულებულია",
       "CONFIRMED": "დადასტურებულია"
-    }
+    },
+    "viewAll": "ყველა"
   },
   "event": {
     "newEvent": "New event",
@@ -332,7 +333,19 @@
       "linkRulesetsTitle": "კატეგორიების შაბლონები",
       "linkRulesetsDescription": "მართეთ მრავალჯერადი გამოყენების შეჯიბრის კატეგორიები და წონები.",
       "linkEventsTitle": "Events",
-      "linkEventsDescription": "Set up events and prepare for registration."
+      "linkEventsDescription": "Set up events and prepare for registration.",
+      "liveNow": "პირდაპირი",
+      "liveGoTo": "გადასვლა",
+      "kpiTotal": "სულ ღონისძიება",
+      "kpiTotalSub": "სულ ყველა",
+      "kpiActiveSub": "მიმდინარე",
+      "nextEvent": "შემდეგი ღონისძიება",
+      "days": "დღე",
+      "pipelineTitle": "ღონისძიებების სტატუსი",
+      "linkDrawDescription": "წილისყრა და ბრაკეტების გენერაცია.",
+      "linkWeighInDescription": "სპორტსმენების წონის ჩაწერა.",
+      "linkBracketsDescription": "ბრაკეტების ნახვა და რედაქტირება.",
+      "linkAthletesDescription": "სპორტსმენების პროფილები."
     },
     "sidebar": {
       "dashboard": "Dashboard",

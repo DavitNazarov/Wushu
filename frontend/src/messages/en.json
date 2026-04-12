@@ -74,7 +74,8 @@
       "PAUSED": "Paused",
       "COMPLETE": "Complete",
       "CONFIRMED": "Confirmed"
-    }
+    },
+    "viewAll": "View all"
   },
   "event": {
     "newEvent": "New event",
@@ -332,7 +333,19 @@
       "linkRulesetsTitle": "Category templates",
       "linkRulesetsDescription": "Manage reusable competition categories and weights.",
       "linkEventsTitle": "Events",
-      "linkEventsDescription": "Set up events and prepare for registration."
+      "linkEventsDescription": "Set up events and prepare for registration.",
+      "liveNow": "Live Now",
+      "liveGoTo": "Go to Live",
+      "kpiTotal": "Total Events",
+      "kpiTotalSub": "all time",
+      "kpiActiveSub": "competition running",
+      "nextEvent": "Next Competition",
+      "days": "days",
+      "pipelineTitle": "Event Pipeline",
+      "linkDrawDescription": "Manage draws and bracket generation.",
+      "linkWeighInDescription": "Record and verify athlete weights.",
+      "linkBracketsDescription": "View and edit competition brackets.",
+      "linkAthletesDescription": "Manage athlete profiles and records."
     },
     "sidebar": {
       "dashboard": "Dashboard",
