@@ -92,7 +92,11 @@ export class RegistrationsService {
       event.competitionStartDate,
     );
 
-    if (ageGroup.minAge != null && athleteAge < ageGroup.minAge) {
+    // Special rule: athletes aged 15–17 may participate in the 18+ adult group
+    const isYouthToAdultException =
+      athleteAge >= 15 && athleteAge <= 17 && ageGroup.minAge === 18;
+
+    if (ageGroup.minAge != null && athleteAge < ageGroup.minAge && !isYouthToAdultException) {
       throw new Error('ATHLETE_OUT_OF_AGE_GROUP');
     }
     if (ageGroup.maxAge != null && athleteAge > ageGroup.maxAge) {
@@ -110,6 +114,7 @@ export class RegistrationsService {
     eventWeightCategoryId?: string | null;
     athlete: Athlete;
     event: Event;
+    skipEligibilityCheck?: boolean;
   }): Promise<{ eventWeightCategoryId: string | null; categoryCode: string }> {
     const hasConfiguredCategories = await this.prisma.eventWeightCategory.count({
       where: {
@@ -137,7 +142,9 @@ export class RegistrationsService {
       });
       if (!category) throw new Error('INVALID_CATEGORY_FOR_EVENT');
 
-      this.assertAthleteEligibleForCategory(input.athlete, input.event, category);
+      if (!input.skipEligibilityCheck) {
+        this.assertAthleteEligibleForCategory(input.athlete, input.event, category);
+      }
       return {
         eventWeightCategoryId: category.id,
         categoryCode: category.categoryTemplateWeight.name,
@@ -428,6 +435,7 @@ export class RegistrationsService {
       eventWeightCategoryId: input.eventWeightCategoryId,
       athlete: existing.athlete,
       event: existing.event,
+      skipEligibilityCheck: input.override ?? false,
     });
 
     const updated = await this.prisma.registration.update({

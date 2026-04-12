@@ -1,9 +1,12 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import { useLocale } from 'next-intl';
+import { Pencil, X } from 'lucide-react';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { Card } from '@/components/ui/primitives/card';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { useToast } from '@/components/ui/Toast';
 import {
   BracketRenderer,
   RoundRobinPanel,
@@ -16,6 +19,9 @@ import {
 } from '@/features/brackets/lib/bracketDisplayMapper';
 import { BracketFightList } from './BracketFightList';
 import { BracketAthleteList } from './BracketAthleteList';
+import { useBracketSwap } from '@/features/brackets/lib/useBracketSwap';
+
+type DragInfo = { fightId: string; side: 'a' | 'b'; athleteId: string };
 
 type Props = {
   details: BracketCategoryDetailsResponse | null;
@@ -37,6 +43,39 @@ function Metric({ label, value }: { label: string; value: number | string }) {
 
 export function BracketDetailsPanel({ details, isLoading, t, tFightStatus }: Props) {
   const locale = useLocale();
+  const { toast } = useToast();
+  const [editMode, setEditMode] = useState(false);
+  const dragRef = useRef<DragInfo | null>(null);
+
+  const eventId = details?.event.id ?? '';
+  const categoryId = details?.category.id ?? '';
+  const swapMut = useBracketSwap(eventId, categoryId);
+
+  function handleDragStart(info: DragInfo) {
+    dragRef.current = info;
+  }
+
+  function handleDrop(target: { fightId: string; side: 'a' | 'b' }) {
+    const src = dragRef.current;
+    dragRef.current = null;
+    if (!src || !eventId) return;
+    if (src.fightId === target.fightId && src.side === target.side) return;
+
+    const sideToCorner = (s: 'a' | 'b') => (s === 'a' ? 'red' : 'blue') as 'red' | 'blue';
+
+    swapMut.mutate(
+      {
+        eventId,
+        fightId1: src.fightId,
+        side1: sideToCorner(src.side),
+        fightId2: target.fightId,
+        side2: sideToCorner(target.side),
+      },
+      {
+        onError: () => toast('Swap failed', 'error'),
+      },
+    );
+  }
 
   if (isLoading) {
     return (
@@ -131,9 +170,31 @@ export function BracketDetailsPanel({ details, isLoading, t, tFightStatus }: Pro
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-[13px] font-semibold text-[var(--color-text)]">
-          {isRoundRobin ? t('roundRobinTitle') : t('bracketViewerTitle')}
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-[13px] font-semibold text-[var(--color-text)]">
+            {isRoundRobin ? t('roundRobinTitle') : t('bracketViewerTitle')}
+          </h3>
+          {!isRoundRobin && (
+            <button
+              type="button"
+              onClick={() => setEditMode((v) => !v)}
+              title={editMode ? 'Exit edit mode' : 'Edit bracket (drag to swap athletes)'}
+              className={`flex h-7 w-7 items-center justify-center rounded-md transition ${
+                editMode
+                  ? 'bg-[var(--color-primary)] text-white'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              {editMode ? <X className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+            </button>
+          )}
+        </div>
+        {editMode && (
+          <p className="text-[12px] text-[var(--color-text-muted)]">
+            Drag an athlete slot onto another to swap their bracket positions.
+            {swapMut.isPending && ' Saving…'}
+          </p>
+        )}
         {isRoundRobin ? (
           <RoundRobinPanel
             fights={details.fights}
@@ -146,7 +207,10 @@ export function BracketDetailsPanel({ details, isLoading, t, tFightStatus }: Pro
             data={rendererData}
             tBracket={t}
             tFightStatus={(status) => tFightStatus(status)}
-            getAthleteHref={(athleteId) => `/${locale}/admin/athletes/${athleteId}`}
+            getAthleteHref={editMode ? undefined : (athleteId) => `/${locale}/admin/athletes/${athleteId}`}
+            editMode={editMode}
+            onDragStart={handleDragStart}
+            onDrop={handleDrop}
           />
         )}
       </div>

@@ -32,6 +32,8 @@ import {
 } from './drawReadinessMapper';
 import { GenerateDrawDialog } from './GenerateDrawDialog';
 import { RegenerateDrawDialog } from './RegenerateDrawDialog';
+import { DrawReassignModal } from './DrawReassignModal';
+import type { DrawAthletePoolRow } from '@/types/api';
 
 type Props = {
   eventId: string;
@@ -55,6 +57,7 @@ export function DrawPageContainer({ eventId }: Props) {
   const [generateOpen, setGenerateOpen] = useState(false);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<'categories' | 'selected'>('categories');
+  const [reassignRow, setReassignRow] = useState<DrawAthletePoolRow | null>(null);
 
   const { events, selectedEvent, setSelectedEventId } = useAdminEventRoute({
     eventId,
@@ -272,7 +275,9 @@ export function DrawPageContainer({ eventId }: Props) {
                 <DrawCategoryDetailsPanel
                   details={categoryDetailsQuery.data ?? null}
                   isLoading={categoryDetailsQuery.isLoading}
+                  eventId={currentEventId}
                   t={t}
+                  onReassign={setReassignRow}
                 />
               </div>
             </div>
@@ -288,6 +293,17 @@ export function DrawPageContainer({ eventId }: Props) {
 
           <RegenerateDrawDialog open={regenerateOpen} overview={overviewQuery.data ?? null} pending={generateMutation.isPending} onClose={() => setRegenerateOpen(false)} onConfirm={handleRegenerate} t={t} />
         </>
+      )}
+
+      {reassignRow && (
+        <DrawReassignModal
+          open={!!reassignRow}
+          onClose={() => setReassignRow(null)}
+          eventId={currentEventId}
+          registrationId={reassignRow.registrationId}
+          athleteName={reassignRow.athleteName}
+          currentCategory={reassignRow.finalCategory ?? reassignRow.originalCategory ?? '—'}
+        />
       )}
 
       <DrawMobileBottomBars overview={overviewQuery.data ?? null} editable={isEditable} currentEventId={currentEventId} locale={locale} pathname={pathname} onGenerate={() => setGenerateOpen(true)} onRegenerate={() => setRegenerateOpen(true)} t={t} tNav={(key) => tNav(key as Parameters<typeof tNav>[0])} tPublic={(key) => tPublic(key as Parameters<typeof tPublic>[0])} />

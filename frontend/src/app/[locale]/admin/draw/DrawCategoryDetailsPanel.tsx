@@ -2,13 +2,15 @@
 
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import type { DrawCategoryDetailsResponse } from '@/types/api';
+import type { DrawAthletePoolRow, DrawCategoryDetailsResponse } from '@/types/api';
 import { statusBadgeClasses } from './drawReadinessMapper';
 
 type Props = {
   details: DrawCategoryDetailsResponse | null;
   isLoading: boolean;
+  eventId: string;
   t: (key: string, values?: Record<string, string | number | Date>) => string;
+  onReassign: (row: DrawAthletePoolRow) => void;
 };
 
 function Badge({ label, tone }: { label: string; tone: 'info' | 'warning' }) {
@@ -25,7 +27,7 @@ function Badge({ label, tone }: { label: string; tone: 'info' | 'warning' }) {
   );
 }
 
-export function DrawCategoryDetailsPanel({ details, isLoading, t }: Props) {
+export function DrawCategoryDetailsPanel({ details, isLoading, eventId: _eventId, t, onReassign }: Props) {
   if (isLoading) {
     return (
       <section className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
@@ -115,6 +117,7 @@ export function DrawCategoryDetailsPanel({ details, isLoading, t }: Props) {
                 <th className="px-2 py-2 text-left font-medium">{t('columnsFinalCategory')}</th>
                 <th className="px-2 py-2 text-left font-medium">{t('columnsWeighInStatus')}</th>
                 <th className="px-2 py-2 text-left font-medium">{t('columnsFlags')}</th>
+                <th className="px-2 py-2" />
               </tr>
             </thead>
             <tbody>
@@ -133,6 +136,15 @@ export function DrawCategoryDetailsPanel({ details, isLoading, t }: Props) {
                       {row.movedUp && <Badge label={t('flagMovedUp')} tone="info" />}
                       {row.overrideUsed && <Badge label={t('flagOverride')} tone="warning" />}
                     </div>
+                  </td>
+                  <td className="px-2 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => onReassign(row)}
+                      className="rounded-[var(--radius-pill)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-muted)] transition hover:border-[var(--color-primary)]/50 hover:text-[var(--color-primary)]"
+                    >
+                      Reassign ↑
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -166,6 +178,13 @@ export function DrawCategoryDetailsPanel({ details, isLoading, t }: Props) {
                 </span>
                 {row.movedUp && <Badge label={t('flagMovedUp')} tone="info" />}
                 {row.overrideUsed && <Badge label={t('flagOverride')} tone="warning" />}
+                <button
+                  type="button"
+                  onClick={() => onReassign(row)}
+                  className="rounded-[var(--radius-pill)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-muted)] transition hover:border-[var(--color-primary)]/50 hover:text-[var(--color-primary)]"
+                >
+                  Reassign ↑
+                </button>
               </div>
             </div>
           ))}

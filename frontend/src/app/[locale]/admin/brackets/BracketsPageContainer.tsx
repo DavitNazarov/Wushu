@@ -46,6 +46,7 @@ export function BracketsPageContainer({ eventId }: Props) {
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [filter, setFilter] = useState<BracketCategoryFilter>('ALL');
   const [sort, setSort] = useState<BracketCategorySort>('CATEGORY');
+  const [onlyWithAthletes, setOnlyWithAthletes] = useState(false);
   const [publishDialogTarget, setPublishDialogTarget] = useState<boolean | null>(null);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<'categories' | 'selected'>('categories');
@@ -54,15 +55,14 @@ export function BracketsPageContainer({ eventId }: Props) {
 
   const overviewQuery = useBracketsOverview(eventId);
 
-  const filteredCategories = useMemo(
-    () =>
-      filterAndSortBracketCategories({
-        categories: overviewQuery.data?.categories ?? [],
-        filter,
-        sort,
-      }),
-    [overviewQuery.data?.categories, filter, sort],
-  );
+  const filteredCategories = useMemo(() => {
+    const sorted = filterAndSortBracketCategories({
+      categories: overviewQuery.data?.categories ?? [],
+      filter,
+      sort,
+    });
+    return onlyWithAthletes ? sorted.filter((c) => c.athleteCount > 0) : sorted;
+  }, [overviewQuery.data?.categories, filter, sort, onlyWithAthletes]);
 
   const resolvedSelectedCategoryId = useMemo(() => {
     if (!filteredCategories.length) return '';
@@ -207,8 +207,12 @@ export function BracketsPageContainer({ eventId }: Props) {
               <BracketCategoryFilters
                 filter={filter}
                 sort={sort}
+                onlyWithAthletes={onlyWithAthletes}
+                totalCount={overviewQuery.data?.categories.length ?? 0}
+                shownCount={filteredCategories.length}
                 onFilter={setFilter}
                 onSort={setSort}
+                onOnlyWithAthletesChange={setOnlyWithAthletes}
                 t={t}
               />
               <BracketCategoryList

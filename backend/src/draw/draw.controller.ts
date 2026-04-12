@@ -252,6 +252,41 @@ export class DrawController {
     }
   }
 
+  @Post('brackets/swap')
+  @RequireCapability(CAPABILITIES.DRAW_RUN)
+  async swapBracketParticipants(
+    @Req() req: AuthenticatedRequest,
+    @Body()
+    body: {
+      eventId: string;
+      fightId1: string;
+      side1: 'red' | 'blue';
+      fightId2: string;
+      side2: 'red' | 'blue';
+    },
+  ) {
+    const auth = req.auth!;
+    if (!body.eventId || !body.fightId1 || !body.fightId2) {
+      throw new HttpException('MISSING_REQUIRED_FIELDS', HttpStatus.BAD_REQUEST);
+    }
+    try {
+      await this.brackets.swapParticipants({
+        organisationId: auth.organisationId,
+        eventId: body.eventId,
+        fightId1: body.fightId1,
+        side1: body.side1,
+        fightId2: body.fightId2,
+        side2: body.side2,
+      });
+      return { ok: true };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'FIGHT_NOT_FOUND') throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      if (msg === 'SWAP_SAME_SLOT') throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      throw new HttpException('Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
   @Get('brackets/:id')
   @RequireCapability(CAPABILITIES.DRAW_RUN)
   async getBracket(@Req() req: AuthenticatedRequest, @Param('id') id: string) {

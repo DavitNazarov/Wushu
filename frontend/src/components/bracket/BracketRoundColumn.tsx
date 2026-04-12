@@ -14,9 +14,11 @@ const SLOT_BASE = 100;
 
 /**
  * ARM: horizontal arm length (px) extending from a match card into the gap
- * between columns. Must be ≤ half the gap (gap-5 = 20px → max ARM = 10).
+ * between columns. Must be ≤ half the gap (gap-8 = 32px → max ARM = 16).
  */
-const ARM = 10;
+const ARM = 16;
+
+type DragInfo = { fightId: string; side: 'a' | 'b'; athleteId: string };
 
 type Props = {
   round: BracketRendererRound;
@@ -27,6 +29,9 @@ type Props = {
   tFightStatus: (key: string) => string;
   tBracket: (key: string, values?: Record<string, string | number | Date>) => string;
   getAthleteHref?: (athleteId: string) => string;
+  editMode?: boolean;
+  onDragStart?: (info: DragInfo) => void;
+  onDrop?: (info: { fightId: string; side: 'a' | 'b' }) => void;
 };
 
 export function BracketRoundColumn({
@@ -38,6 +43,9 @@ export function BracketRoundColumn({
   tFightStatus,
   tBracket,
   getAthleteHref,
+  editMode,
+  onDragStart,
+  onDrop,
 }: Props) {
   const slotH = SLOT_BASE * Math.pow(2, roundIndex);
 
@@ -80,6 +88,9 @@ export function BracketRoundColumn({
                 tFightStatus={tFightStatus}
                 tBracket={tBracket}
                 getAthleteHref={getAthleteHref}
+                editMode={editMode}
+                onDragStart={onDragStart}
+                onDrop={onDrop}
               />
             </div>
 

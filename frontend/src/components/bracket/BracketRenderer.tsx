@@ -4,11 +4,16 @@ import { BracketRoundColumn } from './BracketRoundColumn';
 import { BracketScrollableViewport } from './BracketScrollableViewport';
 import type { BracketRendererData } from './types';
 
+type DragInfo = { fightId: string; side: 'a' | 'b'; athleteId: string };
+
 type Props = {
   data: BracketRendererData;
   tBracket: (key: string, values?: Record<string, string | number | Date>) => string;
   tFightStatus: (key: string) => string;
   getAthleteHref?: (athleteId: string) => string;
+  editMode?: boolean;
+  onDragStart?: (info: DragInfo) => void;
+  onDrop?: (info: { fightId: string; side: 'a' | 'b' }) => void;
 };
 
 function labelForRound(input: { label: string; roundNumber: number; t: Props['tBracket'] }): string {
@@ -19,7 +24,7 @@ function labelForRound(input: { label: string; roundNumber: number; t: Props['tB
   return input.t('roundLabel.ROUND', { round: input.roundNumber });
 }
 
-export function BracketRenderer({ data, tBracket, tFightStatus, getAthleteHref }: Props) {
+export function BracketRenderer({ data, tBracket, tFightStatus, getAthleteHref, editMode, onDragStart, onDrop }: Props) {
   if (data.rounds.length === 0) {
     return (
       <div className="rounded-[var(--radius-card)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-alt)] p-6 text-[13px] text-[var(--color-text-muted)]">
@@ -41,6 +46,9 @@ export function BracketRenderer({ data, tBracket, tFightStatus, getAthleteHref }
           tFightStatus={tFightStatus}
           tBracket={tBracket}
           getAthleteHref={getAthleteHref}
+          editMode={editMode}
+          onDragStart={onDragStart}
+          onDrop={onDrop}
         />
       ))}
     </BracketScrollableViewport>

@@ -469,6 +469,63 @@ export class BracketsService {
     };
   }
 
+  async swapParticipants(input: {
+    organisationId: string;
+    eventId: string;
+    fightId1: string;
+    side1: 'red' | 'blue';
+    fightId2: string;
+    side2: 'red' | 'blue';
+  }): Promise<void> {
+    const field1 = input.side1 === 'red' ? 'redAthleteId' : 'blueAthleteId';
+    const field2 = input.side2 === 'red' ? 'redAthleteId' : 'blueAthleteId';
+
+    const [fight1, fight2] = await Promise.all([
+      this.prisma.fight.findFirst({
+        where: { id: input.fightId1, eventId: input.eventId, organisationId: input.organisationId },
+        select: { id: true, redAthleteId: true, blueAthleteId: true, winnerAthleteId: true },
+      }),
+      this.prisma.fight.findFirst({
+        where: { id: input.fightId2, eventId: input.eventId, organisationId: input.organisationId },
+        select: { id: true, redAthleteId: true, blueAthleteId: true, winnerAthleteId: true },
+      }),
+    ]);
+
+    if (!fight1 || !fight2) throw new Error('FIGHT_NOT_FOUND');
+    if (input.fightId1 === input.fightId2 && input.side1 === input.side2) {
+      throw new Error('SWAP_SAME_SLOT');
+    }
+
+    const athleteId1 = fight1[field1 as keyof typeof fight1] as string | null;
+    const athleteId2 = fight2[field2 as keyof typeof fight2] as string | null;
+
+    await this.prisma.$transaction([
+      this.prisma.fight.update({
+        where: { id: fight1.id },
+        data: {
+          [field1]: athleteId2,
+          // Clear winner if the swapped athlete was the winner
+          winnerAthleteId: fight1.winnerAthleteId != null ? null : undefined,
+          loserAthleteId: null,
+          winMethod: fight1.winnerAthleteId != null ? null : undefined,
+          confirmedAt: fight1.winnerAthleteId != null ? null : undefined,
+          status: fight1.winnerAthleteId != null ? 'PENDING' : undefined,
+        },
+      }),
+      this.prisma.fight.update({
+        where: { id: fight2.id },
+        data: {
+          [field2]: athleteId1,
+          winnerAthleteId: fight2.winnerAthleteId != null ? null : undefined,
+          loserAthleteId: null,
+          winMethod: fight2.winnerAthleteId != null ? null : undefined,
+          confirmedAt: fight2.winnerAthleteId != null ? null : undefined,
+          status: fight2.winnerAthleteId != null ? 'PENDING' : undefined,
+        },
+      }),
+    ]);
+  }
+
   private toOverviewCategoryRow(input: {
     category: DrawCategoryComputedRow | undefined;
     categoryFights: Array<FightOverviewRow>;
