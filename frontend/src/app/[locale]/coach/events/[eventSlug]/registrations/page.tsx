@@ -41,7 +41,9 @@ function athleteInitials(reg: RegistrationRow): string {
 }
 
 function athleteName(reg: RegistrationRow): string {
-  return reg.athlete ? `${reg.athlete.firstName} ${reg.athlete.lastName}` : reg.athleteId;
+  if (!reg.athlete) return reg.athleteId;
+  const year = reg.athlete.dateOfBirth ? ` (${new Date(reg.athlete.dateOfBirth).getFullYear()})` : '';
+  return `${reg.athlete.firstName} ${reg.athlete.lastName}${year}`;
 }
 
 const SUB_NAV = [
@@ -347,14 +349,6 @@ export default function CoachRegistrationsPage({ params }: Props) {
                       {reg.categoryCode}
                     </span>
                     <StatusChip status={reg.status} label={tReg(`status.${reg.status}`)} domain="registration" />
-                    {reg.status !== 'WITHDRAWN' && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setWithdrawId(reg.id); }}
-                        className="text-[12px] font-medium text-[var(--color-danger,#ef4444)] opacity-70 transition-opacity hover:opacity-100"
-                      >
-                        {t('withdraw')}
-                      </button>
-                    )}
                   </div>
                 </div>
               ))}

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api/client';
 import {
@@ -91,7 +92,17 @@ export function CategoryPicker({
     return allAgeGroups.filter((ag) => isEligible(ag, age, athlete.sex!));
   })();
 
-  const selectedAgeGroup = ageGroups.find((ag) => ag.id === ageGroupId) ?? null;
+  // When categories load and we have a weightCategoryId but no ageGroupId yet,
+  // auto-resolve the parent age group (used when opening the edit modal).
+  useEffect(() => {
+    if (!data || ageGroupId || !weightCategoryId) return;
+    const parentGroup = allAgeGroups.find((ag) =>
+      ag.weightCategories.some((wc) => wc.id === weightCategoryId),
+    );
+    if (parentGroup) onAgeGroupChange(parentGroup.id);
+  }, [data, ageGroupId, weightCategoryId, allAgeGroups, onAgeGroupChange]);
+
+  const selectedAgeGroup = allAgeGroups.find((ag) => ag.id === ageGroupId) ?? null;
   const weightCategories: EventWeightCategoryRow[] = selectedAgeGroup?.weightCategories ?? [];
 
   function handleAgeGroupChange(id: string) {

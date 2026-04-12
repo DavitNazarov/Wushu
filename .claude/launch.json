@@ -4,8 +4,8 @@
     {
       "name": "Frontend (Next.js)",
       "runtimeExecutable": "/usr/local/bin/node",
-      "runtimeArgs": ["/Users/sn/Wushu/node_modules/.bin/next", "dev", "--port", "3000", "--webpack"],
-      "port": 3000,
+      "runtimeArgs": ["/Users/sn/Wushu/node_modules/.bin/next", "dev", "--port", "3001", "--webpack"],
+      "port": 3001,
       "cwd": "/Users/sn/Wushu/frontend"
     },
     {
