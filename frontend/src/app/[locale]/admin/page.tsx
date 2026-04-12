@@ -46,40 +46,32 @@ function StatCard({
   value,
   icon: Icon,
   accent,
-  sublabel,
 }: {
   label: string;
   value: number;
   icon: React.ElementType;
   accent: string;
-  sublabel?: string;
 }) {
   return (
     <motion.div
       whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}
       transition={{ duration: 0.18 }}
-      className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)]"
+      className="relative flex h-[108px] flex-col justify-between overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]"
     >
-      {/* subtle tinted corner glow */}
       <div
         className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-15 blur-2xl"
         style={{ background: accent }}
       />
-      <div className="flex items-start justify-between">
-        <div
-          className="flex h-9 w-9 items-center justify-center rounded-lg"
-          style={{ background: `${accent}22`, color: accent }}
-        >
-          <Icon className="h-4 w-4" strokeWidth={2} />
-        </div>
-        <span className="text-[28px] font-bold tabular-nums text-[var(--color-text)]">{value}</span>
+      <div
+        className="flex h-8 w-8 items-center justify-center rounded-lg"
+        style={{ background: `${accent}22`, color: accent }}
+      >
+        <Icon className="h-3.5 w-3.5" strokeWidth={2} />
       </div>
-      <p className="mt-3 text-[12px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-        {label}
-      </p>
-      {sublabel && (
-        <p className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">{sublabel}</p>
-      )}
+      <div>
+        <p className="text-[24px] font-bold tabular-nums leading-none text-[var(--color-text)]">{value}</p>
+        <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">{label}</p>
+      </div>
     </motion.div>
   );
 }
@@ -244,7 +236,7 @@ function QuickTile({
     >
       <Link
         href={href}
-        className="group flex items-center gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] transition-all hover:border-transparent hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]"
+        className="group flex h-[68px] items-center gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 shadow-[var(--shadow-card)] transition-all hover:border-transparent hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]"
       >
         <div
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-110"
@@ -374,10 +366,10 @@ export default function AdminDashboardPage() {
           animate="animate"
         >
           <motion.div variants={adminVariants.staggerChild}>
-            <StatCard label={t('kpiTotal')}     value={totalEvents}   icon={Calendar}  accent="#3b82f6" sublabel={t('kpiTotalSub')} />
+            <StatCard label={t('kpiTotal')}     value={totalEvents}   icon={Calendar}  accent="#3b82f6" />
           </motion.div>
           <motion.div variants={adminVariants.staggerChild}>
-            <StatCard label={tEvents('kpiActive')} value={activeEvents} icon={Radio}     accent="#22c55e" sublabel={activeEvents > 0 ? t('kpiActiveSub') : undefined} />
+            <StatCard label={tEvents('kpiActive')} value={activeEvents} icon={Radio}     accent="#22c55e" />
           </motion.div>
           <motion.div variants={adminVariants.staggerChild}>
             <StatCard label={tEvents('kpiUpcoming')} value={upcomingCount} icon={Clock}  accent="#f59e0b" />
