@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
+import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -52,16 +53,33 @@ function StatCard({
   icon: React.ElementType;
   accent: string;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [spot, setSpot] = useState<{ x: number; y: number } | null>(null);
+
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+    setSpot({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }
+
   return (
     <motion.div
-      whileHover={{ y: -3, boxShadow: `0 8px 28px ${accent}30`, backgroundColor: `${accent}12` }}
+      ref={ref}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setSpot(null)}
+      whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}
       transition={{ duration: 0.18 }}
       className="relative flex h-[108px] flex-col justify-between overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]"
     >
-      <div
-        className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-15 blur-2xl"
-        style={{ background: accent }}
-      />
+      {/* cursor spotlight */}
+      {spot && (
+        <div
+          className="pointer-events-none absolute inset-0 transition-opacity duration-300"
+          style={{
+            background: `radial-gradient(120px circle at ${spot.x}px ${spot.y}px, ${accent}28, transparent 80%)`,
+          }}
+        />
+      )}
       <div
         className="flex h-8 w-8 items-center justify-center rounded-lg"
         style={{ background: `${accent}22`, color: accent }}
