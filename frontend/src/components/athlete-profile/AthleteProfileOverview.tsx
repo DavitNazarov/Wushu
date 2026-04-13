@@ -91,7 +91,6 @@ export function AthleteProfileOverview({ athlete, registrations, fights, scope }
             />
           </div>
         </div>
-        </div>
       </div>
 
       {/* Stats strip — flat, divided, no inner cards */}
