@@ -6,6 +6,7 @@ import { use } from 'react';
 import { notFound } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { PublicLayout } from '@/components/layout/PublicLayout';
+import { motion } from 'framer-motion';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EventTabPanelFallback } from '@/components/event/EventTabPanelFallback';
@@ -140,16 +141,26 @@ export default function PublicEventDetailPage({ params }: Props) {
         {!isLoading && event && (
           <>
             {/* Header — matches club detail page structure */}
-            <div className="flex items-start gap-5">
+            <motion.div
+              className="flex items-start gap-5"
+              initial={{ opacity: 0, y: 16, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              transition={{ type: 'spring', stiffness: 150, damping: 25 }}
+            >
               {/* Date badge */}
-              <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+              <motion.div
+                className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 200, damping: 20, delay: 0.05 }}
+              >
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
                   {new Date(event.competitionStartDate).toLocaleDateString(locale, { month: 'short' })}
                 </span>
                 <span className="text-[26px] font-bold tabular-nums leading-tight text-[var(--color-text)]">
                   {new Date(event.competitionStartDate).getDate()}
                 </span>
-              </div>
+              </motion.div>
 
               <div className="pt-1">
                 <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">
@@ -174,12 +185,62 @@ export default function PublicEventDetailPage({ params }: Props) {
                   </span>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Tabs */}
             <EventTabs
               overview={
                 <div className="space-y-4">
+                  {/* Lifecycle-aware banner */}
+                  {event.lifecycle === 'REG_OPEN' && (
+                    <div className="flex items-start gap-3 rounded-[var(--radius-card)] border border-[var(--color-primary)]/25 bg-[var(--color-primary-subtle)] px-4 py-3.5">
+                      <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      <div>
+                        <p className="text-[13px] font-semibold text-[var(--color-primary)]">Registration is open</p>
+                        <p className="mt-0.5 text-[12px] text-[var(--color-primary)]/80">
+                          {event.registrationEndDate
+                            ? `Deadline: ${fmtDate(event.registrationEndDate, locale)}. Contact your club coach to register.`
+                            : 'Contact your club coach to register for this event.'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {event.lifecycle === 'WEIGHIN' && (
+                    <div className="flex items-start gap-3 rounded-[var(--radius-card)] border border-[var(--color-warning)]/25 bg-[var(--color-warning-subtle)] px-4 py-3.5">
+                      <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-warning)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+                      </svg>
+                      <div>
+                        <p className="text-[13px] font-semibold text-[var(--color-warning)]">Weigh-in in progress</p>
+                        <p className="mt-0.5 text-[12px] text-[var(--color-warning)]/80">Athletes are currently being weighed. Brackets will be published after weigh-in completes.</p>
+                      </div>
+                    </div>
+                  )}
+                  {(event.lifecycle === 'DRAWN' || event.lifecycle === 'PUBLISHED') && (
+                    <div className="flex items-start gap-3 rounded-[var(--radius-card)] border border-[var(--color-primary)]/25 bg-[var(--color-primary-subtle)] px-4 py-3.5">
+                      <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      <div>
+                        <p className="text-[13px] font-semibold text-[var(--color-primary)]">Brackets are ready</p>
+                        <p className="mt-0.5 text-[12px] text-[var(--color-primary)]/80">The draw has been completed. Competition begins {fmtDate(event.competitionStartDate, locale)}.</p>
+                      </div>
+                    </div>
+                  )}
+                  {event.lifecycle === 'COMPLETED' && (
+                    <div className="flex items-start gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-4 py-3.5">
+                      <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <p className="text-[13px] font-semibold text-[var(--color-text)]">Event completed</p>
+                        <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">This event has concluded. Final results are available in the Results tab.</p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Stage progress */}
                   <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
                     <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">

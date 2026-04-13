@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Geo Wushu შეჯიბრების სისტემა",
-    "badge": "GEO WUSHU",
+    "title": "საქართველოს უშუს ეროვნული ფედერაცია",
+    "badge": "GFWF",
     "subtitle": "",
     "tagline": "მართეთ ბადეები, განრიგი და ცოცხალი შედეგები ერთი პანელიდან.",
     "statusLive": "ცოცხალი ღონისძიება",
@@ -102,7 +102,7 @@
     "adminDashboard": "ადმინისტრატორის პანელი",
     "coachDashboard": "მწვრთნელის პანელი",
     "athleteProfile": "სპორტსმენის პროფილი",
-    "heroTitle": "Geo Wushu Competition System",
+    "heroTitle": "საქართველოს უშუს ეროვნული ფედერაცია",
     "heroSubtitle": "Events, brackets, schedule, and live results — in one place.",
     "featureLiveSchedule": "პირდაპირი განრიგი",
     "featureLiveScheduleDesc": "იხილეთ მიმდინარე და მომდევნო ბრძოლები რეალურ დროში.",
@@ -302,6 +302,7 @@
     "email": "ელფოსტა",
     "password": "პაროლი",
     "login": "შესვლა",
+    "heading": "შესვლა",
     "subtitle": "შედით, რათა თქვენს პანელზე გადახვიდეთ.",
     "emailLabel": "ელფოსტა",
     "passwordLabel": "პაროლი",

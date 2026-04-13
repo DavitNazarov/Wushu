@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const MD_BREAKPOINT = 768;
 
@@ -10,13 +11,13 @@ type MobileDrawerProps = {
   onClose: () => void;
   children: ReactNode;
   title?: string;
-  /** 'left' for admin/coach sidebar, 'right' for public nav */
+  /** 'left' for sidebar, 'right' for public nav */
   side?: 'left' | 'right';
   /** Top offset so overlay doesn't cover header (e.g. 'top-16' = 64px) */
   overlayTop?: string;
   /** Panel width - default varies by side */
   panelWidth?: string;
-  /** When false, drawer works on desktop too (e.g. for dashboard public nav) */
+  /** When false, drawer works on desktop too */
   hideOnDesktop?: boolean;
 };
 
@@ -39,44 +40,62 @@ export function MobileDrawer({
     return () => window.removeEventListener('resize', handleResize);
   }, [onClose, hideOnDesktop]);
 
-  if (!open) return null;
-
   const desktopHidden = hideOnDesktop ? 'md:hidden' : '';
-  const overlayClass = `fixed ${overlayTop} left-0 right-0 bottom-0 z-40 bg-black/60 ${desktopHidden}`;
   const panelPosition = side === 'right' ? 'right-0' : 'left-0';
-  const panelRounded = side === 'right' ? 'rounded-bl-[var(--radius-modal)]' : 'rounded-br-[var(--radius-modal)]';
-  const panelShadow =
-    side === 'right'
-      ? 'shadow-[-4px_4px_24px_rgba(0,0,0,0.25)]'
-      : 'shadow-[4px_4px_24px_rgba(0,0,0,0.25)]';
+  const panelRounded  = side === 'right' ? 'rounded-bl-[var(--radius-modal)]' : 'rounded-br-[var(--radius-modal)]';
+  const panelShadow   = side === 'right'
+    ? 'shadow-[-4px_4px_24px_rgba(0,0,0,0.25)]'
+    : 'shadow-[4px_4px_24px_rgba(0,0,0,0.25)]';
+
+  // Slide direction: right drawer comes from right, left drawer comes from left
+  const slideX = side === 'right' ? '100%' : '-100%';
 
   return (
-    <>
-      <div className={overlayClass} aria-hidden onClick={onClose} />
-      <div
-        className={`fixed ${panelPosition} top-0 z-50 ${panelWidth} max-h-dvh overflow-y-auto ${panelRounded} bg-[var(--color-surface)] border-[var(--color-border)] ${panelShadow} ${desktopHidden} ${
-          side === 'right' ? 'border-l-2 border-b-2' : 'border-r-2 border-b-2'
-        }`}
-        aria-modal
-        role="dialog"
-      >
-        <div
-          className={`flex shrink-0 items-center border-b-2 border-[var(--color-border)] bg-[var(--color-surface-alt)] px-4 py-4 ${title ? 'justify-between' : 'justify-end'}`}
-        >
-          {title && (
-            <span className="text-base font-bold text-[var(--color-text)]">{title}</span>
-          )}
-          <button
-            type="button"
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            className={`fixed ${overlayTop} left-0 right-0 bottom-0 z-40 bg-black/60 ${desktopHidden}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            aria-hidden
             onClick={onClose}
-            aria-label="Close menu"
-            className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-input)] text-[var(--color-text)] transition-colors hover:bg-[var(--color-primary-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+          />
+
+          {/* Drawer panel — spring slide-in from animate-ui sidebar */}
+          <motion.div
+            className={`fixed ${panelPosition} top-0 z-50 ${panelWidth} max-h-dvh overflow-y-auto ${panelRounded} bg-[var(--color-surface)] border-[var(--color-border)] ${panelShadow} ${desktopHidden} ${
+              side === 'right' ? 'border-l-2 border-b-2' : 'border-r-2 border-b-2'
+            }`}
+            aria-modal
+            role="dialog"
+            initial={{ x: slideX, opacity: 0.7 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: slideX, opacity: 0.7 }}
+            transition={{ type: 'spring', stiffness: 280, damping: 30 }}
           >
-            <X className="h-6 w-6" strokeWidth={2.5} />
-          </button>
-        </div>
-        {children}
-      </div>
-    </>
+            <div
+              className={`flex shrink-0 items-center border-b-2 border-[var(--color-border)] bg-[var(--color-surface-alt)] px-4 py-4 ${title ? 'justify-between' : 'justify-end'}`}
+            >
+              {title && (
+                <span className="text-base font-bold text-[var(--color-text)]">{title}</span>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close menu"
+                className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-input)] text-[var(--color-text)] transition-colors hover:bg-[var(--color-primary-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+              >
+                <X className="h-6 w-6" strokeWidth={2.5} />
+              </button>
+            </div>
+            {children}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }

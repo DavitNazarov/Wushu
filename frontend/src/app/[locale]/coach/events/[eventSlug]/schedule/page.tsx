@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useTranslations, useLocale } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, MapPin, Swords } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/Card';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -85,10 +86,15 @@ export default function CoachSchedulePage({ params }: Props) {
         </Card>
       ) : (
         <div className="space-y-6">
-          {mats.map((matName) => {
+          {mats.map((matName, matIdx) => {
             const items = byMat[matName] ?? [];
             return (
-              <div key={matName}>
+              <motion.div
+                key={matName}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: matIdx * 0.06, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              >
                 <div className="mb-3 flex items-center gap-3">
                   <div className="flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
@@ -101,32 +107,49 @@ export default function CoachSchedulePage({ params }: Props) {
                 </div>
 
                 <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)]">
-                  {items.map((f, idx) => (
-                    <div
+                  {items.map((f, idx) => {
+                    const isRunning = f.liveStatus === 'RUNNING';
+                    return (
+                    <motion.div
                       key={f.id}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.03, duration: 0.25, ease: 'easeOut' }}
                       className={`flex items-center gap-3 px-4 py-3 ${
                         idx < items.length - 1 ? 'border-b border-[var(--color-border)]' : ''
-                      } ${f.liveStatus === 'RUNNING' ? 'bg-[var(--color-primary)]/5' : ''}`}
+                      } ${isRunning ? 'bg-[var(--color-primary)]/5' : ''}`}
                     >
-                      {/* Order */}
+                      {/* Live pulse or order */}
                       <div className="w-10 shrink-0 text-center">
-                        <p className="text-[13px] font-semibold tabular-nums text-[var(--color-text)]">
-                          #{f.scheduleOrder ?? '—'}
-                        </p>
+                        {isRunning ? (
+                          <span className="relative flex h-2.5 w-2.5 mx-auto">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-primary)] opacity-60" />
+                            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--color-primary)]" />
+                          </span>
+                        ) : (
+                          <p className="text-[12px] font-semibold tabular-nums text-[var(--color-text-muted)]">
+                            #{f.scheduleOrder ?? '—'}
+                          </p>
+                        )}
                       </div>
 
                       {/* Divider */}
                       <div className="h-8 w-px shrink-0 bg-[var(--color-border)]" />
 
                       {/* Athletes */}
-                      <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <span className="truncate text-[13px] font-medium text-[var(--color-text)]">
-                          {f.redDisplayName}
-                        </span>
-                        <Swords className="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" />
-                        <span className="truncate text-[13px] font-medium text-[var(--color-text)]">
-                          {f.blueDisplayName}
-                        </span>
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className={`truncate text-[13px] font-medium ${isRunning ? 'text-[var(--color-primary)]' : 'text-[var(--color-text)]'}`}>
+                            {f.redDisplayName}
+                          </span>
+                          <Swords className="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" />
+                          <span className={`truncate text-[13px] font-medium ${isRunning ? 'text-[var(--color-primary)]' : 'text-[var(--color-text)]'}`}>
+                            {f.blueDisplayName}
+                          </span>
+                        </div>
+                        {isRunning && (
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-primary)]">Live now</p>
+                        )}
                       </div>
 
                       {/* Status */}
@@ -137,10 +160,11 @@ export default function CoachSchedulePage({ params }: Props) {
                           domain="fight"
                         />
                       </div>
-                    </div>
-                  ))}
+                    </motion.div>
+                    );
+                  })}
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>

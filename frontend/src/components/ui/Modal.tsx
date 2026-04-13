@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useCallback } from 'react';
 import { X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export type ModalProps = {
   open: boolean;
@@ -40,37 +41,68 @@ export function Modal({
     };
   }, [open, handleKey]);
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/60" onClick={onClose} />
-      <div className={`relative flex w-full ${widthClassName} flex-col rounded-[var(--radius-modal)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl`} style={{ maxHeight: 'calc(100vh - 2rem)' }}>
-        {/* Header — fixed */}
-        <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-6 pb-4">
-          <div>
-            <h2 className="text-base font-semibold text-[var(--color-text)]">{title}</h2>
-            {description && (
-              <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{description}</p>
-            )}
-          </div>
-          <button
-            type="button"
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <motion.div
+            className="fixed inset-0 bg-black/60"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
             onClick={onClose}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)]"
+          />
+
+          {/* Panel — 3D perspective flip from animate-ui */}
+          <motion.div
+            className={`relative flex w-full ${widthClassName} flex-col rounded-[var(--radius-modal)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl`}
+            style={{ maxHeight: 'calc(100vh - 2rem)' }}
+            initial={{
+              opacity: 0,
+              filter: 'blur(6px)',
+              transform: 'perspective(600px) rotateX(-10deg) scale(0.9)',
+            }}
+            animate={{
+              opacity: 1,
+              filter: 'blur(0px)',
+              transform: 'perspective(600px) rotateX(0deg) scale(1)',
+            }}
+            exit={{
+              opacity: 0,
+              filter: 'blur(6px)',
+              transform: 'perspective(600px) rotateX(-10deg) scale(0.9)',
+            }}
+            transition={{ type: 'spring', stiffness: 150, damping: 25 }}
           >
-            <X className="h-4 w-4" strokeWidth={2} />
-          </button>
+            {/* Header */}
+            <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-6 pb-4">
+              <div>
+                <h2 className="text-base font-semibold text-[var(--color-text)]">{title}</h2>
+                {description && (
+                  <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{description}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)]"
+              >
+                <X className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
+            {/* Scrollable body */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-2">{children}</div>
+            {/* Footer */}
+            {footer && (
+              <div className="flex shrink-0 justify-end gap-2 border-t border-[var(--color-border)] px-6 py-4">
+                {footer}
+              </div>
+            )}
+          </motion.div>
         </div>
-        {/* Scrollable body */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-2">{children}</div>
-        {/* Footer — fixed */}
-        {footer && (
-          <div className="flex shrink-0 justify-end gap-2 border-t border-[var(--color-border)] px-6 py-4">
-            {footer}
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 }

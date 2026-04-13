@@ -1,3 +1,7 @@
+'use client';
+
+import { Checkbox as RadixCheckbox } from '@/components/ui/primitives/checkbox';
+
 type CheckboxProps = {
   id: string;
   checked: boolean;
@@ -10,15 +14,13 @@ export function Checkbox({ id, checked, onCheckedChange, label, disabled }: Chec
   return (
     <label
       htmlFor={id}
-      className="flex items-center gap-2 text-[13px] text-[var(--color-text)]"
+      className="flex cursor-pointer items-center gap-2 text-[13px] text-[var(--color-text)]"
     >
-      <input
+      <RadixCheckbox
         id={id}
-        type="checkbox"
         checked={checked}
         disabled={disabled}
-        onChange={(e) => onCheckedChange(e.target.checked)}
-        className="h-4 w-4 rounded border-[var(--color-border)] accent-[var(--color-primary)]"
+        onCheckedChange={(val) => onCheckedChange(val === true)}
       />
       {label}
     </label>

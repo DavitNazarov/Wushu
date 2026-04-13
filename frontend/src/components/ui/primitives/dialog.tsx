@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 const Dialog = DialogPrimitive.Root;
@@ -35,7 +36,27 @@ const DialogContent = React.forwardRef<
       )}
       {...props}
     >
-      {children}
+      <motion.div
+        initial={{
+          opacity: 0,
+          filter: 'blur(6px)',
+          transform: 'perspective(600px) rotateX(-10deg) scale(0.9)',
+        }}
+        animate={{
+          opacity: 1,
+          filter: 'blur(0px)',
+          transform: 'perspective(600px) rotateX(0deg) scale(1)',
+        }}
+        exit={{
+          opacity: 0,
+          filter: 'blur(6px)',
+          transform: 'perspective(600px) rotateX(-10deg) scale(0.9)',
+        }}
+        transition={{ type: 'spring', stiffness: 150, damping: 25 }}
+        className="grid gap-4"
+      >
+        {children}
+      </motion.div>
     </DialogPrimitive.Content>
   </DialogPortal>
 ));
