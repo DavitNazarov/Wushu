@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef } from 'react';
-import { Card } from '@/components/ui/primitives/card';
 import { Input } from '@/components/ui/primitives/input';
 
 type Props = {
@@ -44,9 +43,10 @@ type WeightNumpadProps = {
   disabled?: boolean;
   value: string;
   onChange: (value: string) => void;
+  onEnter?: () => void;
 };
 
-function WeightNumpad({ disabled, value, onChange }: WeightNumpadProps) {
+function WeightNumpad({ disabled, value, onChange, onEnter }: WeightNumpadProps) {
   const clearTimeoutRef = useRef<number | null>(null);
   const clearTriggeredRef = useRef(false);
   const hasDecimal = value.includes('.');
@@ -82,18 +82,20 @@ function WeightNumpad({ disabled, value, onChange }: WeightNumpadProps) {
     }
   };
 
-  const numpadButtonClass =
-    'min-h-[56px] rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 text-[24px] font-semibold text-[var(--color-text)] transition hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:text-[var(--color-text-muted)] disabled:opacity-60';
+  const numBtn =
+    'flex h-[58px] items-center justify-center rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[22px] font-semibold text-[var(--color-text)] transition active:scale-95 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:text-[var(--color-text-muted)] disabled:opacity-50 select-none touch-manipulation';
+
+  const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0'] as const;
 
   return (
-    <div className="mt-3 grid grid-cols-3 gap-2 md:hidden">
-      {(['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0'] as const).map((key) => (
+    <div className="mt-3 grid grid-cols-3 gap-2">
+      {keys.map((key) => (
         <button
           key={key}
           type="button"
           disabled={disabled || (key === '.' && hasDecimal)}
           onClick={() => appendValue(key)}
-          className={numpadButtonClass}
+          className={numBtn}
         >
           {key}
         </button>
@@ -112,10 +114,20 @@ function WeightNumpad({ disabled, value, onChange }: WeightNumpadProps) {
           backspace();
           clearTriggeredRef.current = false;
         }}
-        className={numpadButtonClass}
+        className={numBtn}
       >
         ⌫
       </button>
+      {onEnter && (
+        <button
+          type="button"
+          disabled={disabled || !value}
+          onClick={onEnter}
+          className={`col-span-2 flex h-[58px] items-center justify-center rounded-[var(--radius-input)] border border-[var(--color-primary)]/50 bg-[var(--color-primary)]/10 text-[14px] font-semibold text-[var(--color-primary)] transition active:scale-95 hover:bg-[var(--color-primary)]/15 disabled:cursor-not-allowed disabled:opacity-40 select-none touch-manipulation`}
+        >
+          ✓ Confirm
+        </button>
+      )}
     </div>
   );
 }
@@ -132,68 +144,85 @@ export function WeighInWeightInputCard({
   const invalid = hasValue && (!Number.isFinite(parsed) || parsed <= 0);
   const weightUnit = t('weightUnit');
   const weightPlaceholder = t('weightInputPlaceholder');
-  const displayValue = hasValue
-    ? t('weightDisplayValue', { value, unit: weightUnit })
-    : t('weightDisplayValue', { value: weightPlaceholder, unit: weightUnit });
 
   return (
-    <Card className="p-4">
-      <h3 className="text-[12px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+    <div className="space-y-2">
+      <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
         {t('weightInputTitle')}
-      </h3>
-      <div className="mt-3 hidden items-center gap-2 md:flex">
-        <div className="relative w-full max-w-[220px]">
-          <Input
-            value={value}
-            type="text"
-            inputMode="decimal"
-            disabled={disabled}
-            autoFocus
-            onChange={(event) => onChange(normalizeWeightInput(event.target.value))}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter' || !onEnter) return;
-              event.preventDefault();
-              onEnter();
-            }}
-            className={`h-16 bg-[var(--color-surface)] px-3 pr-12 text-[32px] font-semibold md:text-[28px] ${
-              invalid
-                ? 'border-[var(--color-danger)] focus:border-[var(--color-danger)] focus:ring-[var(--color-danger)]/30'
-                : 'border-[var(--color-border)] focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)]/30'
-            } [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-            placeholder={weightPlaceholder}
-          />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[var(--color-text-muted)]">
-            {weightUnit}
-          </span>
-        </div>
-      </div>
-      <div className="mt-3 md:hidden">
-        <div
-          className={`rounded-[var(--radius-input)] border px-3 py-4 text-center ${
-            invalid
-              ? 'border-[var(--color-danger)]'
-              : 'border-[var(--color-border)]'
-          }`}
-        >
-          <p className="text-[32px] font-semibold text-[var(--color-text)]">
-            {displayValue}
+      </p>
+
+      {/* Desktop input */}
+      <div className="hidden md:block">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-[280px]">
+            <Input
+              value={value}
+              type="text"
+              inputMode="decimal"
+              disabled={disabled}
+              autoFocus
+              onChange={(event) => onChange(normalizeWeightInput(event.target.value))}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || !onEnter) return;
+                event.preventDefault();
+                onEnter();
+              }}
+              className={`h-[72px] bg-[var(--color-surface)] px-4 pr-14 text-[36px] font-bold tracking-tight ${
+                invalid
+                  ? 'border-[var(--color-danger)] focus:border-[var(--color-danger)] focus:ring-[var(--color-danger)]/30'
+                  : 'border-[var(--color-border)] focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)]/30'
+              } [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+              placeholder={weightPlaceholder}
+            />
+            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[13px] font-medium text-[var(--color-text-muted)]">
+              {weightUnit}
+            </span>
+          </div>
+          <p className="text-[12px] text-[var(--color-text-muted)]">
+            {t('weightInputHint')}
           </p>
         </div>
+        {invalid && (
+          <p className="mt-1.5 text-[12px] text-[var(--color-danger)]">
+            {t('weightValidation')}
+          </p>
+        )}
+      </div>
+
+      {/* Mobile display + numpad */}
+      <div className="md:hidden">
+        <div
+          className={`rounded-[var(--radius-input)] border-2 px-4 py-5 text-center transition-colors ${
+            invalid
+              ? 'border-[var(--color-danger)] bg-[var(--color-danger)]/5'
+              : hasValue
+                ? 'border-[var(--color-primary)]/50 bg-[var(--color-primary)]/5'
+                : 'border-[var(--color-border)] bg-[var(--color-surface-alt)]'
+          }`}
+        >
+          <p
+            className={`text-[48px] font-bold leading-none tracking-tight ${
+              hasValue ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'
+            }`}
+          >
+            {hasValue ? value : weightPlaceholder}
+          </p>
+          <p className="mt-1 text-[14px] font-medium text-[var(--color-text-muted)]">
+            {weightUnit}
+          </p>
+        </div>
+        {invalid && (
+          <p className="mt-1.5 text-[12px] text-[var(--color-danger)]">
+            {t('weightValidation')}
+          </p>
+        )}
         <WeightNumpad
           disabled={disabled}
           value={value}
           onChange={onChange}
+          onEnter={onEnter}
         />
       </div>
-      {invalid ? (
-        <p className="mt-2 text-[12px] text-[var(--color-danger)]">
-          {t('weightValidation')}
-        </p>
-      ) : (
-        <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">
-          {t('weightInputHint')}
-        </p>
-      )}
-    </Card>
+    </div>
   );
 }

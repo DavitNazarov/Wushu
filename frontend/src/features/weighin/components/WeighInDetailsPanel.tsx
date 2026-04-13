@@ -2,7 +2,6 @@
 
 import { EmptyState } from '@/components/ui/EmptyState';
 import { InlineAlert } from '@/components/ui/InlineAlert';
-import { Card } from '@/components/ui/primitives/card';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import { toWeighInCategoryList } from '@/lib/weighin/category';
 import type {
@@ -63,12 +62,12 @@ export function WeighInDetailsPanel({
 }: Props) {
   if (!selected) {
     return (
-      <Card className="p-6">
+      <div className="rounded-[var(--radius-card)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-8">
         <EmptyState
           title={t('selectAthleteTitle')}
           description={t('selectAthleteDescription')}
         />
-      </Card>
+      </div>
     );
   }
 
@@ -91,6 +90,7 @@ export function WeighInDetailsPanel({
 
   return (
     <div className="space-y-3">
+      {/* Missing category mapping warning */}
       {!selected.eventWeightCategory && (
         <InlineAlert
           variant="warning"
@@ -113,11 +113,17 @@ export function WeighInDetailsPanel({
           </div>
         </InlineAlert>
       )}
+
+      {/* Unified detail card */}
       <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="border-b border-[var(--color-border)] p-3">
+
+        {/* 1 — Athlete header */}
+        <div className="border-b border-[var(--color-border)] p-4">
           <WeighInAthleteSummaryCard entry={selected} t={t} />
         </div>
-        <div className="border-b border-[var(--color-border)] p-3">
+
+        {/* 2 — Category range strip */}
+        <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-alt)]/50 px-4 py-3">
           <WeighInCategoryInfoCard
             entry={selected}
             preview={preview}
@@ -125,20 +131,21 @@ export function WeighInDetailsPanel({
             t={t}
           />
         </div>
-        <div className="border-b border-[var(--color-border)] p-3">
+
+        {/* 3 — Weight input (hero) */}
+        <div className="border-b border-[var(--color-border)] px-4 py-4">
           <WeighInWeightInputCard
             value={weightInput}
             onChange={onWeightInputChange}
             disabled={!hasCategoryMapping}
-            onEnter={() => {
-              if (!canSubmitOnEnter) return;
-              onRecord({});
-            }}
+            onEnter={canSubmitOnEnter ? () => onRecord({}) : undefined}
             t={(key) => t(key)}
           />
         </div>
+
+        {/* 4 — Decision preview (always visible when category mapped) */}
         {hasCategoryMapping && (
-          <div className="border-b border-[var(--color-border)] p-3">
+          <div className="border-b border-[var(--color-border)] px-4 py-3">
             <WeighInDecisionPreview
               preview={preview}
               isLoading={previewLoading}
@@ -146,8 +153,10 @@ export function WeighInDetailsPanel({
             />
           </div>
         )}
+
+        {/* 5 — Action buttons */}
         {hasCategoryMapping && (
-          <div className="border-b border-[var(--color-border)] p-3">
+          <div className="border-b border-[var(--color-border)] px-4 py-4">
             <WeighInActionBar
               preview={preview}
               categories={categories}
@@ -158,11 +167,14 @@ export function WeighInDetailsPanel({
             />
           </div>
         )}
-        <div className="p-3">
+
+        {/* 6 — Attempt history */}
+        <div className="px-4 py-3">
           <WeighInHistoryCard attempts={selected.weighIns} t={t} />
         </div>
       </div>
 
+      {/* Errors */}
       {previewError != null && canPreview && (
         <InlineAlert variant="error">
           {getCompactErrorMessage(previewError, tC('error'))}

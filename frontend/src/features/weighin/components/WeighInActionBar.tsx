@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/primitives/button';
-import { Card } from '@/components/ui/primitives/card';
 import { Label } from '@/components/ui/primitives/label';
 import {
   Select,
@@ -65,14 +64,9 @@ export function WeighInActionBar({
 
   if (!preview) {
     return (
-      <Card className="space-y-3 p-4">
-        <h3 className="text-[12px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-          {t('actionTitle')}
-        </h3>
-        <Button className="min-h-[44px] w-full sm:w-auto" disabled>
-          {t('actionRecordWeighIn')}
-        </Button>
-      </Card>
+      <Button className="h-[56px] w-full text-[15px] font-semibold" disabled>
+        {t('actionRecordWeighIn')}
+      </Button>
     );
   }
 
@@ -88,93 +82,96 @@ export function WeighInActionBar({
     (category) => category.sortOrder > preview.currentCategory.sortOrder,
   );
 
-  return (
-    <Card className="space-y-3 p-4">
-      <h3 className="text-[12px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-        {t('actionTitle')}
-      </h3>
+  const primaryDisabled = isManualPrimary
+    ? manualBlocked
+    : isPending || !preview.recordingAllowed;
 
+  const isDanger = primaryAction?.level === 'DANGER';
+
+  return (
+    <div className="space-y-3">
       {isManualPrimary && (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <div className="space-y-1">
-            <Label className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--color-text-muted)]">
-              {t('manualDecisionLabel')}
-            </Label>
-            <Select
-              value={manualDecision}
-              onValueChange={(value) => setManualDecision(value as WeighInDecision)}
-            >
-              <SelectTrigger className="h-10 bg-[var(--color-surface)] px-3">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MANUAL_DECISION_OPTIONS.map((decision) => (
-                  <SelectItem key={decision} value={decision}>
-                    {t(`decisionOption${decision}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {manualRequiresCategory && (
-            <div className="space-y-1">
-              <Label className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--color-text-muted)]">
-                {t('manualTargetCategoryLabel')}
+        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-3 space-y-3">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+            {t('manualDecisionLabel')}
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                {t('manualDecisionLabel')}
               </Label>
               <Select
-                value={manualMoveCategoryId || EMPTY_CATEGORY_VALUE}
-                onValueChange={(value) =>
-                  setManualMoveCategoryId(
-                    value === EMPTY_CATEGORY_VALUE ? '' : value,
-                  )
-                }
+                value={manualDecision}
+                onValueChange={(value) => setManualDecision(value as WeighInDecision)}
               >
                 <SelectTrigger className="h-10 bg-[var(--color-surface)] px-3">
-                  <SelectValue placeholder={t('selectMoveCategory')} />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={EMPTY_CATEGORY_VALUE}>
-                    {t('selectMoveCategory')}
-                  </SelectItem>
-                  {moveUpCandidates.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
+                  {MANUAL_DECISION_OPTIONS.map((decision) => (
+                    <SelectItem key={decision} value={decision}>
+                      {t(`decisionOption${decision}`)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-          )}
-          <div className="space-y-1 sm:col-span-2">
-            <Label
-              htmlFor="weighin-manual-reason"
-              className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--color-text-muted)]"
-            >
-              {t('manualReasonLabel')}
-            </Label>
-            <Textarea
-              id="weighin-manual-reason"
-              rows={2}
-              className="min-h-[88px] bg-[var(--color-surface)]"
-              placeholder={t('manualReasonPlaceholder')}
-              value={manualReason}
-              onChange={(event) => setManualReason(event.target.value)}
-            />
+            {manualRequiresCategory && (
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                  {t('manualTargetCategoryLabel')}
+                </Label>
+                <Select
+                  value={manualMoveCategoryId || EMPTY_CATEGORY_VALUE}
+                  onValueChange={(value) =>
+                    setManualMoveCategoryId(value === EMPTY_CATEGORY_VALUE ? '' : value)
+                  }
+                >
+                  <SelectTrigger className="h-10 bg-[var(--color-surface)] px-3">
+                    <SelectValue placeholder={t('selectMoveCategory')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={EMPTY_CATEGORY_VALUE}>
+                      {t('selectMoveCategory')}
+                    </SelectItem>
+                    {moveUpCandidates.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label
+                htmlFor="weighin-manual-reason"
+                className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]"
+              >
+                {t('manualReasonLabel')}
+              </Label>
+              <Textarea
+                id="weighin-manual-reason"
+                rows={2}
+                className="min-h-[72px] bg-[var(--color-surface)]"
+                placeholder={t('manualReasonPlaceholder')}
+                value={manualReason}
+                onChange={(event) => setManualReason(event.target.value)}
+              />
+            </div>
           </div>
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         {primaryAction && (
           <Button
-            className={`min-h-[44px] w-full sm:w-auto ${
-              primaryAction.level === 'DANGER'
-                ? 'bg-[var(--color-danger)] hover:bg-[var(--color-danger)]/90'
+            className={`h-[56px] flex-1 text-[15px] font-semibold tracking-wide ${
+              isDanger
+                ? 'bg-[var(--color-danger)] hover:bg-[var(--color-danger)]/90 text-white'
                 : ''
             }`}
-            disabled={
-              isManualPrimary ? manualBlocked : isPending || !preview.recordingAllowed
-            }
+            disabled={primaryDisabled}
             onClick={() =>
               onRecord(
                 isManualPrimary
@@ -182,24 +179,20 @@ export function WeighInActionBar({
                       decision: manualDecision,
                       reason: manualReason.trim(),
                       nextEventWeightCategoryId:
-                        manualDecision === 'MOVED_UP'
-                          ? manualMoveCategoryId
-                          : undefined,
+                        manualDecision === 'MOVED_UP' ? manualMoveCategoryId : undefined,
                     }
                   : {},
               )
             }
           >
-            {isPending
-              ? t('actionSaving')
-              : actionLabel(primaryAction, t)}
+            {isPending ? t('actionSaving') : actionLabel(primaryAction, t)}
           </Button>
         )}
 
         {hasOverrideAction && (
           <Button
             variant="secondary"
-            className="min-h-[44px] w-full sm:w-auto"
+            className="h-[56px] sm:min-w-[140px] text-[14px] font-semibold"
             onClick={onOpenOverride}
             disabled={isPending}
           >
@@ -207,6 +200,6 @@ export function WeighInActionBar({
           </Button>
         )}
       </div>
-    </Card>
+    </div>
   );
 }
