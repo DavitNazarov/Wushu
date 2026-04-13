@@ -89,7 +89,15 @@ export default function InboxPage() {
                     onClick={() => openDetail(sub)}
                     className="group cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]"
                   >
-                    <td className="px-4 py-3 text-[var(--color-text)]">{sub.type}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        sub.type === 'membership'
+                          ? 'bg-violet-500/15 text-violet-400'
+                          : 'bg-blue-500/15 text-blue-400'
+                      }`}>
+                        {t(`type.${sub.type}` as Parameters<typeof t>[0])}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{sub.name}</td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">{sub.email}</td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">
@@ -130,8 +138,13 @@ export default function InboxPage() {
                     <span className="text-[var(--color-text-muted)] transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--color-primary)]">→</span>
                   </div>
                 </div>
-                <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-                  {sub.type} · {sub.email} · {new Date(sub.createdAt).toLocaleDateString()}
+                <p className="mt-1 flex items-center gap-1.5 text-[12px] text-[var(--color-text-muted)]">
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                    sub.type === 'membership' ? 'bg-violet-500/15 text-violet-400' : 'bg-blue-500/15 text-blue-400'
+                  }`}>
+                    {t(`type.${sub.type}` as Parameters<typeof t>[0])}
+                  </span>
+                  {sub.email} · {new Date(sub.createdAt).toLocaleDateString()}
                 </p>
               </button>
             ))}

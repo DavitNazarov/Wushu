@@ -36,14 +36,29 @@ export function AthleteProfileOverview({ athlete, registrations, fights, scope }
       transition={{ duration: 0.3 }}
     >
       {/* Hero */}
-      <div className="relative overflow-hidden px-6 py-7 bg-[linear-gradient(135deg,var(--color-primary-subtle),color-mix(in_srgb,var(--color-surface)_85%,var(--color-surface-alt)_15%))]">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_100%_0%,var(--color-primary-subtle),transparent)] opacity-50 pointer-events-none" />
+      <div className="relative overflow-hidden px-6 py-8">
+        <motion.div
+          className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[var(--color-primary)] opacity-[0.07] blur-3xl"
+          animate={{ scale: [1, 1.15, 1], opacity: [0.07, 0.12, 0.07] }}
+          transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.div
+          className="pointer-events-none absolute -bottom-8 left-1/4 h-36 w-36 rounded-full bg-violet-500 opacity-[0.04] blur-3xl"
+          animate={{ scale: [1, 1.3, 1], opacity: [0.04, 0.08, 0.04] }}
+          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 3 }}
+        />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,var(--color-primary-subtle),color-mix(in_srgb,var(--color-surface)_88%,var(--color-surface-alt)_12%))]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_100%_0%,var(--color-primary-subtle),transparent)] opacity-50" />
         <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           {/* Identity */}
           <div className="flex items-start gap-5">
-            <div className="relative flex h-[68px] w-[68px] shrink-0 items-center justify-center rounded-2xl bg-[var(--color-primary)] text-[20px] font-bold uppercase tracking-wider text-white shadow-[0_8px_32px_-8px_var(--color-primary)]">
+            <motion.div
+              className="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-2xl bg-[var(--color-primary)] text-[20px] font-bold uppercase tracking-wider text-white shadow-[0_8px_32px_-8px_var(--color-primary)]"
+              whileHover={{ scale: 1.07, rotate: -2 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+            >
               {initials}
-            </div>
+            </motion.div>
             <div className="min-w-0 pt-0.5">
               <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-[var(--color-text-muted)]/70">
                 {t('eyebrow')}
@@ -75,6 +90,7 @@ export function AthleteProfileOverview({ athlete, registrations, fights, scope }
               value={latestRegistration?.eventName ?? t('noEvent')}
             />
           </div>
+        </div>
         </div>
       </div>
 
@@ -134,7 +150,7 @@ function FactTile({ label, value }: { label: string; value: string }) {
 function StatCell({
   label,
   value,
-  hint,
+  hint: _hint,
   icon: Icon,
   color,
 }: {
@@ -145,16 +161,22 @@ function StatCell({
   color: string;
 }) {
   return (
-    <div className="flex items-center gap-3 px-5 py-4">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-alt)]">
+    <motion.div
+      className="group flex cursor-default items-center gap-3 px-5 py-4 transition-colors duration-150 hover:bg-[var(--color-surface-alt)]/60"
+      whileHover={{ x: 2 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+    >
+      <motion.span
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-alt)] transition-colors group-hover:bg-[var(--color-surface)]"
+        whileHover={{ scale: 1.1 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+      >
         <Icon className={`h-4 w-4 ${color}`} />
-      </span>
+      </motion.span>
       <div className="min-w-0">
         <p className={`text-[22px] font-bold tabular-nums leading-none tracking-tight ${color}`}>{value}</p>
-        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
-          {label}
-        </p>
+        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">{label}</p>
       </div>
-    </div>
+    </motion.div>
   );
 }

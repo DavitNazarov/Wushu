@@ -493,6 +493,19 @@
         "weighInDays": "weigh-in days",
         "fightDays": "fight days"
       },
+      "revert": {
+        "button": "ეტაპის დაბრუნება",
+        "dialogTitle": "ღონისძიების ეტაპის დაბრუნება",
+        "dialogDescription": "თქვენ აპირებთ ამ ღონისძიების წინა ეტაპზე დაბრუნებას. ეს მოქმედება ლოგირდება და მოითხოვს მიზეზს.",
+        "warning": "ეტაპის დაბრუნება დესტრუქციული გადაკეთებაა. მიმდინარე ეტაპის მონაცემები (მაგ. კარგება, წონის გაზომვა) შეიძლება შეუსაბამო გახდეს.",
+        "currentStage": "მიმდინარე ეტაპი",
+        "targetStage": "დასაბრუნებელი ეტაპი",
+        "reasonLabel": "მიზეზი",
+        "reasonPlaceholder": "ახსენით, რატომ არის ეტაპის დაბრუნება საჭირო…",
+        "confirm": "დაბრუნების დადასტურება",
+        "success": "ღონისძიების ეტაპი დაბრუნდა.",
+        "errorGeneric": "ეტაპის დაბრუნება ვერ მოხერხდა. სცადეთ ხელახლა."
+      },
       "advance": {
         "button": "ეტაპის გადაყვანა",
         "noEventSelected": "აირჩიეთ ღონისძიება, რომლის ეტაპიც უნდა გადაიყვანოთ.",
@@ -2091,6 +2104,10 @@
   },
   "inbox": {
     "title": "Inbox",
+    "type": {
+      "contact": "შეტყობინება",
+      "membership": "წევრობა"
+    },
     "emptyTitle": "Inbox is empty",
     "emptyDescription": "Contact form submissions will appear here.",
     "columns": {

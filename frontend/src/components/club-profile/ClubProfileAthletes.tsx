@@ -62,10 +62,10 @@ export function ClubProfileAthletes({ athletes }: Props) {
                 <motion.div key={athlete.id} variants={item}>
                   <Link
                     href={`/${locale}/admin/athletes/${athlete.id}`}
-                    className="group flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[var(--color-surface-alt)]/50"
+                    className="group flex items-center gap-3 px-5 py-3.5 transition-all duration-150 hover:bg-[var(--color-surface-alt)]/60 hover:shadow-[inset_3px_0_0_var(--color-primary)]"
                   >
                     {/* Avatar */}
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-subtle)] text-[12px] font-bold uppercase text-[var(--color-primary)]">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-subtle)] text-[12px] font-bold uppercase text-[var(--color-primary)] transition-transform duration-150 group-hover:scale-105">
                       {initials}
                     </div>
 

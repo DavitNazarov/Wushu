@@ -69,3 +69,19 @@ export function isForwardLifecycleTransition(
   if (currentIndex < 0 || targetIndex < 0) return false;
   return targetIndex > currentIndex;
 }
+
+export function isBackwardLifecycleTransition(
+  current: EventLifecycle,
+  target: EventLifecycle,
+): boolean {
+  const currentIndex = getLifecycleIndex(current);
+  const targetIndex = getLifecycleIndex(target);
+  if (currentIndex < 0 || targetIndex < 0) return false;
+  return targetIndex < currentIndex;
+}
+
+export function getPreviousLifecycle(lifecycle: EventLifecycle): EventLifecycle | null {
+  const currentIndex = getLifecycleIndex(lifecycle);
+  if (currentIndex <= 0) return null;
+  return EVENT_LIFECYCLE_ORDER[currentIndex - 1];
+}

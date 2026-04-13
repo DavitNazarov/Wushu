@@ -18,8 +18,9 @@ import { ApiError, apiGet, apiPost } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import { EditEventModal } from '@/features/events/components/EditEventModal';
 import type { EventRow, EventLifecycle } from '@/types/api';
-import { nextEventLifecycle } from '@/domain/events/lifecycle';
+import { nextEventLifecycle, previousEventLifecycle } from '@/domain/events/lifecycle';
 import { EventAdvanceDialog } from './_components/EventAdvanceDialog';
+import { EventRevertDialog } from './_components/EventRevertDialog';
 import { EventDatesCard } from './_components/EventDatesCard';
 import { EventMetaCard } from './_components/EventMetaCard';
 import { EventQuickLinksCard } from './_components/EventQuickLinksCard';
@@ -38,20 +39,21 @@ export default function EventDetailPage() {
   const tEvents = useTranslations('admin.events');
   const tDetail = useTranslations('admin.events.detail');
   const tAdvance = useTranslations('admin.events.advance');
+  const tRevert = useTranslations('admin.events.revert');
   const tCommon = useTranslations('common');
   const { toast } = useToast();
 
   const [advanceOpen, setAdvanceOpen] = useState(false);
+  const [revertOpen, setRevertOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [reason, setReason] = useState('');
-  const [override, setOverride] = useState(false);
+  const [advanceReason, setAdvanceReason] = useState('');
+  const [advanceOverride, setAdvanceOverride] = useState(false);
+  const [revertReason, setRevertReason] = useState('');
 
   const runAutomationMutation = useMutation({
-    // Per-event endpoint: checks, advances if needed, returns fresh event+summary.
     mutationFn: () =>
       apiPost<EventSummaryResponse>(`/api/events/${eventId}/run-automation`, {}),
     onSuccess: (fresh) => {
-      // Populate cache directly so UI updates instantly (no extra round-trip).
       queryClient.setQueryData(['event-detail', eventId], fresh);
       queryClient.invalidateQueries({ queryKey: ['events'] });
       const advanced = Boolean(event && fresh.event.lifecycle !== event.lifecycle);
@@ -70,21 +72,22 @@ export default function EventDetailPage() {
   const event = data?.event;
   const summary = data?.summary;
   const next = event ? nextEventLifecycle(event.lifecycle) : null;
+  const prev = event ? previousEventLifecycle(event.lifecycle) : null;
 
   const advanceMutation = useMutation({
     mutationFn: () =>
       apiPost<EventRow>(`/api/events/${eventId}/lifecycle`, {
         targetState: next,
-        reason: reason.trim() || null,
-        override,
+        reason: advanceReason.trim() || null,
+        override: advanceOverride,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['event-detail', eventId] });
       queryClient.invalidateQueries({ queryKey: ['events'] });
       toast(tAdvance('success'));
       setAdvanceOpen(false);
-      setReason('');
-      setOverride(false);
+      setAdvanceReason('');
+      setAdvanceOverride(false);
     },
     onError: (err) => {
       let msg = tAdvance('errorGeneric');
@@ -93,6 +96,29 @@ export default function EventDetailPage() {
         else if (err.code === 'REGISTRATION_STILL_OPEN') msg = tAdvance('errorRegistrationOpen');
         else if (err.code === 'COMPETITION_NOT_STARTED') msg = tAdvance('errorCompetitionNotStarted');
         else if (err.code === 'OVERRIDE_REASON_REQUIRED') msg = tAdvance('errorOverrideReasonRequired');
+      }
+      toast(msg, 'error');
+    },
+  });
+
+  const revertMutation = useMutation({
+    mutationFn: () =>
+      apiPost<EventRow>(`/api/events/${eventId}/lifecycle`, {
+        targetState: prev,
+        reason: revertReason.trim(),
+        override: true,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['event-detail', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      toast(tRevert('success'));
+      setRevertOpen(false);
+      setRevertReason('');
+    },
+    onError: (err) => {
+      let msg = tRevert('errorGeneric');
+      if (err instanceof ApiError) {
+        if (err.code === 'OVERRIDE_REASON_REQUIRED') msg = tAdvance('errorOverrideReasonRequired');
       }
       toast(msg, 'error');
     },
@@ -177,11 +203,22 @@ export default function EventDetailPage() {
                 {runAutomationMutation.isPending ? tCommon('loading') : tEvents('autoAdvanceStage.runNow')}
               </SecondaryButton>
             )}
+            {prev && (
+              <button
+                onClick={() => {
+                  setRevertReason('');
+                  setRevertOpen(true);
+                }}
+                className="inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-input)] border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/8 px-3 text-[13px] font-medium text-[var(--color-danger)] transition hover:bg-[var(--color-danger)]/15"
+              >
+                ← {tRevert('button')}
+              </button>
+            )}
             {next && (
               <PrimaryButton
                 onClick={() => {
-                  setReason('');
-                  setOverride(false);
+                  setAdvanceReason('');
+                  setAdvanceOverride(false);
                   setAdvanceOpen(true);
                 }}
               >
@@ -215,16 +252,12 @@ export default function EventDetailPage() {
 
       {/* Two-column content */}
       <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
-        {/* Left */}
         <div className="space-y-4">
           <EventDatesCard event={event} />
-
           {summary && summary.totalRegistrations > 0 && (
             <EventRegistrationBreakdownCard byStatus={summary.byStatus} />
           )}
         </div>
-
-        {/* Right */}
         <div className="space-y-4">
           <EventMetaCard event={event} />
           <EventQuickLinksCard eventId={eventId} />
@@ -238,12 +271,23 @@ export default function EventDetailPage() {
         onClose={() => setAdvanceOpen(false)}
         currentLifecycle={event.lifecycle}
         nextLifecycle={next}
-        reason={reason}
-        onReasonChange={setReason}
-        override={override}
-        onOverrideChange={setOverride}
+        reason={advanceReason}
+        onReasonChange={setAdvanceReason}
+        override={advanceOverride}
+        onOverrideChange={setAdvanceOverride}
         isPending={advanceMutation.isPending}
         onConfirm={() => advanceMutation.mutate()}
+      />
+
+      <EventRevertDialog
+        open={revertOpen}
+        onClose={() => setRevertOpen(false)}
+        currentLifecycle={event.lifecycle}
+        previousLifecycle={prev}
+        reason={revertReason}
+        onReasonChange={setRevertReason}
+        isPending={revertMutation.isPending}
+        onConfirm={() => revertMutation.mutate()}
       />
     </div>
   );

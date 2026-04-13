@@ -5,6 +5,7 @@ import { AuditService } from '../common/audit.service';
 import {
   getNextLifecycle,
   isForwardLifecycleTransition,
+  isBackwardLifecycleTransition,
 } from './lifecycle-rules';
 import { getRegistrationStatus } from './event-dates.helper';
 
@@ -158,12 +159,23 @@ export class EventOpsService {
       existing.lifecycle,
       input.targetState,
     );
+    const isBackward = isBackwardLifecycleTransition(
+      existing.lifecycle,
+      input.targetState,
+    );
 
-    if (!isForward) {
+    if (!isForward && !isBackward) {
       throw new Error('INVALID_EVENT_TRANSITION');
     }
 
-    if (!isDirect) {
+    // Backward transitions always require explicit override + reason
+    if (isBackward) {
+      if (!input.allowOverride) throw new Error('INVALID_EVENT_TRANSITION');
+      if (!input.reason) throw new Error('OVERRIDE_REASON_REQUIRED');
+    }
+
+    // Non-direct forward transitions (skipping stages) also require override + reason
+    if (isForward && !isDirect) {
       if (!input.allowOverride) throw new Error('INVALID_EVENT_TRANSITION');
       if (!input.reason) throw new Error('OVERRIDE_REASON_REQUIRED');
     }
@@ -192,9 +204,11 @@ export class EventOpsService {
         organisationId: input.organisationId,
         eventId: result.id,
         actorUserId: input.actorUserId,
-        action: isDirect
-          ? 'EVENT_LIFECYCLE_TRANSITION'
-          : 'EVENT_LIFECYCLE_OVERRIDE',
+        action: isBackward
+          ? 'EVENT_LIFECYCLE_OVERRIDE'
+          : isDirect
+            ? 'EVENT_LIFECYCLE_TRANSITION'
+            : 'EVENT_LIFECYCLE_OVERRIDE',
         entityType: 'event',
         entityId: result.id,
         before: existing as unknown as Prisma.JsonValue,

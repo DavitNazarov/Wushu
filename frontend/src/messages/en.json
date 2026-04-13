@@ -493,6 +493,19 @@
         "weighInDays": "weigh-in days",
         "fightDays": "fight days"
       },
+      "revert": {
+        "button": "Revert stage",
+        "dialogTitle": "Revert event stage",
+        "dialogDescription": "You are about to move this event back to the previous stage. This action is logged and requires a reason.",
+        "warning": "Reverting a stage is a destructive override. Data from the current stage (e.g. draw, weigh-in) may become inconsistent.",
+        "currentStage": "Current stage",
+        "targetStage": "Reverting to",
+        "reasonLabel": "Reason",
+        "reasonPlaceholder": "Explain why this stage revert is necessary…",
+        "confirm": "Confirm revert",
+        "success": "Event stage reverted.",
+        "errorGeneric": "Could not revert stage. Please try again."
+      },
       "advance": {
         "button": "Advance stage",
         "noEventSelected": "Select an event to advance its stage.",
@@ -2091,6 +2104,10 @@
   },
   "inbox": {
     "title": "Inbox",
+    "type": {
+      "contact": "Message",
+      "membership": "Membership"
+    },
     "emptyTitle": "Inbox is empty",
     "emptyDescription": "Contact form submissions will appear here.",
     "columns": {

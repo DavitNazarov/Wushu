@@ -121,7 +121,7 @@ function LiveBanner({ events, locale, t }: { events: EventRow[]; locale: string;
         )}
       </div>
       <Link
-        href={`/${locale}/admin/live`}
+        href={`/${locale}/admin/events/${ev.id}/live`}
         className="flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--color-success)] px-3 py-1.5 text-[12px] font-semibold text-white transition hover:opacity-90"
       >
         <Radio className="h-3 w-3" />
