@@ -18,7 +18,7 @@ import { ApiError, apiGet, apiPost } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import { EditEventModal } from '@/features/events/components/EditEventModal';
 import type { EventRow, EventLifecycle } from '@/types/api';
-import { nextEventLifecycle, previousEventLifecycle } from '@/domain/events/lifecycle';
+import { EVENT_LIFECYCLE_ORDER, nextEventLifecycle } from '@/domain/events/lifecycle';
 import { EventAdvanceDialog } from './_components/EventAdvanceDialog';
 import { EventRevertDialog } from './_components/EventRevertDialog';
 import { EventDatesCard } from './_components/EventDatesCard';
@@ -49,6 +49,7 @@ export default function EventDetailPage() {
   const [advanceReason, setAdvanceReason] = useState('');
   const [advanceOverride, setAdvanceOverride] = useState(false);
   const [revertReason, setRevertReason] = useState('');
+  const [revertTarget, setRevertTarget] = useState<EventLifecycle | null>(null);
 
   const runAutomationMutation = useMutation({
     mutationFn: () =>
@@ -72,7 +73,6 @@ export default function EventDetailPage() {
   const event = data?.event;
   const summary = data?.summary;
   const next = event ? nextEventLifecycle(event.lifecycle) : null;
-  const prev = event ? previousEventLifecycle(event.lifecycle) : null;
 
   const advanceMutation = useMutation({
     mutationFn: () =>
@@ -104,7 +104,7 @@ export default function EventDetailPage() {
   const revertMutation = useMutation({
     mutationFn: () =>
       apiPost<EventRow>(`/api/events/${eventId}/lifecycle`, {
-        targetState: prev,
+        targetState: revertTarget,
         reason: revertReason.trim(),
         override: true,
       }),
@@ -114,6 +114,7 @@ export default function EventDetailPage() {
       toast(tRevert('success'));
       setRevertOpen(false);
       setRevertReason('');
+      setRevertTarget(null);
     },
     onError: (err) => {
       let msg = tRevert('errorGeneric');
@@ -203,15 +204,16 @@ export default function EventDetailPage() {
                 {runAutomationMutation.isPending ? tCommon('loading') : tEvents('autoAdvanceStage.runNow')}
               </SecondaryButton>
             )}
-            {prev && (
+            {EVENT_LIFECYCLE_ORDER.length > 1 && (
               <button
                 onClick={() => {
                   setRevertReason('');
+                  setRevertTarget(null);
                   setRevertOpen(true);
                 }}
-                className="inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-input)] border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/8 px-3 text-[13px] font-medium text-[var(--color-danger)] transition hover:bg-[var(--color-danger)]/15"
+                className="inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 text-[13px] font-medium text-[var(--color-text-muted)] transition hover:border-[var(--color-primary)]/40 hover:text-[var(--color-text)]"
               >
-                ← {tRevert('button')}
+                ⇄ {tRevert('button')}
               </button>
             )}
             {next && (
@@ -283,7 +285,8 @@ export default function EventDetailPage() {
         open={revertOpen}
         onClose={() => setRevertOpen(false)}
         currentLifecycle={event.lifecycle}
-        previousLifecycle={prev}
+        targetLifecycle={revertTarget}
+        onTargetChange={setRevertTarget}
         reason={revertReason}
         onReasonChange={setRevertReason}
         isPending={revertMutation.isPending}

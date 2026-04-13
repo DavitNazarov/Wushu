@@ -210,7 +210,7 @@ export class EventStageAutomationService {
         });
       }
 
-      if (event.lifecycle === 'LIVE') {
+      if (event.lifecycle === 'LIVE' && event.autoAdvanceStage) {
         const competitionEndStr = formatInTimeZone(
           event.competitionEndDate,
           timezone,

@@ -494,17 +494,17 @@
         "fightDays": "fight days"
       },
       "revert": {
-        "button": "Revert stage",
-        "dialogTitle": "Revert event stage",
-        "dialogDescription": "You are about to move this event back to the previous stage. This action is logged and requires a reason.",
-        "warning": "Reverting a stage is a destructive override. Data from the current stage (e.g. draw, weigh-in) may become inconsistent.",
+        "button": "Change stage",
+        "dialogTitle": "Change event stage",
+        "dialogDescription": "Select any stage to move the event to. This action is logged and requires a reason.",
+        "warning": "Changing stages is an override action. Data from skipped stages (e.g. draw, weigh-in) may become inconsistent.",
         "currentStage": "Current stage",
-        "targetStage": "Reverting to",
+        "targetStage": "Select target stage",
         "reasonLabel": "Reason",
-        "reasonPlaceholder": "Explain why this stage revert is necessary…",
-        "confirm": "Confirm revert",
-        "success": "Event stage reverted.",
-        "errorGeneric": "Could not revert stage. Please try again."
+        "reasonPlaceholder": "Explain why this stage change is necessary…",
+        "confirm": "Confirm change",
+        "success": "Event stage changed.",
+        "errorGeneric": "Could not change stage. Please try again."
       },
       "advance": {
         "button": "Advance stage",

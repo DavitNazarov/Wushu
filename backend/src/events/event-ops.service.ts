@@ -195,9 +195,14 @@ export class EventOpsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // When moving backward via override, disable auto-advance so automation
+      // doesn't immediately re-advance the event back to where it was.
       const result = await tx.event.update({
         where: { id: input.eventId },
-        data: { lifecycle: input.targetState },
+        data: {
+          lifecycle: input.targetState,
+          ...(isBackward ? { autoAdvanceStage: false } : {}),
+        },
       });
 
       await this.audit.write({
