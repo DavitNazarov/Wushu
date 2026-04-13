@@ -509,7 +509,7 @@ export class BracketsService {
           loserAthleteId: null,
           winMethod: fight1.winnerAthleteId != null ? null : undefined,
           confirmedAt: fight1.winnerAthleteId != null ? null : undefined,
-          status: fight1.winnerAthleteId != null ? 'QUEUED' : undefined,
+          status: fight1.winnerAthleteId != null ? ('QUEUED' as FightStatus) : undefined,
         },
       }),
       this.prisma.fight.update({
@@ -520,7 +520,7 @@ export class BracketsService {
           loserAthleteId: null,
           winMethod: fight2.winnerAthleteId != null ? null : undefined,
           confirmedAt: fight2.winnerAthleteId != null ? null : undefined,
-          status: fight2.winnerAthleteId != null ? 'QUEUED' : undefined,
+          status: fight2.winnerAthleteId != null ? ('QUEUED' as FightStatus) : undefined,
         },
       }),
     ]);

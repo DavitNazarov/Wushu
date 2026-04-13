@@ -440,8 +440,8 @@ export default function AdminDashboardPage() {
       <motion.section variants={adminVariants.slideUp} initial="initial" animate="animate">
         <h2 className="mb-3 text-[13px] font-semibold text-[var(--color-text)]">{t('quickLinks')}</h2>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {quickActions.map((qa, i) => (
-            <QuickTile key={qa.key} {...qa} delay={i * 0.05} />
+          {quickActions.map(({ key, ...qa }, i) => (
+            <QuickTile key={key} {...qa} delay={i * 0.05} />
           ))}
         </div>
       </motion.section>
