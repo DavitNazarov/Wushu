@@ -51,6 +51,7 @@ export class EventCategoriesService {
         minAge: ageGroup.categoryTemplateAgeGroup.minAge,
         maxAge: ageGroup.categoryTemplateAgeGroup.maxAge,
         roundDurationSeconds: ageGroup.categoryTemplateAgeGroup.roundDurationSeconds,
+        sortOrder: ageGroup.categoryTemplateAgeGroup.sortOrder,
         weightCategories: ageGroup.weightCategories.map((weightCategory) => ({
           id: weightCategory.id,
           categoryTemplateCategoryId: weightCategory.categoryTemplateWeightId,

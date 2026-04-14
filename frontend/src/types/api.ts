@@ -214,6 +214,7 @@ export interface EventAgeGroupRow {
   minAge: number | null;
   maxAge: number | null;
   roundDurationSeconds: number;
+  sortOrder: number;
   weightCategories: EventWeightCategoryRow[];
 }
 
