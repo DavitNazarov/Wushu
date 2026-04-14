@@ -100,27 +100,6 @@ export function resolveEventControlGate(
     };
   }
 
-  if (page === 'registrations' && event.lifecycle === 'REG_OPEN') {
-    if (event.registrationStatus === 'OPEN') {
-      return {
-        page,
-        mode: 'active',
-        event,
-        dateIso: null,
-        activeLifecycles: config.activeLifecycles,
-      };
-    }
-
-    const mode = event.registrationStatus === 'UPCOMING' ? 'upcoming' : 'locked';
-    return {
-      page,
-      mode,
-      event,
-      dateIso: config.getDateIso(event, mode),
-      activeLifecycles: config.activeLifecycles,
-    };
-  }
-
   if (config.activeLifecycles.includes(event.lifecycle)) {
     return {
       page,
