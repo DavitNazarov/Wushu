@@ -58,6 +58,7 @@ export function DrawPageContainer({ eventId }: Props) {
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<'categories' | 'selected'>('categories');
   const [reassignRow, setReassignRow] = useState<DrawAthletePoolRow | null>(null);
+  const [reassignFromCategoryId, setReassignFromCategoryId] = useState<string>('');
 
   const { events, selectedEvent, setSelectedEventId } = useAdminEventRoute({
     eventId,
@@ -277,7 +278,7 @@ export function DrawPageContainer({ eventId }: Props) {
                   isLoading={categoryDetailsQuery.isLoading}
                   eventId={currentEventId}
                   t={t}
-                  onReassign={setReassignRow}
+                  onReassign={(row, catId) => { setReassignRow(row); setReassignFromCategoryId(catId); }}
                 />
               </div>
             </div>
@@ -298,11 +299,12 @@ export function DrawPageContainer({ eventId }: Props) {
       {reassignRow && (
         <DrawReassignModal
           open={!!reassignRow}
-          onClose={() => setReassignRow(null)}
+          onClose={() => { setReassignRow(null); setReassignFromCategoryId(''); }}
           eventId={currentEventId}
           registrationId={reassignRow.registrationId}
           athleteName={reassignRow.athleteName}
           currentCategory={reassignRow.finalCategory ?? reassignRow.originalCategory ?? '—'}
+          currentEventWeightCategoryId={reassignFromCategoryId}
         />
       )}
 

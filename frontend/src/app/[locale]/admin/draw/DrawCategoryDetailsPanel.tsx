@@ -10,7 +10,7 @@ type Props = {
   isLoading: boolean;
   eventId: string;
   t: (key: string, values?: Record<string, string | number | Date>) => string;
-  onReassign: (row: DrawAthletePoolRow) => void;
+  onReassign: (row: DrawAthletePoolRow, currentEventWeightCategoryId: string) => void;
 };
 
 function Badge({ label, tone }: { label: string; tone: 'info' | 'warning' }) {
@@ -140,10 +140,10 @@ export function DrawCategoryDetailsPanel({ details, isLoading, eventId: _eventId
                   <td className="px-2 py-2 text-right">
                     <button
                       type="button"
-                      onClick={() => onReassign(row)}
+                      onClick={() => onReassign(row, category.id)}
                       className="rounded-[var(--radius-pill)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-muted)] transition hover:border-[var(--color-primary)]/50 hover:text-[var(--color-primary)]"
                     >
-                      Reassign ↑
+                      {t('actionReassign')}
                     </button>
                   </td>
                 </tr>
