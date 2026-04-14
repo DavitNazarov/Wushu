@@ -9,6 +9,7 @@ import {
   fetchPublicBrackets,
   fetchPublicResults,
   fetchPublicSchedule,
+  fetchPublicScheduleSessions,
   fetchPublicMat,
   fetchPublicLive,
 } from '@/lib/api/public';
@@ -55,6 +56,14 @@ export function usePublicSchedule(eventSlug: string | null) {
   return useQuery({
     queryKey: ['public', 'schedule', eventSlug],
     queryFn: () => fetchPublicSchedule(eventSlug!),
+    enabled: !!eventSlug,
+  });
+}
+
+export function usePublicScheduleSessions(eventSlug: string | null) {
+  return useQuery({
+    queryKey: ['public', 'schedule-sessions', eventSlug],
+    queryFn: () => fetchPublicScheduleSessions(eventSlug!),
     enabled: !!eventSlug,
   });
 }

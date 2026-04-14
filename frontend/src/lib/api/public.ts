@@ -56,6 +56,14 @@ export type PublicBracket = {
   fights?: BracketFight[];
 };
 
+export type PublicScheduleSession = {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  order: number;
+};
+
 export type ScheduleFight = {
   id: string;
   bracketRoundLabel: string;
@@ -72,6 +80,8 @@ export type ScheduleFight = {
   matName: string | null;
   orderInMat: number | null;
   scheduledAt: string | null;
+  sessionId: string | null;
+  orderInSession: number | null;
   liveStatus?: 'PENDING' | 'UPCOMING' | 'RUNNING' | 'FINISHED';
 };
 
@@ -172,6 +182,16 @@ export async function fetchPublicSchedule(eventSlug: string): Promise<ScheduleFi
     {
       credentials: 'include',
     },
+  );
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchPublicScheduleSessions(eventSlug: string): Promise<PublicScheduleSession[]> {
+  const res = await fetch(
+    `/api/public/schedule-sessions?eventSlug=${encodeURIComponent(eventSlug)}`,
+    { credentials: 'include' },
   );
   if (res.status === 404) return [];
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);

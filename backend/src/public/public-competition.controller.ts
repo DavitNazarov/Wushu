@@ -169,6 +169,13 @@ export class PublicCompetitionController {
     });
   }
 
+  @Get('schedule-sessions')
+  async getPublicScheduleSessions(@Query('eventSlug') eventSlug: string) {
+    const event = await this.getAccessibleCompetitionEvent(eventSlug);
+
+    return this.schedule.listSessions(event.organisationId, event.id);
+  }
+
   @Get('live')
   async getPublicLive(@Query('eventSlug') eventSlug: string) {
     const event = await this.getAccessibleCompetitionEvent(eventSlug);
