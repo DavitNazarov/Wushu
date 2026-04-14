@@ -257,23 +257,21 @@ export class DrawService {
           competitionFormat === 'ROUND_ROBIN'
             ? buildRoundRobinBracket(athleteIds)
             : buildSingleElimBracket(athleteIds);
-        for (const bout of bouts) {
-          await tx.fight.create({
-            data: {
-              organisationId: input.organisationId,
-              eventId: input.eventId,
-              bracketId: bracket.id,
-              categoryCode,
-              eventWeightCategoryId,
-              roundDurationSeconds,
-              round: bout.round,
-              boutNo: bout.boutNo,
-              redAthleteId: bout.redId,
-              blueAthleteId: bout.blueId,
-              status: 'QUEUED',
-            },
-          });
-        }
+        await tx.fight.createMany({
+          data: bouts.map((bout) => ({
+            organisationId: input.organisationId,
+            eventId: input.eventId,
+            bracketId: bracket.id,
+            categoryCode,
+            eventWeightCategoryId,
+            roundDurationSeconds,
+            round: bout.round,
+            boutNo: bout.boutNo,
+            redAthleteId: bout.redId ?? null,
+            blueAthleteId: bout.blueId ?? null,
+            status: 'QUEUED',
+          })),
+        });
 
         if (competitionFormat !== 'ROUND_ROBIN') {
           await this.linkFightDependencies(tx, bracket.id);
@@ -353,7 +351,7 @@ export class DrawService {
       );
 
       return { brackets, seed };
-    });
+    }, { timeout: 30000 });
   }
 
   async resetDraw(input: {
@@ -416,7 +414,7 @@ export class DrawService {
         },
         tx,
       );
-    });
+    }, { timeout: 30000 });
 
     return { ok: true };
   }
@@ -535,24 +533,26 @@ export class DrawService {
       fights.map((fight) => [`${fight.round}:${fight.boutNo}`, fight]),
     );
 
-    for (const fight of fights) {
-      const nextFight = byRoundBout.get(
-        `${fight.round + 1}:${Math.ceil(fight.boutNo / 2)}`,
-      );
-
-      await tx.fight.update({
-        where: { id: fight.id },
-        data: {
-          nextFightId: nextFight?.id ?? null,
-          nextFightSlot:
-            nextFight == null
-              ? null
-              : fight.boutNo % 2 === 1
-                ? 'RED'
-                : 'BLUE',
-        },
-      });
-    }
+    // Batch all updates in parallel instead of sequential awaits
+    await Promise.all(
+      fights.map((fight) => {
+        const nextFight = byRoundBout.get(
+          `${fight.round + 1}:${Math.ceil(fight.boutNo / 2)}`,
+        );
+        return tx.fight.update({
+          where: { id: fight.id },
+          data: {
+            nextFightId: nextFight?.id ?? null,
+            nextFightSlot:
+              nextFight == null
+                ? null
+                : fight.boutNo % 2 === 1
+                  ? 'RED'
+                  : 'BLUE',
+          },
+        });
+      }),
+    );
   }
 
   private async propagateWinnerToNextFight(
