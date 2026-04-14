@@ -59,7 +59,7 @@ export function buildScheduleRows(fights: ScheduleSourceFight[]): BuiltScheduleR
         winnerAthleteId: candidate.fight.winnerAthleteId,
         status: candidate.fight.status,
       }),
-      isScheduled: candidate.fight.matId != null && candidate.fight.orderInMat != null,
+      isScheduled: (candidate.fight.sessionId != null && candidate.fight.orderInSession != null) || (candidate.fight.matId != null && candidate.fight.orderInMat != null),
       status: candidate.fight.status,
       matId: candidate.fight.matId,
       matName: candidate.fight.mat?.name ?? null,
@@ -67,6 +67,7 @@ export function buildScheduleRows(fights: ScheduleSourceFight[]): BuiltScheduleR
       orderInMat: candidate.fight.orderInMat,
       scheduledAt: candidate.fight.scheduledStartTime,
       sessionId: candidate.fight.sessionId,
+      orderInSession: (candidate.fight as { orderInSession?: number | null }).orderInSession ?? null,
     };
   });
 }

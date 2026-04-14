@@ -698,6 +698,8 @@ export interface ScheduleFightRow {
   orderInMat: number | null;
   scheduledAt: string | null;
   sessionId: string | null;
+  orderInSession: number | null;
+  hasGapViolation?: boolean;
 }
 
 export interface AutoScheduleConflict {

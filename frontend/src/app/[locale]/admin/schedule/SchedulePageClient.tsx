@@ -12,31 +12,107 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost, apiDelete } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
-import type {
-  AutoScheduleResponse,
-  MatRow,
-  ScheduleFightRow,
-  ScheduleSessionRow,
-} from '@/types/api';
+import type { ScheduleFightRow, ScheduleSessionRow } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
 import { resolveEventControlGate } from '@/domain/events/controlPageGate';
 import { useRealtimeQuerySync } from '@/hooks/useRealtimeQuerySync';
 import { useAdminEventRoute } from '@/features/admin-events/hooks/useAdminEventRoute';
 import { AdminEventSelect } from '@/components/admin/AdminEventSelect';
-import { ScheduleFightGrid } from './ScheduleFightGrid';
 
-const SEL =
-  'h-10 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
 const INPUT =
   'h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
 
-type Props = {
-  eventId: string;
-};
+type Props = { eventId: string };
 
-function formatSessionTime(iso: string) {
+function fmt(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+type DragFight = { fightId: string; fromSessionId: string };
+type DropFightTarget = { sessionId: string; insertAfterOrder: number };
+
+// ── Fight card ─────────────────────────────────────────────────────────────
+function FightCard({
+  fight,
+  index,
+  sessionId,
+  isEditable,
+  isGapViolation,
+  isDragging,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+}: {
+  fight: ScheduleFightRow;
+  index: number;
+  sessionId: string;
+  isEditable: boolean;
+  isGapViolation: boolean;
+  isDragging: boolean;
+  onDragStart: (fightId: string, fromSessionId: string) => void;
+  onDragEnd: () => void;
+  onDragOver: (e: React.DragEvent, sessionId: string, insertAfterOrder: number) => void;
+  onDrop: (e: React.DragEvent, sessionId: string, insertAfterOrder: number) => void;
+}) {
+  return (
+    <div
+      draggable={isEditable}
+      onDragStart={(e) => { e.stopPropagation(); onDragStart(fight.id, sessionId); }}
+      onDragEnd={onDragEnd}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); onDragOver(e, sessionId, index); }}
+      onDrop={(e) => { e.stopPropagation(); onDrop(e, sessionId, index); }}
+      className={`flex items-center gap-2 rounded-[var(--radius-card)] border bg-[var(--color-surface)] px-3 py-2 text-[12px] transition
+        ${isGapViolation ? 'border-[var(--color-warning)]' : 'border-[var(--color-border)]'}
+        ${isDragging ? 'opacity-40' : ''}
+        ${isEditable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+    >
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-alt)] text-[10px] font-bold text-[var(--color-text-muted)]">
+        {index + 1}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-semibold text-[var(--color-text)]">
+          {fight.redDisplayName} <span className="text-[var(--color-text-muted)]">vs</span> {fight.blueDisplayName}
+        </p>
+        <p className="text-[11px] text-[var(--color-text-muted)]">
+          {fight.bracketRoundLabel} · #{fight.bracketFightNumber}
+        </p>
+      </div>
+      {isGapViolation && (
+        <span className="shrink-0 rounded-full bg-[var(--color-warning)]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-warning)]">
+          ⚠ gap
+        </span>
+      )}
+      {fight.liveStatus === 'RUNNING' && (
+        <span className="shrink-0 rounded-full bg-[var(--color-primary)]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-primary)]">
+          LIVE
+        </span>
+      )}
+    </div>
+  );
+}
+
+function DropZone({
+  sessionId,
+  insertAfterOrder,
+  active,
+  onDragOver,
+  onDrop,
+}: {
+  sessionId: string;
+  insertAfterOrder: number;
+  active: boolean;
+  onDragOver: (e: React.DragEvent, sessionId: string, insertAfterOrder: number) => void;
+  onDrop: (e: React.DragEvent, sessionId: string, insertAfterOrder: number) => void;
+}) {
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); onDragOver(e, sessionId, insertAfterOrder); }}
+      onDrop={(e) => { e.stopPropagation(); onDrop(e, sessionId, insertAfterOrder); }}
+      className={`mx-1 rounded transition-all duration-100 ${active ? 'h-1.5 bg-[var(--color-primary)]' : 'h-0.5 bg-transparent'}`}
+    />
+  );
 }
 
 export function SchedulePageClient({ eventId }: Props) {
@@ -48,125 +124,142 @@ export function SchedulePageClient({ eventId }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const [addMatOpen, setAddMatOpen] = useState(false);
-  const [matName, setMatName] = useState('');
-  const [autoOpen, setAutoOpen] = useState(false);
-  const [autoForm, setAutoForm] = useState(() => {
-    const today = new Date();
-    today.setHours(9, 0, 0, 0);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const defaultStart = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}T09:00`;
-    return {
-      startTimeIso: defaultStart,
-      avgBoutSeconds: 180,
-      bufferSeconds: 60,
-      restMinutes: 30,
-      useSessions: false,
-    };
-  });
-
-  // Session state
+  // Session form
   const [addSessionOpen, setAddSessionOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<ScheduleSessionRow | null>(null);
   const [sessionForm, setSessionForm] = useState({ name: '', startTime: '', endTime: '' });
   const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null);
 
-  const { events, selectedEvent, setSelectedEventId } = useAdminEventRoute({
-    eventId,
-    page: 'schedule',
-  });
+  // Generate modal
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [generateForm, setGenerateForm] = useState({ avgBoutSeconds: 180, bufferSeconds: 60 });
+
+  // Fight DnD
+  const [dragFight, setDragFight] = useState<DragFight | null>(null);
+  const [dropFightTarget, setDropFightTarget] = useState<DropFightTarget | null>(null);
+
+  // Session DnD
+  const [dragSessionId, setDragSessionId] = useState<string | null>(null);
+  const [dropSessionTarget, setDropSessionTarget] = useState<string | null>(null);
+
+  // Gap violations
+  const [gapViolations, setGapViolations] = useState<Set<string>>(new Set());
+
+  const { events, selectedEvent, setSelectedEventId } = useAdminEventRoute({ eventId, page: 'schedule' });
   const eid = eventId;
   const gate = resolveEventControlGate('schedule', selectedEvent);
   const showContent = gate.mode === 'active' || gate.mode === 'readonly';
   const isEditable = gate.mode === 'active';
-  const scheduleQueryKey = useMemo(() => ['schedule', eid] as const, [eid]);
-  const sessionsQueryKey = useMemo(() => ['schedule-sessions', eid] as const, [eid]);
 
-  const { data: mats } = useQuery({
-    queryKey: ['mats', eid],
-    queryFn: () => apiGet<MatRow[]>(`/api/mats?eventId=${eid}`),
-    enabled: !!eid && showContent,
-  });
+  const scheduleQK = useMemo(() => ['schedule', eid] as const, [eid]);
+  const sessionsQK = useMemo(() => ['schedule-sessions', eid] as const, [eid]);
 
   const { data: sessions } = useQuery({
-    queryKey: sessionsQueryKey,
+    queryKey: sessionsQK,
     queryFn: () => apiGet<ScheduleSessionRow[]>(`/api/schedule-sessions?eventId=${eid}`),
     enabled: !!eid && showContent,
   });
 
   const { data: fights, isLoading, error, refetch } = useQuery({
-    queryKey: scheduleQueryKey,
+    queryKey: scheduleQK,
     queryFn: () => apiGet<ScheduleFightRow[]>(`/api/schedule?eventId=${eid}`),
     enabled: !!eid && showContent,
   });
+
   useRealtimeQuerySync({
     scope: 'admin-schedule',
     eventId: eid || null,
     enabled: !!eid && showContent,
-    queryKeys: [scheduleQueryKey, sessionsQueryKey],
+    queryKeys: [scheduleQK, sessionsQK],
   });
 
-  const addMatMut = useMutation({
-    mutationFn: () =>
-      apiPost('/api/mats', { eventId: eid, name: matName, order: (mats?.length ?? 0) + 1 }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['mats', eid] });
-      toast(t('matAdded'));
-      setAddMatOpen(false);
-      setMatName('');
-    },
-    onError: (error) =>
-      toast(getCompactErrorMessage(error, t('errorGeneric')), 'error'),
-  });
+  const sortedSessions = useMemo(
+    () => [...(sessions ?? [])].sort((a, b) => a.order - b.order),
+    [sessions],
+  );
 
-  const autoMut = useMutation({
-    mutationFn: () =>
-      apiPost<AutoScheduleResponse>('/api/schedule/auto', {
-        eventId: eid,
-        ...autoForm,
-      }),
-    onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ['schedule', eid] });
-      toast(
-        result.diagnostics.fullySatisfied
-          ? t('scheduleUpdated')
-          : t('scheduleUpdatedWithConflicts', {
-              count: result.diagnostics.conflictCount,
-            }),
-        result.diagnostics.fullySatisfied ? 'success' : 'error',
-      );
-      setAutoOpen(false);
-    },
-    onError: (error) =>
-      toast(getCompactErrorMessage(error, t('errorGeneric')), 'error'),
-  });
+  const fightsBySession = useMemo(() => {
+    const map = new Map<string, ScheduleFightRow[]>();
+    const unassigned: ScheduleFightRow[] = [];
+    for (const f of fights ?? []) {
+      if (f.sessionId && f.orderInSession != null) {
+        const arr = map.get(f.sessionId) ?? [];
+        arr.push(f);
+        map.set(f.sessionId, arr);
+      } else if (f.isPlayable) {
+        unassigned.push(f);
+      }
+    }
+    for (const arr of map.values()) arr.sort((a, b) => (a.orderInSession ?? 0) - (b.orderInSession ?? 0));
+    return { map, unassigned };
+  }, [fights]);
+
+  // ── Mutations ────────────────────────────────────────────────────────────
 
   const upsertSessionMut = useMutation({
     mutationFn: (data: { id?: string; name: string; startTime: string; endTime: string; order: number }) =>
       apiPost('/api/schedule-sessions', { eventId: eid, ...data }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: sessionsQueryKey });
+      qc.invalidateQueries({ queryKey: sessionsQK });
       toast(t('sessionSaved'));
       setAddSessionOpen(false);
       setEditingSession(null);
       setSessionForm({ name: '', startTime: '', endTime: '' });
     },
-    onError: (error) =>
-      toast(getCompactErrorMessage(error, t('errorGeneric')), 'error'),
+    onError: (e) => toast(getCompactErrorMessage(e, t('errorGeneric')), 'error'),
   });
 
   const deleteSessionMut = useMutation({
-    mutationFn: (sessionId: string) =>
-      apiDelete(`/api/schedule-sessions/${sessionId}?eventId=${eid}`),
+    mutationFn: (id: string) => apiDelete(`/api/schedule-sessions/${id}?eventId=${eid}`),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: sessionsQueryKey });
-      qc.invalidateQueries({ queryKey: scheduleQueryKey });
+      qc.invalidateQueries({ queryKey: sessionsQK });
+      qc.invalidateQueries({ queryKey: scheduleQK });
       toast(t('sessionDeleted'));
       setDeleteSessionId(null);
     },
-    onError: (error) =>
-      toast(getCompactErrorMessage(error, t('errorGeneric')), 'error'),
+    onError: (e) => toast(getCompactErrorMessage(e, t('errorGeneric')), 'error'),
   });
+
+  const generateMut = useMutation({
+    mutationFn: () =>
+      apiPost<{ sessionCount: number; fightCount: number; diagnostics: { fullySatisfied: boolean; conflictCount: number } }>(
+        '/api/schedule/generate',
+        { eventId: eid, ...generateForm },
+      ),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: scheduleQK });
+      qc.invalidateQueries({ queryKey: sessionsQK });
+      setGapViolations(new Set());
+      toast(
+        result.diagnostics.fullySatisfied
+          ? t('generated')
+          : t('generatedWithConflicts', { count: result.diagnostics.conflictCount }),
+        result.diagnostics.fullySatisfied ? 'success' : 'error',
+      );
+      setGenerateOpen(false);
+    },
+    onError: (e) => toast(getCompactErrorMessage(e, t('errorGeneric')), 'error'),
+  });
+
+  const moveFightMut = useMutation({
+    mutationFn: (data: { fightId: string; toSessionId: string | null; insertAfterOrder: number }) =>
+      apiPost<{ ok: boolean; gapViolations: string[] }>('/api/schedule/move-session-fight', data),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: scheduleQK });
+      setGapViolations(new Set(result.gapViolations));
+      if (result.gapViolations.length > 0) toast(t('gapWarning'), 'error');
+    },
+    onError: (e) => toast(getCompactErrorMessage(e, t('errorGeneric')), 'error'),
+  });
+
+  const reorderSessionsMut = useMutation({
+    mutationFn: (sessionIds: string[]) =>
+      apiPost('/api/schedule/reorder-sessions', { eventId: eid, sessionIds }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sessionsQK }),
+    onError: (e) => toast(getCompactErrorMessage(e, t('errorGeneric')), 'error'),
+  });
+
+  // ── Session helpers ───────────────────────────────────────────────────────
 
   function openAddSession() {
     setEditingSession(null);
@@ -174,18 +267,14 @@ export function SchedulePageClient({ eventId }: Props) {
     setAddSessionOpen(true);
   }
 
-  function openEditSession(session: ScheduleSessionRow) {
-    setEditingSession(session);
+  function openEditSession(s: ScheduleSessionRow) {
+    setEditingSession(s);
     const toLocal = (iso: string) => {
       const d = new Date(iso);
       const pad = (n: number) => String(n).padStart(2, '0');
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     };
-    setSessionForm({
-      name: session.name,
-      startTime: toLocal(session.startTime),
-      endTime: toLocal(session.endTime),
-    });
+    setSessionForm({ name: s.name, startTime: toLocal(s.startTime), endTime: toLocal(s.endTime) });
     setAddSessionOpen(true);
   }
 
@@ -195,37 +284,52 @@ export function SchedulePageClient({ eventId }: Props) {
       name: sessionForm.name,
       startTime: new Date(sessionForm.startTime).toISOString(),
       endTime: new Date(sessionForm.endTime).toISOString(),
-      order: editingSession?.order ?? (sessions?.length ?? 0) + 1,
+      order: editingSession?.order ?? sortedSessions.length + 1,
     });
   }
 
-  const scheduleFlow = useMemo(
-    () => {
-      const matOrderById = new Map((mats ?? []).map((mat) => [mat.id, mat.order]));
-      return [...(fights ?? [])].sort((left, right) => {
-        const leftScheduled = left.matId != null && left.orderInMat != null;
-        const rightScheduled = right.matId != null && right.orderInMat != null;
-        if (leftScheduled !== rightScheduled) return leftScheduled ? -1 : 1;
+  // ── Fight DnD ─────────────────────────────────────────────────────────────
 
-        if (leftScheduled && rightScheduled) {
-          const matOrderLeft = left.matId ? (matOrderById.get(left.matId) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
-          const matOrderRight = right.matId ? (matOrderById.get(right.matId) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
-          if (matOrderLeft !== matOrderRight) return matOrderLeft - matOrderRight;
-          return (left.orderInMat ?? Number.MAX_SAFE_INTEGER) - (right.orderInMat ?? Number.MAX_SAFE_INTEGER);
-        }
+  function onFightDragStart(fightId: string, fromSessionId: string) {
+    setDragFight({ fightId, fromSessionId });
+  }
 
-        return (left.scheduleOrder ?? Number.MAX_SAFE_INTEGER) - (right.scheduleOrder ?? Number.MAX_SAFE_INTEGER);
-      });
-    },
-    [fights, mats],
-  );
+  function onFightDragEnd() {
+    setDragFight(null);
+    setDropFightTarget(null);
+  }
 
-  const unscheduledCount = useMemo(
-    () => (fights ?? []).filter((f) => f.isPlayable && !f.matId).length,
-    [fights],
-  );
+  function onFightDragOver(_e: React.DragEvent, sessionId: string, insertAfterOrder: number) {
+    if (dragFight) setDropFightTarget({ sessionId, insertAfterOrder });
+  }
 
-  const hasSessions = (sessions?.length ?? 0) > 0;
+  function onFightDrop(_e: React.DragEvent, sessionId: string, insertAfterOrder: number) {
+    if (!dragFight) return;
+    moveFightMut.mutate({ fightId: dragFight.fightId, toSessionId: sessionId, insertAfterOrder });
+    setDragFight(null);
+    setDropFightTarget(null);
+  }
+
+  // ── Session DnD ───────────────────────────────────────────────────────────
+
+  function onSessionDragEnd() {
+    if (dragSessionId && dropSessionTarget && dragSessionId !== dropSessionTarget) {
+      const ids = sortedSessions.map((s) => s.id);
+      const fromIdx = ids.indexOf(dragSessionId);
+      const toIdx = ids.indexOf(dropSessionTarget);
+      if (fromIdx !== -1 && toIdx !== -1) {
+        ids.splice(fromIdx, 1);
+        ids.splice(toIdx, 0, dragSessionId);
+        reorderSessionsMut.mutate(ids);
+      }
+    }
+    setDragSessionId(null);
+    setDropSessionTarget(null);
+  }
+
+  const hasSessions = sortedSessions.length > 0;
+  const totalScheduled = (fights ?? []).filter((f) => f.isScheduled).length;
+  const totalPlayable = (fights ?? []).filter((f) => f.isPlayable).length;
 
   return (
     <div className="space-y-6">
@@ -243,14 +347,12 @@ export function SchedulePageClient({ eventId }: Props) {
             />
             {isEditable && (
               <>
-                <SecondaryButton onClick={openAddSession}>
-                  {t('addSession')}
-                </SecondaryButton>
-                <SecondaryButton onClick={() => { setMatName(''); setAddMatOpen(true); }}>
-                  {t('addMat')}
-                </SecondaryButton>
-                <PrimaryButton onClick={() => setAutoOpen(true)}>
-                  {t('autoSchedule')}
+                <SecondaryButton onClick={openAddSession}>{t('addSession')}</SecondaryButton>
+                <PrimaryButton
+                  disabled={!hasSessions || totalPlayable === 0}
+                  onClick={() => setGenerateOpen(true)}
+                >
+                  {t('generateSchedule')}
                 </PrimaryButton>
               </>
             )}
@@ -262,12 +364,7 @@ export function SchedulePageClient({ eventId }: Props) {
         <EventPhaseGate
           gate={gate}
           locale={locale}
-          t={(key, values) =>
-            tGate(
-              key as Parameters<typeof tGate>[0],
-              values as Record<string, string | number | Date> | undefined,
-            )
-          }
+          t={(key, values) => tGate(key as Parameters<typeof tGate>[0], values as Record<string, string | number | Date> | undefined)}
           tEvents={(key) => tEvents(key as Parameters<typeof tEvents>[0])}
         />
       )}
@@ -281,81 +378,139 @@ export function SchedulePageClient({ eventId }: Props) {
         />
       )}
 
-      {/* Sessions display */}
-      {showContent && hasSessions && (
-        <div className="space-y-2">
-          <span className="text-[13px] font-medium text-[var(--color-text-muted)]">
-            {t('sessionsLabel')}
-          </span>
-          <div className="flex flex-wrap gap-2">
-            {sessions!.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center gap-2 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-1.5"
-              >
-                <span className="text-[12px] font-semibold text-[var(--color-text)]">{s.name}</span>
-                <span className="text-[11px] text-[var(--color-text-muted)]">
-                  {formatSessionTime(s.startTime)} – {formatSessionTime(s.endTime)}
-                </span>
-                {isEditable && (
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => openEditSession(s)}
-                      className="text-[11px] text-[var(--color-primary)] hover:underline"
-                    >
-                      {tCommon('edit')}
-                    </button>
-                    <button
-                      onClick={() => setDeleteSessionId(s.id)}
-                      className="text-[11px] text-[var(--color-danger)] hover:underline"
-                    >
-                      {tCommon('delete')}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {showContent && mats && mats.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[13px] font-medium text-[var(--color-text-muted)]">
-            {t('matsLabel')}:
-          </span>
-          {mats.map((m) => (
-            <span
-              key={m.id}
-              className="rounded-[var(--radius-pill)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-1 text-[12px] font-semibold text-[var(--color-text)]"
-            >
-              {m.name}
-            </span>
-          ))}
-          {unscheduledCount > 0 && (
-            <span className="text-[12px] text-[var(--color-warning)]">
-              {unscheduledCount} {t('unscheduled').toLowerCase()}
-            </span>
-          )}
-        </div>
-      )}
-
       {showContent && isLoading ? (
-        <SkeletonRows rows={4} cols={3} />
-      ) : showContent && !scheduleFlow.length ? (
+        <SkeletonRows rows={4} cols={2} />
+      ) : showContent && !hasSessions ? (
         <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
       ) : showContent ? (
-        <ScheduleFightGrid
-          fights={scheduleFlow}
-          sessions={sessions ?? []}
-          fightReadyLabel={t('fightReady')}
-          fightWaitingLabel={t('fightWaiting')}
-        />
+        <div className="space-y-4">
+          {/* Stats */}
+          <div className="flex items-center gap-3 text-[12px] text-[var(--color-text-muted)]">
+            <span>{totalScheduled}/{totalPlayable} {t('scheduled').toLowerCase()}</span>
+            {fightsBySession.unassigned.length > 0 && (
+              <span className="text-[var(--color-warning)]">
+                {fightsBySession.unassigned.length} {t('unscheduled').toLowerCase()}
+              </span>
+            )}
+          </div>
+
+          {/* Sessions */}
+          {sortedSessions.map((session) => {
+            const sessionFights = fightsBySession.map.get(session.id) ?? [];
+            const isSessionDropTarget = dragSessionId && dropSessionTarget === session.id;
+
+            return (
+              <div
+                key={session.id}
+                draggable={isEditable && !dragFight}
+                onDragStart={(e) => { if (isEditable && !dragFight) { e.stopPropagation(); setDragSessionId(session.id); }}}
+                onDragEnd={onSessionDragEnd}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (dragSessionId) setDropSessionTarget(session.id);
+                }}
+                className={`rounded-[var(--radius-card)] border transition
+                  ${isSessionDropTarget ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5' : 'border-[var(--color-border)] bg-[var(--color-surface-alt)]'}
+                  ${dragSessionId === session.id ? 'opacity-50' : ''}`}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 py-2.5">
+                  <div className="flex items-center gap-3">
+                    {isEditable && (
+                      <span className="select-none text-[var(--color-text-muted)]">⠿</span>
+                    )}
+                    <span className="text-[13px] font-semibold text-[var(--color-text)]">{session.name}</span>
+                    <span className="text-[12px] text-[var(--color-text-muted)]">
+                      {fmt(session.startTime)} – {fmt(session.endTime)}
+                    </span>
+                    <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[11px] text-[var(--color-text-muted)]">
+                      {sessionFights.length}
+                    </span>
+                  </div>
+                  {isEditable && (
+                    <div className="flex gap-3">
+                      <button onClick={() => openEditSession(session)} className="text-[12px] text-[var(--color-primary)] hover:underline">
+                        {tCommon('edit')}
+                      </button>
+                      <button onClick={() => setDeleteSessionId(session.id)} className="text-[12px] text-[var(--color-danger)] hover:underline">
+                        {tCommon('delete')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Fight list */}
+                <div
+                  className="space-y-1 px-4 pb-3"
+                  onDragOver={(e) => { e.preventDefault(); if (dragFight && sessionFights.length === 0) setDropFightTarget({ sessionId: session.id, insertAfterOrder: 0 }); }}
+                  onDrop={(e) => { if (dragFight && sessionFights.length === 0) onFightDrop(e, session.id, 0); }}
+                >
+                  {isEditable && dragFight && (
+                    <DropZone
+                      sessionId={session.id}
+                      insertAfterOrder={0}
+                      active={dropFightTarget?.sessionId === session.id && dropFightTarget.insertAfterOrder === 0}
+                      onDragOver={onFightDragOver}
+                      onDrop={onFightDrop}
+                    />
+                  )}
+
+                  {sessionFights.length === 0 ? (
+                    <p className="py-4 text-center text-[12px] text-[var(--color-text-muted)]">{t('emptySession')}</p>
+                  ) : (
+                    sessionFights.map((fight, idx) => (
+                      <div key={fight.id}>
+                        <FightCard
+                          fight={fight}
+                          index={idx}
+                          sessionId={session.id}
+                          isEditable={isEditable}
+                          isGapViolation={gapViolations.has(fight.id)}
+                          isDragging={dragFight?.fightId === fight.id}
+                          onDragStart={onFightDragStart}
+                          onDragEnd={onFightDragEnd}
+                          onDragOver={onFightDragOver}
+                          onDrop={onFightDrop}
+                        />
+                        {isEditable && dragFight && (
+                          <DropZone
+                            sessionId={session.id}
+                            insertAfterOrder={idx + 1}
+                            active={dropFightTarget?.sessionId === session.id && dropFightTarget.insertAfterOrder === idx + 1}
+                            onDragOver={onFightDragOver}
+                            onDrop={onFightDrop}
+                          />
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Unassigned */}
+          {fightsBySession.unassigned.length > 0 && (
+            <div className="rounded-[var(--radius-card)] border border-dashed border-[var(--color-border)] p-4">
+              <p className="mb-2 text-[12px] font-semibold text-[var(--color-text-muted)]">
+                {t('unscheduled')} ({fightsBySession.unassigned.length})
+              </p>
+              <div className="space-y-1">
+                {fightsBySession.unassigned.map((fight) => (
+                  <div key={fight.id} className="flex items-center gap-2 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px]">
+                    <span className="font-semibold text-[var(--color-text)]">{fight.redDisplayName} vs {fight.blueDisplayName}</span>
+                    <span className="text-[var(--color-text-muted)]">{fight.bracketRoundLabel} · #{fight.bracketFightNumber}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       ) : null}
 
       {isEditable && (
         <>
-          {/* Add/Edit session modal */}
+          {/* Add / Edit session modal */}
           <Modal
             open={addSessionOpen}
             onClose={() => { setAddSessionOpen(false); setEditingSession(null); }}
@@ -363,16 +518,9 @@ export function SchedulePageClient({ eventId }: Props) {
             description={t('addSessionDesc')}
             footer={
               <>
-                <SecondaryButton onClick={() => { setAddSessionOpen(false); setEditingSession(null); }}>
-                  {tCommon('cancel')}
-                </SecondaryButton>
+                <SecondaryButton onClick={() => { setAddSessionOpen(false); setEditingSession(null); }}>{tCommon('cancel')}</SecondaryButton>
                 <PrimaryButton
-                  disabled={
-                    !sessionForm.name.trim() ||
-                    !sessionForm.startTime ||
-                    !sessionForm.endTime ||
-                    upsertSessionMut.isPending
-                  }
+                  disabled={!sessionForm.name.trim() || !sessionForm.startTime || !sessionForm.endTime || upsertSessionMut.isPending}
                   onClick={submitSession}
                 >
                   {upsertSessionMut.isPending ? tCommon('loading') : tCommon('save')}
@@ -382,42 +530,21 @@ export function SchedulePageClient({ eventId }: Props) {
           >
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">
-                  {t('sessionName')}
-                </label>
-                <input
-                  className={INPUT}
-                  value={sessionForm.name}
-                  onChange={(e) => setSessionForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder={t('sessionNamePlaceholder')}
-                />
+                <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">{t('sessionName')}</label>
+                <input className={INPUT} value={sessionForm.name} onChange={(e) => setSessionForm((f) => ({ ...f, name: e.target.value }))} placeholder={t('sessionNamePlaceholder')} />
               </div>
               <div>
-                <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">
-                  {t('sessionStart')}
-                </label>
-                <input
-                  type="datetime-local"
-                  className={INPUT}
-                  value={sessionForm.startTime}
-                  onChange={(e) => setSessionForm((f) => ({ ...f, startTime: e.target.value }))}
-                />
+                <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">{t('sessionStart')}</label>
+                <input type="datetime-local" className={INPUT} value={sessionForm.startTime} onChange={(e) => setSessionForm((f) => ({ ...f, startTime: e.target.value }))} />
               </div>
               <div>
-                <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">
-                  {t('sessionEnd')}
-                </label>
-                <input
-                  type="datetime-local"
-                  className={INPUT}
-                  value={sessionForm.endTime}
-                  onChange={(e) => setSessionForm((f) => ({ ...f, endTime: e.target.value }))}
-                />
+                <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">{t('sessionEnd')}</label>
+                <input type="datetime-local" className={INPUT} value={sessionForm.endTime} onChange={(e) => setSessionForm((f) => ({ ...f, endTime: e.target.value }))} />
               </div>
             </div>
           </Modal>
 
-          {/* Delete session confirm modal */}
+          {/* Delete session modal */}
           <Modal
             open={!!deleteSessionId}
             onClose={() => setDeleteSessionId(null)}
@@ -425,112 +552,43 @@ export function SchedulePageClient({ eventId }: Props) {
             description={t('deleteSessionDesc')}
             footer={
               <>
-                <SecondaryButton onClick={() => setDeleteSessionId(null)}>
-                  {tCommon('cancel')}
-                </SecondaryButton>
-                <PrimaryButton
-                  disabled={deleteSessionMut.isPending}
-                  onClick={() => deleteSessionId && deleteSessionMut.mutate(deleteSessionId)}
-                >
+                <SecondaryButton onClick={() => setDeleteSessionId(null)}>{tCommon('cancel')}</SecondaryButton>
+                <PrimaryButton disabled={deleteSessionMut.isPending} onClick={() => deleteSessionId && deleteSessionMut.mutate(deleteSessionId)}>
                   {deleteSessionMut.isPending ? tCommon('loading') : tCommon('delete')}
                 </PrimaryButton>
               </>
             }
           >
-            <p className="text-[13px] text-[var(--color-text-muted)]">
-              {t('deleteSessionWarning')}
-            </p>
+            <p className="text-[13px] text-[var(--color-text-muted)]">{t('deleteSessionWarning')}</p>
           </Modal>
 
-          {/* Add mat modal */}
+          {/* Generate modal */}
           <Modal
-            open={addMatOpen}
-            onClose={() => setAddMatOpen(false)}
-            title={t('addMat')}
-            description={t('addMatDesc')}
+            open={generateOpen}
+            onClose={() => setGenerateOpen(false)}
+            title={t('generateSchedule')}
+            description={t('generateScheduleDesc')}
             footer={
               <>
-                <SecondaryButton onClick={() => setAddMatOpen(false)}>{tCommon('cancel')}</SecondaryButton>
-                <PrimaryButton disabled={!matName.trim() || addMatMut.isPending} onClick={() => addMatMut.mutate()}>
-                  {addMatMut.isPending ? tCommon('loading') : tCommon('create')}
-                </PrimaryButton>
-              </>
-            }
-          >
-            <label className="block text-[13px] font-medium text-[var(--color-text)]">{t('matName')}</label>
-            <input
-              className={`mt-1 ${INPUT}`}
-              value={matName}
-              onChange={(e) => setMatName(e.target.value)}
-              placeholder={t('matPlaceholder')}
-            />
-          </Modal>
-
-          {/* Auto-schedule modal */}
-          <Modal
-            open={autoOpen}
-            onClose={() => setAutoOpen(false)}
-            title={t('autoSchedule')}
-            description={t('autoScheduleDesc')}
-            footer={
-              <>
-                <SecondaryButton onClick={() => setAutoOpen(false)}>{tCommon('cancel')}</SecondaryButton>
-                <PrimaryButton disabled={autoMut.isPending || !autoForm.startTimeIso} onClick={() => autoMut.mutate()}>
-                  {autoMut.isPending ? tCommon('loading') : t('autoSchedule')}
+                <SecondaryButton onClick={() => setGenerateOpen(false)}>{tCommon('cancel')}</SecondaryButton>
+                <PrimaryButton disabled={generateMut.isPending} onClick={() => generateMut.mutate()}>
+                  {generateMut.isPending ? tCommon('loading') : t('generate')}
                 </PrimaryButton>
               </>
             }
           >
             <div className="space-y-3">
-              {([
-                { label: t('startTime'), key: 'startTimeIso', type: 'datetime-local' },
-                { label: t('avgBout'), key: 'avgBoutSeconds', type: 'number' },
-                { label: t('buffer'), key: 'bufferSeconds', type: 'number' },
-                { label: t('restMinutes'), key: 'restMinutes', type: 'number' },
-              ] as const).map(({ label, key, type }) => (
-                <div key={key}>
-                  <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">{label}</label>
-                  <input
-                    type={type}
-                    className={INPUT}
-                    value={autoForm[key]}
-                    onChange={(e) =>
-                      setAutoForm((f) => ({
-                        ...f,
-                        [key]: type === 'number' ? Number(e.target.value) : e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              ))}
-
-              {hasSessions && (
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={autoForm.useSessions}
-                    onChange={(e) =>
-                      setAutoForm((f) => ({ ...f, useSessions: e.target.checked }))
-                    }
-                    className="h-4 w-4 accent-[var(--color-primary)]"
-                  />
-                  <span className="text-[13px] text-[var(--color-text)]">
-                    {t('useSessionsLabel')}
-                  </span>
-                </label>
-              )}
-
-              {hasSessions && autoForm.useSessions && (
-                <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-2 text-[12px] text-[var(--color-text-muted)]">
-                  {sessions!.map((s) => (
-                    <div key={s.id}>
-                      <span className="font-semibold text-[var(--color-text)]">{s.name}</span>
-                      {' '}
-                      {formatSessionTime(s.startTime)} – {formatSessionTime(s.endTime)}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div>
+                <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">{t('avgBoutSeconds')}</label>
+                <input type="number" className={INPUT} value={generateForm.avgBoutSeconds} onChange={(e) => setGenerateForm((f) => ({ ...f, avgBoutSeconds: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label className="mb-1 block text-[13px] text-[var(--color-text-muted)]">{t('bufferSeconds')}</label>
+                <input type="number" className={INPUT} value={generateForm.bufferSeconds} onChange={(e) => setGenerateForm((f) => ({ ...f, bufferSeconds: Number(e.target.value) }))} />
+              </div>
+              <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-2 text-[12px] text-[var(--color-text-muted)]">
+                {t('gapRuleNote')}
+              </div>
             </div>
           </Modal>
         </>

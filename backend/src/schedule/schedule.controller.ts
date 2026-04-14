@@ -168,6 +168,94 @@ export class ScheduleController {
     });
   }
 
+  @Post('schedule/generate')
+  async generateSchedule(
+    @Req() req: AuthenticatedRequest,
+    @Body()
+    body: {
+      eventId: string;
+      avgBoutSeconds: number;
+      bufferSeconds: number;
+      override?: boolean;
+      reason?: string;
+    },
+  ) {
+    const auth = req.auth!;
+    if (!body.eventId) throw new HttpException('eventId_REQUIRED', HttpStatus.BAD_REQUEST);
+    try {
+      const result = await this.schedule.generateSchedule({
+        organisationId: auth.organisationId,
+        eventId: body.eventId,
+        actorUserId: auth.sub,
+        avgBoutSeconds: body.avgBoutSeconds ?? 180,
+        bufferSeconds: body.bufferSeconds ?? 60,
+        override: body.override ?? false,
+        reason: body.reason ?? null,
+      });
+      this.gateway.emitScheduleUpdate(body.eventId, { type: 'SCHEDULE_AUTO', updatedFightIds: [], matIds: [] });
+      return result;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'EVENT_NOT_FOUND') throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      const known = ['NO_SESSIONS', 'NO_SCHEDULABLE_FIGHTS', 'EVENT_NOT_READY_FOR_SCHEDULE', 'EVENT_READ_ONLY', 'OVERRIDE_REASON_REQUIRED'];
+      if (known.includes(msg)) throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      throw new HttpException('Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Post('schedule/move-session-fight')
+  async moveFightToSession(
+    @Req() req: AuthenticatedRequest,
+    @Body()
+    body: {
+      fightId: string;
+      toSessionId: string | null;
+      insertAfterOrder: number;
+      override?: boolean;
+      reason?: string;
+    },
+  ) {
+    const auth = req.auth!;
+    if (!body.fightId) throw new HttpException('fightId_REQUIRED', HttpStatus.BAD_REQUEST);
+    try {
+      const result = await this.schedule.moveFightToSession({
+        organisationId: auth.organisationId,
+        fightId: body.fightId,
+        actorUserId: auth.sub,
+        toSessionId: body.toSessionId ?? null,
+        insertAfterOrder: body.insertAfterOrder ?? 0,
+        override: body.override ?? false,
+        reason: body.reason ?? null,
+      });
+      this.gateway.emitScheduleUpdate('', { type: 'FIGHT_MOVED', fightId: body.fightId, toMatId: null, toOrder: body.insertAfterOrder });
+      return result;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'FIGHT_NOT_FOUND') throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      const known = ['EVENT_NOT_READY_FOR_SCHEDULE', 'EVENT_READ_ONLY', 'OVERRIDE_REASON_REQUIRED'];
+      if (known.includes(msg)) throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      throw new HttpException('Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Post('schedule/reorder-sessions')
+  async reorderSessions(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { eventId: string; sessionIds: string[] },
+  ) {
+    const auth = req.auth!;
+    if (!body.eventId || !Array.isArray(body.sessionIds))
+      throw new HttpException('VALIDATION_ERROR', HttpStatus.BAD_REQUEST);
+    await this.schedule.reorderSessions({
+      organisationId: auth.organisationId,
+      eventId: body.eventId,
+      actorUserId: auth.sub,
+      sessionIds: body.sessionIds,
+    });
+    this.gateway.emitScheduleUpdate(body.eventId, { type: 'SESSION_UPSERTED', sessionId: '' });
+    return { ok: true };
+  }
+
   @Post('schedule/auto')
   async autoSchedule(
     @Req() req: AuthenticatedRequest,

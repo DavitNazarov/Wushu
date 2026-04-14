@@ -636,6 +636,289 @@ export class ScheduleService {
     return updated;
   }
 
+  // ── Session-based scheduling (no mats required) ──────────────────────────
+
+  /**
+   * Generate a session-based schedule.
+   * Distributes fights into existing sessions by capacity.
+   * Creates additional sessions automatically on overflow.
+   */
+  async generateSchedule(input: {
+    organisationId: string;
+    eventId: string;
+    actorUserId: string;
+    avgBoutSeconds: number;
+    bufferSeconds: number;
+    override?: boolean;
+    reason?: string | null;
+  }) {
+    const event = await this.prisma.event.findFirst({
+      where: { id: input.eventId, organisationId: input.organisationId },
+    });
+    if (!event) throw new Error('EVENT_NOT_FOUND');
+    this.assertScheduleMutable({ event, override: input.override, reason: input.reason ?? null });
+
+    const sessions = await this.prisma.scheduleSession.findMany({
+      where: { organisationId: input.organisationId, eventId: input.eventId },
+      orderBy: { order: 'asc' },
+    });
+    if (sessions.length === 0) throw new Error('NO_SESSIONS');
+
+    const fights = await this.prisma.fight.findMany({
+      where: { organisationId: input.organisationId, eventId: input.eventId },
+      include: {
+        eventWeightCategory: {
+          select: {
+            categoryTemplateWeight: { select: { name: true, sortOrder: true } },
+            eventAgeGroup: {
+              select: { categoryTemplateAgeGroup: { select: { name: true, sortOrder: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    const { fights: orderedFights, diagnostics } = planAutoScheduleOrder(fights);
+    if (orderedFights.length === 0) throw new Error('NO_SCHEDULABLE_FIGHTS');
+
+    const boutMs = (input.avgBoutSeconds + input.bufferSeconds) * 1000;
+
+    // Build mutable session list (we may append auto-created overflow sessions)
+    const sessionList = [...sessions];
+
+    // Compute capacity per session
+    function sessionCapacity(s: { startTime: Date; endTime: Date }): number {
+      const durationMs = s.endTime.getTime() - s.startTime.getTime();
+      return Math.max(1, Math.floor(durationMs / boutMs));
+    }
+
+    type SessionAssignment = {
+      sessionId: string;
+      fights: string[]; // fight IDs in order
+    };
+    const assignments: SessionAssignment[] = sessionList.map((s) => ({ sessionId: s.id, fights: [] }));
+
+    let sessionIdx = 0;
+    for (const fight of orderedFights) {
+      // Find a session with remaining capacity
+      while (sessionIdx < assignments.length) {
+        const cap = sessionCapacity(sessionList[sessionIdx]);
+        if (assignments[sessionIdx].fights.length < cap) break;
+        sessionIdx++;
+      }
+
+      // Overflow: create a new session
+      if (sessionIdx >= assignments.length) {
+        const last = sessionList[sessionList.length - 1];
+        const gapMs = 60 * 60 * 1000; // 1 hour gap
+        const newStart = new Date(last.endTime.getTime() + gapMs);
+        // New session duration = same as last session
+        const lastDuration = last.endTime.getTime() - last.startTime.getTime();
+        const newEnd = new Date(newStart.getTime() + lastDuration);
+
+        const newSession = await this.prisma.scheduleSession.create({
+          data: {
+            organisationId: input.organisationId,
+            eventId: input.eventId,
+            name: `Session ${sessionList.length + 1}`,
+            startTime: newStart,
+            endTime: newEnd,
+            order: sessionList.length + 1,
+          },
+        });
+        sessionList.push(newSession);
+        assignments.push({ sessionId: newSession.id, fights: [] });
+        // sessionIdx now points to the new session
+      }
+
+      assignments[sessionIdx].fights.push(fight.id);
+    }
+
+    // Clear all session assignments for this event's fights, then apply new ones
+    await this.prisma.$transaction(async (tx) => {
+      // Clear existing session data
+      await tx.fight.updateMany({
+        where: { organisationId: input.organisationId, eventId: input.eventId },
+        data: { sessionId: null, orderInSession: null },
+      });
+
+      // Apply new assignments
+      for (const assignment of assignments) {
+        for (let i = 0; i < assignment.fights.length; i++) {
+          await tx.fight.update({
+            where: { id: assignment.fights[i] },
+            data: { sessionId: assignment.sessionId, orderInSession: i + 1 },
+          });
+        }
+      }
+
+      await this.audit.write(
+        {
+          organisationId: input.organisationId,
+          eventId: input.eventId,
+          actorUserId: input.actorUserId,
+          action: 'SCHEDULE_AUTO_GENERATED',
+          entityType: 'event',
+          entityId: input.eventId,
+          after: {
+            sessionCount: assignments.length,
+            fightCount: orderedFights.length,
+            avgBoutSeconds: input.avgBoutSeconds,
+            bufferSeconds: input.bufferSeconds,
+            restGapDiagnostics: diagnostics,
+          } as unknown as Prisma.JsonValue,
+          override: input.override ?? false,
+          reason: input.reason ?? null,
+        },
+        tx,
+      );
+    });
+
+    return { sessionCount: assignments.length, fightCount: orderedFights.length, diagnostics };
+  }
+
+  /**
+   * Move a fight to a different position within a session or to another session.
+   * insertAfterOrder: 0 = prepend, N = insert after Nth fight.
+   * Returns gap violations (fightIds of athletes with < 10-fight gap).
+   */
+  async moveFightToSession(input: {
+    organisationId: string;
+    fightId: string;
+    actorUserId: string;
+    toSessionId: string | null;
+    insertAfterOrder: number;
+    override?: boolean;
+    reason?: string | null;
+  }) {
+    const fight = await this.prisma.fight.findFirst({
+      where: { id: input.fightId, organisationId: input.organisationId },
+      include: { event: true },
+    });
+    if (!fight) throw new Error('FIGHT_NOT_FOUND');
+    this.assertScheduleMutable({ event: fight.event, override: input.override, reason: input.reason ?? null });
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const fromSessionId = fight.sessionId;
+
+      // Remove from source session and repack
+      if (fromSessionId) {
+        const sourceFights = await tx.fight.findMany({
+          where: { sessionId: fromSessionId, id: { not: input.fightId } },
+          orderBy: { orderInSession: 'asc' },
+        });
+        for (let i = 0; i < sourceFights.length; i++) {
+          await tx.fight.update({ where: { id: sourceFights[i].id }, data: { orderInSession: i + 1 } });
+        }
+      }
+
+      if (input.toSessionId === null) {
+        // Unassign
+        await tx.fight.update({
+          where: { id: input.fightId },
+          data: { sessionId: null, orderInSession: null },
+        });
+      } else {
+        // Insert into target session
+        const targetFights = await tx.fight.findMany({
+          where: {
+            sessionId: input.toSessionId,
+            id: fromSessionId === input.toSessionId ? { not: input.fightId } : undefined,
+          },
+          orderBy: { orderInSession: 'asc' },
+        });
+        const insertAt = Math.max(0, Math.min(targetFights.length, input.insertAfterOrder));
+        const ids = targetFights.map((f) => f.id);
+        ids.splice(insertAt, 0, input.fightId);
+        for (let i = 0; i < ids.length; i++) {
+          await tx.fight.update({ where: { id: ids[i] }, data: { sessionId: input.toSessionId, orderInSession: i + 1 } });
+        }
+      }
+
+      await this.audit.write(
+        {
+          organisationId: input.organisationId,
+          eventId: fight.eventId,
+          actorUserId: input.actorUserId,
+          action: 'FIGHT_MOVED',
+          entityType: 'fight',
+          entityId: input.fightId,
+          before: { sessionId: fromSessionId, orderInSession: fight.orderInSession } as unknown as Prisma.JsonValue,
+          after: { sessionId: input.toSessionId, insertAfterOrder: input.insertAfterOrder } as unknown as Prisma.JsonValue,
+          override: input.override ?? false,
+          reason: input.reason ?? null,
+        },
+        tx,
+      );
+    });
+
+    // Check gap violations across the event
+    const allSessionFights = await this.prisma.fight.findMany({
+      where: {
+        organisationId: input.organisationId,
+        eventId: fight.eventId,
+        sessionId: { not: null },
+        orderInSession: { not: null },
+      },
+      include: {
+        scheduleSession: { select: { order: true } },
+      },
+      orderBy: [{ scheduleSession: { order: 'asc' } }, { orderInSession: 'asc' }],
+    });
+
+    const gapViolations = this.checkGapViolations(allSessionFights);
+    return { ok: true, gapViolations };
+  }
+
+  /**
+   * Bulk-reorder sessions by providing session IDs in new order.
+   */
+  async reorderSessions(input: {
+    organisationId: string;
+    eventId: string;
+    actorUserId: string;
+    sessionIds: string[];
+  }) {
+    await this.prisma.$transaction(
+      input.sessionIds.map((id, idx) =>
+        this.prisma.scheduleSession.update({
+          where: { id },
+          data: { order: idx + 1 },
+        }),
+      ),
+    );
+    await this.audit.write({
+      organisationId: input.organisationId,
+      eventId: input.eventId,
+      actorUserId: input.actorUserId,
+      action: 'SCHEDULE_AUTO_GENERATED',
+      entityType: 'event',
+      entityId: input.eventId,
+      after: { reorderedSessions: input.sessionIds } as unknown as Prisma.JsonValue,
+      override: false,
+      reason: null,
+    });
+  }
+
+  private checkGapViolations(
+    fights: Array<{ id: string; redAthleteId: string | null; blueAthleteId: string | null }>,
+  ): string[] {
+    const lastIndexByAthlete = new Map<string, number>();
+    const violatedFightIds = new Set<string>();
+    for (let i = 0; i < fights.length; i++) {
+      const fight = fights[i];
+      for (const athleteId of [fight.redAthleteId, fight.blueAthleteId]) {
+        if (!athleteId) continue;
+        const last = lastIndexByAthlete.get(athleteId);
+        if (last != null && i - last - 1 < 10) {
+          violatedFightIds.add(fight.id);
+        }
+        lastIndexByAthlete.set(athleteId, i);
+      }
+    }
+    return [...violatedFightIds];
+  }
+
   private async hasImmediateRestViolation(input: {
     organisationId: string;
     eventId: string;

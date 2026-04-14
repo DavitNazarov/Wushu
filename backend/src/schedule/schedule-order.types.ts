@@ -41,6 +41,7 @@ export type ScheduleSourceFight = {
   orderInMat: number | null;
   scheduledStartTime: Date | null;
   sessionId: string | null;
+  orderInSession?: number | null;
   redAthlete?: FightAthlete | null;
   blueAthlete?: FightAthlete | null;
   winnerAthlete?: FightAthlete | null;
@@ -70,6 +71,7 @@ export type BuiltScheduleRow = {
   orderInMat: number | null;
   scheduledAt: Date | null;
   sessionId: string | null;
+  orderInSession: number | null;
 };
 
 export type ScheduleDisplayAthlete = FightAthlete | null | undefined;

@@ -644,6 +644,7 @@ model Fight {
   orderInMat         Int?
   scheduledStartTime DateTime?
   sessionId          String?
+  orderInSession     Int?
 
   winnerAthleteId   String?
   loserAthleteId    String?
@@ -675,6 +676,7 @@ model Fight {
   @@index([organisationId, eventId])
   @@index([organisationId, eventId, status])
   @@index([matId, orderInMat])
+  @@index([sessionId, orderInSession])
   @@index([eventWeightCategoryId])
   @@index([nextFightId])
 }
