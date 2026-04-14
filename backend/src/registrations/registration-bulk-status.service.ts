@@ -91,8 +91,8 @@ export class RegistrationBulkStatusService {
         action: 'REGISTRATION_STATUS_CHANGED',
         entityType: 'registration',
         entityId: registrationId,
-        before: { id: reg.id, status: reg.status } as Prisma.JsonValue,
-        after: { id: reg.id, status: input.newStatus } as Prisma.JsonValue,
+        before: { id: reg.id, status: reg.status } as unknown as Prisma.InputJsonValue,
+        after: { id: reg.id, status: input.newStatus } as unknown as Prisma.InputJsonValue,
         reason: input.reason ?? null,
         override: !isDirect || !mutable,
       });
