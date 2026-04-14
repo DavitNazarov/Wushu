@@ -115,7 +115,7 @@ describe('FightsService timer concurrency', () => {
     });
 
     expect(prisma.timerState.upsert).toHaveBeenCalled();
-    expect(result?.fightId).toBe('fight_1');
+    expect(result?.timer?.fightId).toBe('fight_1');
   });
 });
 

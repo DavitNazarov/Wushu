@@ -110,29 +110,26 @@ export class EventsService {
   async getPublicOrRegistrableBySlug(
     slug: string,
   ): Promise<EventWithCategoryTemplateId | null> {
-    const found = await this.prisma.event.findFirst({
-      where: { slug },
-      select: { id: true },
-    });
-    if (!found) return null;
-
-    try {
-      await this.automation.maybeAutoAdvanceById(found.id);
-    } catch (error) {
-      this.logger.error(
-        `Auto-advance check failed for event ${found.id}: ${String(error)}`,
-      );
-    }
-
     const event = await this.prisma.event.findFirst({
-      where: { id: found.id },
+      where: { slug },
       include: {
         categoryTemplateSnapshot: { select: { categoryTemplateId: true } },
       },
     });
+    if (!event) return null;
 
-    if (!event) {
-      return null;
+    // Skip auto-advance for LIVE events — the only LIVE transition is to
+    // COMPLETED at end of competition day, which the hourly cron handles.
+    // Calling maybeAutoAdvanceById on every live-page poll adds 2 extra DB
+    // round-trips for no benefit during an active competition.
+    if (event.lifecycle !== 'LIVE') {
+      try {
+        await this.automation.maybeAutoAdvanceById(event.id);
+      } catch (error) {
+        this.logger.error(
+          `Auto-advance check failed for event ${event.id}: ${String(error)}`,
+        );
+      }
     }
 
     const mapped = this.attachCategoryTemplateId(event);

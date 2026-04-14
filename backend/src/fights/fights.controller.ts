@@ -270,7 +270,7 @@ export class FightsController {
   ) {
     const auth = req.auth!;
     try {
-      const timer = await this.fights.timerAction({
+      const { timer, eventId, matId } = await this.fights.timerAction({
         organisationId: auth.organisationId,
         fightId: id,
         actorUserId: auth.sub,
@@ -279,19 +279,12 @@ export class FightsController {
         expectedUpdatedAt: body.expectedUpdatedAt ?? null,
       });
 
-      const fight = await this.fights.getById(auth.organisationId, id);
-      if (fight) {
-        this.gateway.emitFightUpdate(fight.eventId, fight.matId, fight);
-        this.gateway.emitTimerUpdate(fight.eventId, fight.matId, {
-          fightId: id,
-          timer,
-        });
-        this.gateway.emitScheduleUpdate(fight.eventId, {
-          type: 'LIVE_TIMER_CHANGED',
-          fightId: id,
-          matId: fight.matId,
-        });
-      }
+      this.gateway.emitTimerUpdate(eventId, matId, { fightId: id, timer });
+      this.gateway.emitScheduleUpdate(eventId, {
+        type: 'LIVE_TIMER_CHANGED',
+        fightId: id,
+        matId,
+      });
       return timer;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';

@@ -51,8 +51,13 @@ const FIGHT_STATE_TRANSITIONS: Record<FightStatus, FightStatus[]> = {
   CONFIRMED: [],
 };
 
+const LIVE_BOARD_CACHE_TTL_MS = 800;
+
 @Injectable()
 export class FightsService {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private readonly liveBoardCache = new Map<string, { data: any; ts: number }>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -193,7 +198,27 @@ export class FightsService {
     });
   }
 
+  /** Thin cache wrapper — invalidated after LIVE_BOARD_CACHE_TTL_MS. */
   async getLiveQueueBoard(input: {
+    organisationId: string;
+    eventId: string;
+  }) {
+    const cacheKey = `${input.organisationId}:${input.eventId}`;
+    const cached = this.liveBoardCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < LIVE_BOARD_CACHE_TTL_MS) {
+      return cached.data;
+    }
+    const data = await this.computeLiveQueueBoard(input);
+    this.liveBoardCache.set(cacheKey, { data, ts: Date.now() });
+    return data;
+  }
+
+  /** Call this to force-invalidate the board cache after mutations. */
+  invalidateLiveBoardCache(organisationId: string, eventId: string) {
+    this.liveBoardCache.delete(`${organisationId}:${eventId}`);
+  }
+
+  private async computeLiveQueueBoard(input: {
     organisationId: string;
     eventId: string;
   }) {
@@ -888,7 +913,7 @@ export class FightsService {
       throw new Error('ROUND_RESULT_ALREADY_SET');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const roundResult = await this.prisma.$transaction(async (tx) => {
       const latestTimer = await tx.timerState.findUnique({
         where: { fightId: input.fightId },
       });
@@ -1011,6 +1036,9 @@ export class FightsService {
         scheduleEventType: 'LIVE_REST_STARTED' as const,
       };
     });
+
+    this.invalidateLiveBoardCache(fight.organisationId, fight.eventId);
+    return roundResult;
   }
 
   async advanceExpiredTimers(now = new Date()) {
@@ -1302,7 +1330,7 @@ export class FightsService {
       updateData.confirmedAt = new Date();
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const txResult = await this.prisma.$transaction(async (tx) => {
       const updateResult = await tx.fight.updateMany({
         where: {
           id: input.fightId,
@@ -1400,6 +1428,9 @@ export class FightsService {
 
       return { fight: updated, advanced };
     });
+
+    this.invalidateLiveBoardCache(input.organisationId, fight.eventId);
+    return txResult;
   }
 
   async timerAction(input: {
@@ -1539,7 +1570,7 @@ export class FightsService {
       updatedByUserId: input.actorUserId,
     };
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.timerState.upsert({
         where: { fightId: input.fightId },
         create: {
@@ -1574,6 +1605,9 @@ export class FightsService {
 
       return updated;
     });
+
+    this.invalidateLiveBoardCache(input.organisationId, fight.eventId);
+    return { timer: result, eventId: fight.eventId, matId: fight.matId };
   }
 
   async setResult(input: {
@@ -1627,7 +1661,7 @@ export class FightsService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       return this.finalizeFightResult(tx, {
         fight,
         actorUserId: input.actorUserId,
@@ -1639,6 +1673,8 @@ export class FightsService {
         auditAction: input.override ? 'FIGHT_RESULT_AMENDED' : 'FIGHT_RESULT_SET',
       });
     });
+    this.invalidateLiveBoardCache(input.organisationId, fight.eventId);
+    return result;
   }
 
   private async propagateWinnerToNextFight(
