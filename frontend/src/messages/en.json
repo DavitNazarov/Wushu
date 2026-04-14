@@ -482,7 +482,7 @@
         "LOCKED": "Locked",
         "WEIGHIN": "Weigh-in",
         "WEIGH_IN_COMPLETED": "W-in done",
-        "DRAWN": "Drawn",
+        "DRAWN": "Draw done",
         "PUBLISHED": "Published",
         "LIVE": "Live",
         "COMPLETED": "Done"
@@ -2001,7 +2001,7 @@
       "draw": {
         "upcomingWithDate": "Draw control becomes available after registration closes on {date}.",
         "upcomingWithoutDate": "Draw control becomes available later in the event flow.",
-        "readonlyWithoutDate": "Draw has already been executed. Review the results here."
+        "readonlyWithoutDate": "Draw has already been executed. Review the results here. Use \"Change stage\" on the overview to go back if needed."
       },
       "schedule": {
         "upcomingWithDate": "Schedule becomes available after draw execution. Competition starts on {date}.",

@@ -76,6 +76,7 @@ export function DrawHeaderSummary({
                 <PrimaryButton
                   onClick={onGenerate}
                   disabled={!overview.actions.canGenerate || generating}
+                  title={actionBlockedReason ? t(`blockReason.${actionBlockedReason}`) : undefined}
                 >
                   {generating ? t('actionGenerating') : t('actionGenerate')}
                 </PrimaryButton>
@@ -84,6 +85,7 @@ export function DrawHeaderSummary({
                   onClick={onRegenerate}
                   disabled={!overview.actions.canRegenerate || regenerating}
                   className="!bg-[var(--color-danger)] hover:!opacity-90"
+                  title={actionBlockedReason ? t(`blockReason.${actionBlockedReason}`) : undefined}
                 >
                   {regenerating ? t('actionRegenerating') : t('actionRegenerate')}
                 </PrimaryButton>
