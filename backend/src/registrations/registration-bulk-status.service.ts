@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type { RegistrationStatus } from '@prisma/client';
+import type { Prisma, RegistrationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { RegistrationsService } from './registrations.service';
+import { isEventReadOnly, isRegistrationMutableLifecycle } from '../events/lifecycle-rules';
+import { ALLOWED_STATUS_TRANSITIONS } from './registrations.service';
 
 const ADMIN_BULK_STATUSES: RegistrationStatus[] = [
   'APPROVED',
@@ -25,10 +26,7 @@ export interface BulkStatusResponse {
 
 @Injectable()
 export class RegistrationBulkStatusService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly registrations: RegistrationsService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async setStatus(input: {
     organisationId: string;
@@ -42,71 +40,79 @@ export class RegistrationBulkStatusService {
     }
 
     const uniqueIds = [...new Set(input.registrationIds)];
+
+    // Single query: fetch all registrations + event lifecycle
     const existing = await this.prisma.registration.findMany({
-      where: {
-        organisationId: input.organisationId,
-        id: { in: uniqueIds },
-      },
-      select: {
-        id: true,
-        status: true,
-      },
+      where: { organisationId: input.organisationId, id: { in: uniqueIds } },
+      select: { id: true, status: true, event: { select: { id: true, lifecycle: true } } },
     });
 
-    const existingById = new Map(existing.map((registration) => [registration.id, registration]));
+    const existingById = new Map(existing.map((r) => [r.id, r]));
+
     const results: BulkStatusResultRow[] = [];
+    const toUpdateIds: string[] = [];
+    const auditRows: Prisma.AuditLogCreateManyInput[] = [];
 
     for (const registrationId of uniqueIds) {
-      const registration = existingById.get(registrationId);
-      if (!registration) {
-        results.push({
-          registrationId,
-          outcome: 'FAILED',
-          errorCode: 'REGISTRATION_NOT_FOUND',
-        });
+      const reg = existingById.get(registrationId);
+
+      if (!reg) {
+        results.push({ registrationId, outcome: 'FAILED', errorCode: 'REGISTRATION_NOT_FOUND' });
         continue;
       }
 
-      if (registration.status === input.newStatus) {
-        results.push({
-          registrationId,
-          outcome: 'SKIPPED',
-          errorCode: 'ALREADY_IN_TARGET_STATUS',
-        });
+      if (reg.status === input.newStatus) {
+        results.push({ registrationId, outcome: 'SKIPPED', errorCode: 'ALREADY_IN_TARGET_STATUS' });
         continue;
       }
 
-      try {
-        await this.registrations.setStatus({
-          organisationId: input.organisationId,
-          registrationId,
-          actorUserId: input.actorUserId,
-          newStatus: input.newStatus,
-          reason: input.reason ?? null,
-        });
-        results.push({
-          registrationId,
-          outcome: 'UPDATED',
-        });
-      } catch (error) {
-        results.push({
-          registrationId,
-          outcome: 'FAILED',
-          errorCode: error instanceof Error ? error.message : 'UNKNOWN',
-        });
+      const lifecycle = reg.event.lifecycle;
+      if (isEventReadOnly(lifecycle)) {
+        results.push({ registrationId, outcome: 'FAILED', errorCode: 'EVENT_READ_ONLY' });
+        continue;
       }
+
+      const allowed = ALLOWED_STATUS_TRANSITIONS[reg.status] ?? [];
+      const isDirect = allowed.includes(input.newStatus);
+      const mutable = isRegistrationMutableLifecycle(lifecycle);
+
+      if (!isDirect && !mutable && !input.reason) {
+        results.push({ registrationId, outcome: 'FAILED', errorCode: 'OVERRIDE_REASON_REQUIRED' });
+        continue;
+      }
+
+      toUpdateIds.push(registrationId);
+      results.push({ registrationId, outcome: 'UPDATED' });
+
+      auditRows.push({
+        organisationId: input.organisationId,
+        eventId: reg.event.id,
+        actorUserId: input.actorUserId,
+        action: 'REGISTRATION_STATUS_CHANGED',
+        entityType: 'registration',
+        entityId: registrationId,
+        before: { id: reg.id, status: reg.status } as Prisma.JsonValue,
+        after: { id: reg.id, status: input.newStatus } as Prisma.JsonValue,
+        reason: input.reason ?? null,
+        override: !isDirect || !mutable,
+      });
     }
 
-    const updatedCount = results.filter((result) => result.outcome === 'UPDATED').length;
-    const skippedCount = results.filter((result) => result.outcome === 'SKIPPED').length;
-    const failedCount = results.filter((result) => result.outcome === 'FAILED').length;
+    if (toUpdateIds.length > 0) {
+      // Two queries total regardless of count: updateMany + createMany
+      await this.prisma.$transaction([
+        this.prisma.registration.updateMany({
+          where: { id: { in: toUpdateIds } },
+          data: { status: input.newStatus },
+        }),
+        this.prisma.auditLog.createMany({ data: auditRows }),
+      ]);
+    }
 
-    return {
-      requestedCount: uniqueIds.length,
-      updatedCount,
-      skippedCount,
-      failedCount,
-      results,
-    };
+    const updatedCount = results.filter((r) => r.outcome === 'UPDATED').length;
+    const skippedCount = results.filter((r) => r.outcome === 'SKIPPED').length;
+    const failedCount = results.filter((r) => r.outcome === 'FAILED').length;
+
+    return { requestedCount: uniqueIds.length, updatedCount, skippedCount, failedCount, results };
   }
 }

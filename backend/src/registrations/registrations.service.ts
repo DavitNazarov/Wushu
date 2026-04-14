@@ -14,7 +14,7 @@ import {
   isRegistrationMutableLifecycle,
 } from '../events/lifecycle-rules';
 
-const ALLOWED_STATUS_TRANSITIONS: Record<
+export const ALLOWED_STATUS_TRANSITIONS: Record<
   RegistrationStatus,
   RegistrationStatus[]
 > = {
