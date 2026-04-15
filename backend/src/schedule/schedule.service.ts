@@ -214,40 +214,52 @@ export class ScheduleService {
     eventId: string;
     matId?: string;
   }) {
-    const fights = await this.prisma.fight.findMany({
-      where: {
-        organisationId: params.organisationId,
-        eventId: params.eventId,
-      },
-      include: {
-        mat: true,
-        redAthlete: { select: { id: true, firstName: true, lastName: true } },
-        blueAthlete: { select: { id: true, firstName: true, lastName: true } },
-        winnerAthlete: {
-          select: { id: true, firstName: true, lastName: true },
+    const [fights, sessions] = await Promise.all([
+      this.prisma.fight.findMany({
+        where: {
+          organisationId: params.organisationId,
+          eventId: params.eventId,
         },
-        eventWeightCategory: {
-          select: {
-            categoryTemplateWeight: {
-              select: { name: true, sortOrder: true },
-            },
-            eventAgeGroup: {
-              select: {
-                categoryTemplateAgeGroup: {
-                  select: { name: true, sortOrder: true },
+        include: {
+          mat: true,
+          redAthlete: { select: { id: true, firstName: true, lastName: true } },
+          blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+          winnerAthlete: {
+            select: { id: true, firstName: true, lastName: true },
+          },
+          eventWeightCategory: {
+            select: {
+              categoryTemplateWeight: {
+                select: { name: true, sortOrder: true },
+              },
+              eventAgeGroup: {
+                select: {
+                  categoryTemplateAgeGroup: {
+                    select: { name: true, sortOrder: true },
+                  },
                 },
               },
             },
           },
         },
-      },
-      orderBy: [
-        { eventWeightCategoryId: 'asc' },
-        { categoryCode: 'asc' },
-        { round: 'asc' },
-        { boutNo: 'asc' },
-      ],
-    });
+        orderBy: [
+          { eventWeightCategoryId: 'asc' },
+          { categoryCode: 'asc' },
+          { round: 'asc' },
+          { boutNo: 'asc' },
+        ],
+      }),
+      this.prisma.scheduleSession.findMany({
+        where: {
+          organisationId: params.organisationId,
+          eventId: params.eventId,
+        },
+        orderBy: { order: 'asc' },
+        select: { id: true, order: true },
+      }),
+    ]);
+
+    const sessionOrderById = new Map(sessions.map((s) => [s.id, s.order]));
 
     const scheduleRows = buildScheduleRows(fights).map((row) => ({
       ...row,
@@ -259,7 +271,7 @@ export class ScheduleService {
         id: row.id,
         matId: row.matId,
         orderInMat: row.orderInMat,
-        sessionOrder: null,
+        sessionOrder: row.sessionId ? (sessionOrderById.get(row.sessionId) ?? null) : null,
         orderInSession: row.orderInSession,
         scheduleOrder: row.scheduleOrder,
         status: row.status,
