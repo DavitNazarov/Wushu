@@ -55,8 +55,10 @@ const LIVE_BOARD_CACHE_TTL_MS = 800;
 
 @Injectable()
 export class FightsService {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private readonly liveBoardCache = new Map<string, { data: any; ts: number }>();
+  private readonly liveBoardCache = new Map<
+    string,
+    { data: Awaited<ReturnType<FightsService['computeLiveQueueBoard']>>; ts: number }
+  >();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -198,7 +200,7 @@ export class FightsService {
     });
   }
 
-  /** Thin cache wrapper — invalidated after LIVE_BOARD_CACHE_TTL_MS. */
+  /** Cached live board — expires after TTL or on explicit invalidation. */
   async getLiveQueueBoard(input: {
     organisationId: string;
     eventId: string;
@@ -1195,6 +1197,15 @@ export class FightsService {
 
       if (transition) {
         transitions.push(transition);
+      }
+    }
+
+    const invalidated = new Set<string>();
+    for (const t of transitions) {
+      const key = `${t.fight.organisationId}:${t.eventId}`;
+      if (!invalidated.has(key)) {
+        this.invalidateLiveBoardCache(t.fight.organisationId, t.eventId);
+        invalidated.add(key);
       }
     }
 
