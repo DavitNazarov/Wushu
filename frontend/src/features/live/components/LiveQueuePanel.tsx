@@ -45,7 +45,7 @@ export function LiveQueuePanel({ fights, title, emptyLabel, t }: Props) {
               <div key={fight.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                 {/* Order number */}
                 <span className="w-7 shrink-0 text-center text-[12px] font-semibold text-[var(--color-text-muted)]">
-                  #{fight.orderInMat ?? fight.scheduleOrder ?? fight.boutNo}
+                  #{fight.orderInSession ?? fight.orderInMat ?? fight.scheduleOrder ?? fight.boutNo}
                 </span>
 
                 {/* Fight info */}

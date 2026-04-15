@@ -7,6 +7,7 @@ import {
   GitBranch,
   Inbox,
   LayoutDashboard,
+  Monitor,
   Newspaper,
   Radio,
   Scale,
@@ -28,6 +29,7 @@ export type AdminNavItemKey =
   | 'brackets'
   | 'schedule'
   | 'live'
+  | 'display'
   | 'results'
   | 'clubs'
   | 'athletes'
@@ -70,6 +72,7 @@ export const adminNavSections: NavSection[] = [
       { key: 'brackets', href: '/admin/brackets', icon: GitBranch },
       { key: 'schedule', href: '/admin/schedule', icon: Clock },
       { key: 'live', href: '/admin/live', icon: Radio },
+      { key: 'display', href: '/display', icon: Monitor },
       { key: 'results', href: '/admin/results', icon: Trophy },
     ],
   },

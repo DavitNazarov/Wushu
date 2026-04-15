@@ -31,6 +31,7 @@ export interface LiveQueueFightRow {
   matId: string | null;
   matName: string | null;
   orderInMat: number | null;
+  orderInSession: number | null;
   scheduledAt: string | null;
   timerState: TimerState | null;
 }

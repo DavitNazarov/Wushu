@@ -70,6 +70,11 @@ export function AppShell({ children }: AppShellProps) {
         ? getAdminEventPath(locale, selectedEvent.id, eventPage)
         : `/${locale}/admin/events`;
     }
+    if (item.key === 'display') {
+      return selectedEvent?.id
+        ? `/${locale}/display/${selectedEvent.id}`
+        : `/${locale}/admin/events`;
+    }
     if (item.key === 'integrity') {
       return selectedEvent?.id
         ? `/${locale}/admin/integrity?eventId=${encodeURIComponent(selectedEvent.id)}`

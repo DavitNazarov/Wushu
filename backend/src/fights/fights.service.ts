@@ -350,6 +350,7 @@ export class FightsService {
         matId: row.matId,
         matName: row.matName,
         orderInMat: row.orderInMat,
+        orderInSession: row.orderInSession,
         scheduledAt: row.scheduledAt,
         timerState: this.toTimerStateView(fight.timerState),
       };

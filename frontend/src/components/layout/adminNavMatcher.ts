@@ -35,6 +35,7 @@ export function getActiveAdminNavKey(
   locale: string,
 ): AdminNavItemKey | null {
   const segments = getNormalizedPathSegments(pathname, locale);
+  if (segments[0] === 'display') return 'display';
   if (segments[0] !== 'admin') return null;
   if (segments.length === 1) return 'dashboard';
 

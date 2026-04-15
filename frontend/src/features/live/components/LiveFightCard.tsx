@@ -131,7 +131,7 @@ export function LiveFightCard({
         <div className="flex flex-wrap items-center gap-2">
           <StatusChip status={fight.status} label={tFight(fight.status)} domain="fight" />
           <span className="text-[12px] text-[var(--color-text-muted)]">
-            #{fight.orderInMat ?? fight.scheduleOrder ?? fight.boutNo} · {fight.bracketRoundLabel}
+            #{fight.orderInSession ?? fight.orderInMat ?? fight.scheduleOrder ?? fight.boutNo} · {fight.bracketRoundLabel}
           </span>
         </div>
       </div>
