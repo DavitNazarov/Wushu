@@ -199,6 +199,7 @@ export function AdminLivePageClient({ eventId }: Props) {
           <EmptyState title={tSchedule('emptyTitle')} description={tSchedule('emptyDescription')} />
         ) : (
         <>
+          {/* ── Current fight: hero control panel ── */}
           <LiveFightCard
             fight={currentFight}
             title={t('currentFight')}
@@ -238,17 +239,18 @@ export function AdminLivePageClient({ eventId }: Props) {
                   }
                 : undefined
             }
-            t={(key) => t(key as Parameters<typeof t>[0])}
+            t={(key, values) => t(key as Parameters<typeof t>[0], values)}
             tFight={(key) => tFight(key as Parameters<typeof tFight>[0])}
             tSchedule={(key) => tSchedule(key as Parameters<typeof tSchedule>[0])}
           />
 
-          <div className="grid gap-4 xl:grid-cols-2">
+          {/* ── Secondary: On Deck + Up Next + Queue ── */}
+          <div className="grid gap-4 lg:grid-cols-3">
             <LiveFightCard
               fight={liveQuery.data?.onDeckFight ?? null}
               title={t('onDeck')}
               emptyLabel={t('noUpcoming')}
-              t={(key) => t(key as Parameters<typeof t>[0])}
+              t={(key, values) => t(key as Parameters<typeof t>[0], values)}
               tFight={(key) => tFight(key as Parameters<typeof tFight>[0])}
               tSchedule={(key) => tSchedule(key as Parameters<typeof tSchedule>[0])}
             />
@@ -258,22 +260,21 @@ export function AdminLivePageClient({ eventId }: Props) {
               emptyLabel={t('noUpcoming')}
               t={(key, values) => t(key as Parameters<typeof t>[0], values)}
             />
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-2">
             <LiveQueuePanel
               fights={liveQuery.data?.queuePreview ?? []}
               title={t('queuePreview')}
               emptyLabel={t('noQueue')}
               t={(key, values) => t(key as Parameters<typeof t>[0], values)}
             />
-            <LiveQueuePanel
-              fights={liveQuery.data?.completedFights ?? []}
-              title={t('completedHistory')}
-              emptyLabel={t('noCompleted')}
-              t={(key, values) => t(key as Parameters<typeof t>[0], values)}
-            />
           </div>
+
+          {/* ── Completed fights ── */}
+          <LiveQueuePanel
+            fights={liveQuery.data?.completedFights ?? []}
+            title={t('completedHistory')}
+            emptyLabel={t('noCompleted')}
+            t={(key, values) => t(key as Parameters<typeof t>[0], values)}
+          />
         </>
         )
       ) : null}
