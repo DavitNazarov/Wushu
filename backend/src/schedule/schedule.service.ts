@@ -492,7 +492,7 @@ export class ScheduleService {
             fightCount: schedulableFights.length,
             matCount: mats.length,
             restGapDiagnostics: diagnostics,
-          } as Prisma.InputJsonValue,
+          } as unknown as Prisma.JsonValue,
           override: input.override ?? false,
           reason: input.reason ?? null,
         },
@@ -621,11 +621,11 @@ export class ScheduleService {
           before: {
             matId: fight.matId,
             orderInMat: fight.orderInMat,
-          } as Prisma.InputJsonValue,
+          } as unknown as Prisma.JsonValue,
           after: {
             matId: result.matId,
             orderInMat: result.orderInMat,
-          } as Prisma.InputJsonValue,
+          } as unknown as Prisma.JsonValue,
           reason: input.reason ?? null,
           override: input.override ?? false,
         },
@@ -905,7 +905,7 @@ export class ScheduleService {
       action: 'SCHEDULE_AUTO_GENERATED',
       entityType: 'event',
       entityId: input.eventId,
-      after: { reorderedSessions: input.sessionIds } as Prisma.InputJsonValue,
+      after: { reorderedSessions: input.sessionIds } as unknown as Prisma.JsonValue,
       override: false,
       reason: null,
     });
