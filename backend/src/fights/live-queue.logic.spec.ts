@@ -1,7 +1,7 @@
 import {
   computeLiveStatuses,
   deriveLiveQueueBoard,
-  type LiveQueueRow,
+  LiveQueueRow,
 } from './live-queue.logic';
 
 function createRow(input: Partial<LiveQueueRow> & { id: string }): LiveQueueRow {
@@ -9,6 +9,8 @@ function createRow(input: Partial<LiveQueueRow> & { id: string }): LiveQueueRow 
     id: input.id,
     matId: input.matId ?? 'mat-1',
     orderInMat: input.orderInMat ?? 1,
+    sessionOrder: input.sessionOrder ?? null,
+    orderInSession: input.orderInSession ?? null,
     scheduleOrder: input.scheduleOrder ?? input.orderInMat ?? 1,
     status: input.status ?? 'QUEUED',
     isPlayable: input.isPlayable ?? true,
@@ -45,5 +47,30 @@ describe('live-queue.logic', () => {
     expect(board.onDeck?.id).toBe('fight-2');
     expect(board.next.map((row) => row.id)).toEqual(['fight-3']);
     expect(board.completed.map((row) => row.id)).toEqual(['fight-4']);
+  });
+
+  it('session-ordered fights sort before unassigned fights', () => {
+    const board = deriveLiveQueueBoard([
+      createRow({ id: 'unassigned-1', matId: null, orderInMat: null, scheduleOrder: 1 }),
+      createRow({ id: 'session-2', matId: null, orderInMat: null, sessionOrder: 1, orderInSession: 2 }),
+      createRow({ id: 'session-1', matId: null, orderInMat: null, sessionOrder: 1, orderInSession: 1 }),
+    ]);
+
+    // Session-assigned fights come first, ordered by session then position
+    expect(board.current?.id).toBe('session-1');
+    expect(board.onDeck?.id).toBe('session-2');
+    expect(board.next.map((row) => row.id)).toEqual(['unassigned-1']);
+  });
+
+  it('orders fights across sessions: session 1 before session 2', () => {
+    const board = deriveLiveQueueBoard([
+      createRow({ id: 's2-f1', matId: null, orderInMat: null, sessionOrder: 2, orderInSession: 1 }),
+      createRow({ id: 's1-f1', matId: null, orderInMat: null, sessionOrder: 1, orderInSession: 1 }),
+      createRow({ id: 's1-f2', matId: null, orderInMat: null, sessionOrder: 1, orderInSession: 2 }),
+    ]);
+
+    expect(board.current?.id).toBe('s1-f1');
+    expect(board.onDeck?.id).toBe('s1-f2');
+    expect(board.next.map((row) => row.id)).toEqual(['s2-f1']);
   });
 });

@@ -171,7 +171,7 @@ export class ScheduleService {
     // Unlink fights from this session before deleting
     await this.prisma.fight.updateMany({
       where: { sessionId: input.sessionId },
-      data: { sessionId: null },
+      data: { sessionId: null, orderInSession: null },
     });
 
     return this.prisma.scheduleSession.delete({ where: { id: input.sessionId } });
@@ -259,6 +259,8 @@ export class ScheduleService {
         id: row.id,
         matId: row.matId,
         orderInMat: row.orderInMat,
+        sessionOrder: null,
+        orderInSession: row.orderInSession,
         scheduleOrder: row.scheduleOrder,
         status: row.status,
         isPlayable: row.isPlayable,
@@ -867,7 +869,7 @@ export class ScheduleService {
     });
 
     const gapViolations = this.checkGapViolations(allSessionFights);
-    return { ok: true, gapViolations };
+    return { ok: true, eventId: fight.eventId, gapViolations };
   }
 
   /**
@@ -898,6 +900,121 @@ export class ScheduleService {
       override: false,
       reason: null,
     });
+  }
+
+  /**
+   * Bulk-reorder fights within a session.
+   * orderedFightIds must contain all fight IDs currently in the session.
+   * Recalculates orderInSession as sequential 1,2,3...
+   */
+  async updateFightOrder(input: {
+    organisationId: string;
+    sessionId: string;
+    actorUserId: string;
+    orderedFightIds: string[];
+  }) {
+    const session = await this.prisma.scheduleSession.findFirst({
+      where: { id: input.sessionId, organisationId: input.organisationId },
+    });
+    if (!session) throw new Error('SESSION_NOT_FOUND');
+
+    const event = await this.prisma.event.findFirst({
+      where: { id: session.eventId, organisationId: input.organisationId },
+    });
+    if (!event) throw new Error('EVENT_NOT_FOUND');
+    this.assertScheduleMutable({ event });
+
+    const currentFights = await this.prisma.fight.findMany({
+      where: { sessionId: input.sessionId },
+      select: { id: true },
+    });
+    const currentIds = new Set(currentFights.map((f) => f.id));
+    const inputIds = new Set(input.orderedFightIds);
+
+    // Validate: input must contain exactly the same fight IDs as the session
+    if (currentIds.size !== inputIds.size || ![...currentIds].every((id) => inputIds.has(id))) {
+      throw new Error('FIGHT_IDS_MISMATCH');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (let i = 0; i < input.orderedFightIds.length; i++) {
+        await tx.fight.update({
+          where: { id: input.orderedFightIds[i] },
+          data: { orderInSession: i + 1 },
+        });
+      }
+
+      await this.audit.write(
+        {
+          organisationId: input.organisationId,
+          eventId: session.eventId,
+          actorUserId: input.actorUserId,
+          action: 'FIGHT_ORDER_UPDATED',
+          entityType: 'scheduleSession',
+          entityId: input.sessionId,
+          after: { orderedFightIds: input.orderedFightIds } as unknown as Prisma.JsonValue,
+          override: false,
+          reason: null,
+        },
+        tx,
+      );
+    });
+
+    return { ok: true, eventId: session.eventId };
+  }
+
+  /**
+   * Returns sessions with their ordered fights for an event.
+   * This is the authoritative schedule view.
+   */
+  async getEventSchedule(params: {
+    organisationId: string;
+    eventId: string;
+  }) {
+    const [sessions, fights] = await Promise.all([
+      this.prisma.scheduleSession.findMany({
+        where: { organisationId: params.organisationId, eventId: params.eventId },
+        orderBy: { order: 'asc' },
+      }),
+      this.prisma.fight.findMany({
+        where: {
+          organisationId: params.organisationId,
+          eventId: params.eventId,
+          sessionId: { not: null },
+        },
+        include: {
+          redAthlete: { select: { id: true, firstName: true, lastName: true } },
+          blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+          winnerAthlete: { select: { id: true, firstName: true, lastName: true } },
+          eventWeightCategory: {
+            select: {
+              categoryTemplateWeight: { select: { name: true, sortOrder: true } },
+              eventAgeGroup: {
+                select: {
+                  categoryTemplateAgeGroup: { select: { name: true, sortOrder: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { orderInSession: 'asc' },
+      }),
+    ]);
+
+    const fightsBySession = new Map<string, typeof fights>();
+    for (const fight of fights) {
+      if (!fight.sessionId) continue;
+      const bucket = fightsBySession.get(fight.sessionId) ?? [];
+      bucket.push(fight);
+      fightsBySession.set(fight.sessionId, bucket);
+    }
+
+    return sessions.map((session) => ({
+      ...session,
+      fights: (fightsBySession.get(session.id) ?? []).sort(
+        (a, b) => (a.orderInSession ?? 0) - (b.orderInSession ?? 0),
+      ),
+    }));
   }
 
   private checkGapViolations(

@@ -176,6 +176,15 @@ export class PublicCompetitionController {
     return this.schedule.listSessions(event.organisationId, event.id);
   }
 
+  @Get('event-schedule')
+  async getPublicEventSchedule(@Query('eventSlug') eventSlug: string) {
+    const event = await this.getAccessibleCompetitionEvent(eventSlug);
+    return this.schedule.getEventSchedule({
+      organisationId: event.organisationId,
+      eventId: event.id,
+    });
+  }
+
   @Get('live')
   async getPublicLive(@Query('eventSlug') eventSlug: string) {
     const event = await this.getAccessibleCompetitionEvent(eventSlug);
@@ -258,6 +267,8 @@ export class PublicCompetitionController {
     const board = deriveLiveQueueBoard(
       scheduleRows.map((row) => ({
         ...row,
+        sessionOrder: null,
+        orderInSession: row.orderInSession,
         isFinished: row.status === 'COMPLETE' || row.status === 'CONFIRMED',
       })),
     );

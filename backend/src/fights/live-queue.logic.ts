@@ -4,6 +4,8 @@ export type LiveQueueRow = {
   id: string;
   matId: string | null;
   orderInMat: number | null;
+  sessionOrder: number | null;
+  orderInSession: number | null;
   scheduleOrder: number | null;
   status: 'QUEUED' | 'ON_DECK' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETE' | 'CONFIRMED';
   isPlayable: boolean;
@@ -11,6 +13,21 @@ export type LiveQueueRow = {
 };
 
 export function compareQueueOrder(a: LiveQueueRow, b: LiveQueueRow): number {
+  // Session-based ordering is the primary sort key
+  const aHasSession = a.sessionOrder != null && a.orderInSession != null;
+  const bHasSession = b.sessionOrder != null && b.orderInSession != null;
+
+  if (aHasSession || bHasSession) {
+    // Fights assigned to sessions come before unassigned fights
+    if (aHasSession && !bHasSession) return -1;
+    if (!aHasSession && bHasSession) return 1;
+
+    // Both have sessions — sort by session order, then position within session
+    if (a.sessionOrder !== b.sessionOrder) return a.sessionOrder! - b.sessionOrder!;
+    return a.orderInSession! - b.orderInSession!;
+  }
+
+  // Fallback for fights without session assignment: mat ordering, then scheduleOrder
   const matOrderA = a.orderInMat ?? Number.MAX_SAFE_INTEGER;
   const matOrderB = b.orderInMat ?? Number.MAX_SAFE_INTEGER;
   if (matOrderA !== matOrderB) return matOrderA - matOrderB;

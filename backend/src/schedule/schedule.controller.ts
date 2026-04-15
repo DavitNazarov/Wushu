@@ -227,7 +227,7 @@ export class ScheduleController {
         override: body.override ?? false,
         reason: body.reason ?? null,
       });
-      this.gateway.emitScheduleUpdate('', { type: 'FIGHT_MOVED', fightId: body.fightId, toMatId: null, toOrder: body.insertAfterOrder });
+      this.gateway.emitScheduleUpdate(result.eventId, { type: 'FIGHT_MOVED', fightId: body.fightId, toMatId: null, toOrder: body.insertAfterOrder });
       return result;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
@@ -254,6 +254,57 @@ export class ScheduleController {
     });
     this.gateway.emitScheduleUpdate(body.eventId, { type: 'SESSION_UPSERTED', sessionId: '' });
     return { ok: true };
+  }
+
+  @Get('schedule/event')
+  async getEventSchedule(
+    @Req() req: AuthenticatedRequest,
+    @Query('eventId') eventId: string,
+  ) {
+    const auth = req.auth!;
+    if (!eventId)
+      throw new HttpException('eventId_REQUIRED', HttpStatus.BAD_REQUEST);
+    return this.schedule.getEventSchedule({
+      organisationId: auth.organisationId,
+      eventId,
+    });
+  }
+
+  @Post('schedule/reorder-fights')
+  async updateFightOrder(
+    @Req() req: AuthenticatedRequest,
+    @Body()
+    body: {
+      sessionId: string;
+      orderedFightIds: string[];
+    },
+  ) {
+    const auth = req.auth!;
+    if (!body.sessionId || !Array.isArray(body.orderedFightIds))
+      throw new HttpException('VALIDATION_ERROR', HttpStatus.BAD_REQUEST);
+    try {
+      const result = await this.schedule.updateFightOrder({
+        organisationId: auth.organisationId,
+        sessionId: body.sessionId,
+        actorUserId: auth.sub,
+        orderedFightIds: body.orderedFightIds,
+      });
+      this.gateway.emitScheduleUpdate(result.eventId, {
+        type: 'FIGHT_MOVED',
+        fightId: null,
+        toMatId: null,
+        toOrder: null,
+      });
+      return result;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'SESSION_NOT_FOUND' || msg === 'EVENT_NOT_FOUND')
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      const known = ['FIGHT_IDS_MISMATCH', 'EVENT_NOT_READY_FOR_SCHEDULE', 'EVENT_READ_ONLY'];
+      if (known.includes(msg))
+        throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      throw new HttpException('Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   @Post('schedule/auto')

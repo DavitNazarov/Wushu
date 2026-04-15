@@ -230,8 +230,15 @@ export class FightsService {
     });
     if (!event) throw new Error('EVENT_NOT_FOUND');
 
-    const [mats, fights] = await Promise.all([
+    const [mats, sessions, fights] = await Promise.all([
       this.prisma.mat.findMany({
+        where: {
+          organisationId: input.organisationId,
+          eventId: input.eventId,
+        },
+        orderBy: { order: 'asc' },
+      }),
+      this.prisma.scheduleSession.findMany({
         where: {
           organisationId: input.organisationId,
           eventId: input.eventId,
@@ -275,6 +282,8 @@ export class FightsService {
       }),
     ]);
 
+    const sessionOrderById = new Map(sessions.map((s) => [s.id, s.order]));
+
     const scheduleRows = buildScheduleRows(fights).map((row) => ({
       ...row,
       liveStatus: 'PENDING' as LiveFightStatus,
@@ -283,6 +292,7 @@ export class FightsService {
       ...row,
       matId: null,
       orderInMat: null,
+      sessionOrder: row.sessionId ? (sessionOrderById.get(row.sessionId) ?? null) : null,
       isFinished: row.status === 'COMPLETE' || row.status === 'CONFIRMED',
     }));
     const liveStatuses = computeLiveStatuses(
@@ -290,6 +300,8 @@ export class FightsService {
         id: row.id,
         matId: row.matId,
         orderInMat: row.orderInMat,
+        sessionOrder: row.sessionOrder,
+        orderInSession: row.orderInSession,
         scheduleOrder: row.scheduleOrder,
         status: row.status,
         isPlayable: row.isPlayable,
@@ -609,6 +621,8 @@ export class FightsService {
             id: row.id,
             matId: row.matId,
             orderInMat: row.orderInMat,
+            sessionOrder: null,
+            orderInSession: null,
             scheduleOrder: row.scheduleOrder,
             status: row.status,
             isPlayable: row.isPlayable,
