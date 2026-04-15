@@ -736,45 +736,41 @@ export class ScheduleService {
       assignments[sessionIdx].fights.push(fight.id);
     }
 
-    // Clear all session assignments for this event's fights, then apply new ones
-    await this.prisma.$transaction(async (tx) => {
-      // Clear existing session data
-      await tx.fight.updateMany({
+    // Clear all session assignments, then apply new ones in a single batch transaction
+    const writes: Prisma.PrismaPromise<unknown>[] = [
+      this.prisma.fight.updateMany({
         where: { organisationId: input.organisationId, eventId: input.eventId },
         data: { sessionId: null, orderInSession: null },
-      });
-
-      // Apply new assignments
-      for (const assignment of assignments) {
-        for (let i = 0; i < assignment.fights.length; i++) {
-          await tx.fight.update({
-            where: { id: assignment.fights[i] },
-            data: { sessionId: assignment.sessionId, orderInSession: i + 1 },
-          });
-        }
+      }),
+    ];
+    for (const assignment of assignments) {
+      for (let i = 0; i < assignment.fights.length; i++) {
+        writes.push(this.prisma.fight.update({
+          where: { id: assignment.fights[i] },
+          data: { sessionId: assignment.sessionId, orderInSession: i + 1 },
+        }));
       }
-
-      await this.audit.write(
-        {
-          organisationId: input.organisationId,
-          eventId: input.eventId,
-          actorUserId: input.actorUserId,
-          action: 'SCHEDULE_AUTO_GENERATED',
-          entityType: 'event',
-          entityId: input.eventId,
-          after: {
-            sessionCount: assignments.length,
-            fightCount: orderedFights.length,
-            avgBoutSeconds: input.avgBoutSeconds,
-            bufferSeconds: input.bufferSeconds,
-            restGapDiagnostics: diagnostics,
-          } as unknown as Prisma.JsonValue,
-          override: input.override ?? false,
-          reason: input.reason ?? null,
-        },
-        tx,
-      );
-    });
+    }
+    writes.push(this.prisma.auditLog.create({
+      data: {
+        organisationId: input.organisationId,
+        eventId: input.eventId,
+        actorUserId: input.actorUserId,
+        action: 'SCHEDULE_AUTO_GENERATED',
+        entityType: 'event',
+        entityId: input.eventId,
+        after: {
+          sessionCount: assignments.length,
+          fightCount: orderedFights.length,
+          avgBoutSeconds: input.avgBoutSeconds,
+          bufferSeconds: input.bufferSeconds,
+          restGapDiagnostics: diagnostics,
+        } as unknown as Prisma.JsonValue,
+        override: input.override ?? false,
+        reason: input.reason ?? null,
+      },
+    }));
+    await this.prisma.$transaction(writes);
 
     return { sessionCount: assignments.length, fightCount: orderedFights.length, diagnostics };
   }
@@ -800,73 +796,86 @@ export class ScheduleService {
     if (!fight) throw new Error('FIGHT_NOT_FOUND');
     this.assertScheduleMutable({ event: fight.event, override: input.override, reason: input.reason ?? null });
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      const fromSessionId = fight.sessionId;
+    const fromSessionId = fight.sessionId;
 
-      // Remove from source session and repack
-      if (fromSessionId) {
-        const sourceFights = await tx.fight.findMany({
-          where: { sessionId: fromSessionId, id: { not: input.fightId } },
-          orderBy: { orderInSession: 'asc' },
-        });
-        for (let i = 0; i < sourceFights.length; i++) {
-          await tx.fight.update({ where: { id: sourceFights[i].id }, data: { orderInSession: i + 1 } });
-        }
-      }
-
-      if (input.toSessionId === null) {
-        // Unassign
-        await tx.fight.update({
-          where: { id: input.fightId },
-          data: { sessionId: null, orderInSession: null },
-        });
-      } else {
-        // Insert into target session
-        const targetFights = await tx.fight.findMany({
-          where: {
-            sessionId: input.toSessionId,
-            id: fromSessionId === input.toSessionId ? { not: input.fightId } : undefined,
-          },
-          orderBy: { orderInSession: 'asc' },
-        });
-        const insertAt = Math.max(0, Math.min(targetFights.length, input.insertAfterOrder));
-        const ids = targetFights.map((f) => f.id);
-        ids.splice(insertAt, 0, input.fightId);
-        for (let i = 0; i < ids.length; i++) {
-          await tx.fight.update({ where: { id: ids[i] }, data: { sessionId: input.toSessionId, orderInSession: i + 1 } });
-        }
-      }
-
-      await this.audit.write(
-        {
+    // Fetch source, target, and all-event fights in parallel
+    const [sourceFights, targetFights, allSessionFights] = await Promise.all([
+      fromSessionId
+        ? this.prisma.fight.findMany({
+            where: { sessionId: fromSessionId, id: { not: input.fightId } },
+            orderBy: { orderInSession: 'asc' },
+            select: { id: true, orderInSession: true, redAthleteId: true, blueAthleteId: true },
+          })
+        : Promise.resolve([]),
+      input.toSessionId
+        ? this.prisma.fight.findMany({
+            where: {
+              sessionId: input.toSessionId,
+              id: fromSessionId === input.toSessionId ? { not: input.fightId } : undefined,
+            },
+            orderBy: { orderInSession: 'asc' },
+            select: { id: true, orderInSession: true, redAthleteId: true, blueAthleteId: true },
+          })
+        : Promise.resolve([]),
+      this.prisma.fight.findMany({
+        where: {
           organisationId: input.organisationId,
           eventId: fight.eventId,
-          actorUserId: input.actorUserId,
-          action: 'FIGHT_MOVED',
-          entityType: 'fight',
-          entityId: input.fightId,
-          before: { sessionId: fromSessionId, orderInSession: fight.orderInSession } as unknown as Prisma.JsonValue,
-          after: { sessionId: input.toSessionId, insertAfterOrder: input.insertAfterOrder } as unknown as Prisma.JsonValue,
-          override: input.override ?? false,
-          reason: input.reason ?? null,
+          sessionId: { not: null },
+          orderInSession: { not: null },
         },
-        tx,
-      );
-    });
+        include: { scheduleSession: { select: { order: true } } },
+        orderBy: [{ scheduleSession: { order: 'asc' } }, { orderInSession: 'asc' }],
+      }),
+    ]);
 
-    // Check gap violations across the event
-    const allSessionFights = await this.prisma.fight.findMany({
-      where: {
+    // Build all DB writes upfront, then execute in a single transaction batch
+    const writes: Prisma.PrismaPromise<unknown>[] = [];
+
+    // Repack source session — only update fights whose position actually changed
+    for (let i = 0; i < sourceFights.length; i++) {
+      const newOrder = i + 1;
+      if (sourceFights[i].orderInSession !== newOrder) {
+        writes.push(this.prisma.fight.update({ where: { id: sourceFights[i].id }, data: { orderInSession: newOrder } }));
+      }
+    }
+
+    if (input.toSessionId === null) {
+      // Unassign
+      writes.push(this.prisma.fight.update({
+        where: { id: input.fightId },
+        data: { sessionId: null, orderInSession: null },
+      }));
+    } else {
+      // Insert into target session
+      const insertAt = Math.max(0, Math.min(targetFights.length, input.insertAfterOrder));
+      const ids = targetFights.map((f) => f.id);
+      ids.splice(insertAt, 0, input.fightId);
+      for (let i = 0; i < ids.length; i++) {
+        writes.push(this.prisma.fight.update({
+          where: { id: ids[i] },
+          data: { sessionId: input.toSessionId, orderInSession: i + 1 },
+        }));
+      }
+    }
+
+    // Audit write
+    writes.push(this.prisma.auditLog.create({
+      data: {
         organisationId: input.organisationId,
         eventId: fight.eventId,
-        sessionId: { not: null },
-        orderInSession: { not: null },
+        actorUserId: input.actorUserId,
+        action: 'FIGHT_MOVED',
+        entityType: 'fight',
+        entityId: input.fightId,
+        before: { sessionId: fromSessionId, orderInSession: fight.orderInSession } as unknown as Prisma.JsonValue,
+        after: { sessionId: input.toSessionId, insertAfterOrder: input.insertAfterOrder } as unknown as Prisma.JsonValue,
+        override: input.override ?? false,
+        reason: input.reason ?? null,
       },
-      include: {
-        scheduleSession: { select: { order: true } },
-      },
-      orderBy: [{ scheduleSession: { order: 'asc' } }, { orderInSession: 'asc' }],
-    });
+    }));
+
+    await this.prisma.$transaction(writes);
 
     const gapViolations = this.checkGapViolations(allSessionFights);
     return { ok: true, eventId: fight.eventId, gapViolations };
@@ -936,29 +945,23 @@ export class ScheduleService {
       throw new Error('FIGHT_IDS_MISMATCH');
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      for (let i = 0; i < input.orderedFightIds.length; i++) {
-        await tx.fight.update({
-          where: { id: input.orderedFightIds[i] },
-          data: { orderInSession: i + 1 },
-        });
-      }
-
-      await this.audit.write(
-        {
-          organisationId: input.organisationId,
-          eventId: session.eventId,
-          actorUserId: input.actorUserId,
-          action: 'FIGHT_ORDER_UPDATED',
-          entityType: 'scheduleSession',
-          entityId: input.sessionId,
-          after: { orderedFightIds: input.orderedFightIds } as unknown as Prisma.JsonValue,
-          override: false,
-          reason: null,
-        },
-        tx,
-      );
-    });
+    const writes: Prisma.PrismaPromise<unknown>[] = input.orderedFightIds.map(
+      (id, i) => this.prisma.fight.update({ where: { id }, data: { orderInSession: i + 1 } }),
+    );
+    writes.push(this.prisma.auditLog.create({
+      data: {
+        organisationId: input.organisationId,
+        eventId: session.eventId,
+        actorUserId: input.actorUserId,
+        action: 'FIGHT_ORDER_UPDATED',
+        entityType: 'scheduleSession',
+        entityId: input.sessionId,
+        after: { orderedFightIds: input.orderedFightIds } as unknown as Prisma.JsonValue,
+        override: false,
+        reason: null,
+      },
+    }));
+    await this.prisma.$transaction(writes);
 
     return { ok: true, eventId: session.eventId };
   }
