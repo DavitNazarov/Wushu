@@ -11,6 +11,8 @@ import {
   HttpException,
   Logger,
 } from '@nestjs/common';
+import { timingSafeEqual } from 'crypto';
+import { loginSchema, signupSchema, bootstrapAdminSchema } from './auth.schemas';
 import Express from 'express';
 import { Throttle, ThrottlerGuard, SkipThrottle } from '@nestjs/throttler';
 import {
@@ -44,16 +46,31 @@ export class AuthController {
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async login(
-    @Body() body: { email: string; password: string },
+    @Body() body: unknown,
     @Res({ passthrough: true }) res: Express.Response,
     @Req() req: Express.Request,
   ) {
+    const parsed = loginSchema.safeParse(body);
+    if (!parsed.success) {
+      res.status(HttpStatus.BAD_REQUEST);
+      return {
+        error: 'VALIDATION_ERROR',
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      };
+    }
+
     const ipAddress =
       (req.headers['x-forwarded-for'] as string) ?? req.ip ?? null;
-    const result = await this.auth.authenticate(body.email, body.password);
+    const result = await this.auth.authenticate(
+      parsed.data.email,
+      parsed.data.password,
+    );
 
     if (!result.ok) {
-      await this.auth.logSignInAttempt(body.email, false, { ipAddress });
+      await this.auth.logSignInAttempt(parsed.data.email, false, { ipAddress });
       res.status(HttpStatus.UNAUTHORIZED);
       return { error: result.error };
     }
@@ -68,13 +85,13 @@ export class AuthController {
     // Store refresh token hash in DB for rotation + revocation
     await this.auth.storeRefreshToken(result.userId, result.refreshToken);
 
-    await this.auth.logSignInAttempt(body.email, true, {
+    await this.auth.logSignInAttempt(parsed.data.email, true, {
       ipAddress,
       userId: result.userId,
       organisationId: result.organisationId,
     });
 
-    this.logger.log(`[auth] login ok for ${body.email}`);
+    this.logger.log('[auth] login ok');
     return { ok: true, role: result.role };
   }
 
@@ -146,7 +163,8 @@ export class AuthController {
   }
 
   @Get('me')
-  @SkipThrottle()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   async me(
     @Req() req: Express.Request,
     @Res({ passthrough: true }) res: Express.Response,
@@ -196,6 +214,7 @@ export class AuthController {
       role: me.role,
       capabilities: me.capabilities,
       clubId: me.clubId,
+      nationality: me.nationality,
       displayName: me.displayName,
       clubName: me.clubName,
       organisationName: me.organisationName,
@@ -207,28 +226,34 @@ export class AuthController {
   @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
   async signup(
     @Req() req: AuthenticatedRequest,
-    @Body()
-    body: {
-      email: string;
-      password: string;
-      displayName: string;
-      role: 'admin' | 'coach';
-      clubId?: string | null;
-    },
+    @Body() body: unknown,
   ) {
     const auth = req.auth;
     if (!auth)
       throw new HttpException('UNAUTHENTICATED', HttpStatus.UNAUTHORIZED);
 
+    const parsed = signupSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid signup payload',
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
+    }
+
     try {
       const result = await this.authUser.registerUser({
         organisationId: auth.organisationId,
         actorUserId: auth.sub,
-        email: body.email,
-        password: body.password,
-        displayName: body.displayName,
-        role: body.role,
-        clubId: body.clubId ?? null,
+        email: parsed.data.email,
+        password: parsed.data.password,
+        displayName: parsed.data.displayName,
+        role: parsed.data.role,
+        clubId: parsed.data.clubId ?? null,
+        nationality: parsed.data.nationality ?? null,
       });
       return { ok: true, id: result.id };
     } catch (e: any) {
@@ -270,20 +295,32 @@ export class AuthController {
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 3, ttl: 60_000 } })
   async bootstrapAdmin(
-    @Body()
-    body: {
-      email: string;
-      password: string;
-      displayName: string;
-      bootstrapSecret?: string;
-    },
+    @Body() body: unknown,
   ) {
+    const parsed = bootstrapAdminSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid bootstrap payload',
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
+    }
+
     // If BOOTSTRAP_SECRET is configured in the environment, the caller must
     // present the matching value. This prevents an attacker who can reach the
     // API before the operator from hijacking the initial admin account.
     const requiredSecret = process.env.BOOTSTRAP_SECRET?.trim();
     if (requiredSecret) {
-      if (!body.bootstrapSecret || body.bootstrapSecret !== requiredSecret) {
+      const provided = parsed.data.bootstrapSecret?.trim();
+      const expectedBuffer = Buffer.from(requiredSecret, 'utf8');
+      const providedBuffer = Buffer.from(provided ?? '', 'utf8');
+      if (
+        expectedBuffer.length !== providedBuffer.length ||
+        !timingSafeEqual(expectedBuffer, providedBuffer)
+      ) {
         throw new HttpException('FORBIDDEN', HttpStatus.FORBIDDEN);
       }
     }
@@ -299,9 +336,9 @@ export class AuthController {
 
     try {
       const result = await this.authUser.bootstrapInitialAdmin({
-        email: body.email,
-        password: body.password,
-        displayName: body.displayName,
+        email: parsed.data.email,
+        password: parsed.data.password,
+        displayName: parsed.data.displayName,
       });
       return { ok: true, id: result.id, organisationId: result.organisationId };
     } catch (e: any) {

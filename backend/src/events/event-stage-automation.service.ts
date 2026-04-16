@@ -79,9 +79,10 @@ export class EventStageAutomationService {
    * Scan all events eligible for auto-advance and apply transitions.
    * Called by the hourly cron and by the admin "run now" endpoint.
    */
-  async checkAndAdvanceStages(): Promise<number> {
+  async checkAndAdvanceStages(organisationId?: string): Promise<number> {
     const candidates = await this.prisma.event.findMany({
       where: {
+        ...(organisationId ? { organisationId } : {}),
         OR: [
           {
             autoAdvanceStage: true,

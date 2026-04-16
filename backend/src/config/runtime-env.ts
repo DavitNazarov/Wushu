@@ -47,7 +47,16 @@ export function createCorsOriginDelegate(): (
   const allowedOrigins = new Set(getAllowedCorsOrigins());
 
   return (origin, callback) => {
-    if (!origin || allowedOrigins.has(normalizeOrigin(origin))) {
+    const normalized = origin ? normalizeOrigin(origin) : '';
+    const isProd = process.env.NODE_ENV === 'production';
+    const isAllowed = normalized && allowedOrigins.has(normalized);
+
+    if (!isProd) {
+      if (!origin || isAllowed) {
+        callback(null, true);
+        return;
+      }
+    } else if (isAllowed) {
       callback(null, true);
       return;
     }

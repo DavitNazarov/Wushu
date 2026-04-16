@@ -52,8 +52,11 @@ export class EventsController {
   /** Admin: immediately run the stage-automation check for all eligible events. */
   @Post('stage-automation/run')
   @HttpCode(HttpStatus.OK)
-  async runStageAutomation() {
-    const advanced = await this.stageAutomation.checkAndAdvanceStages();
+  async runStageAutomation(@Req() req: AuthenticatedRequest) {
+    const auth = req.auth!;
+    const advanced = await this.stageAutomation.checkAndAdvanceStages(
+      auth.organisationId,
+    );
     return { advanced };
   }
 

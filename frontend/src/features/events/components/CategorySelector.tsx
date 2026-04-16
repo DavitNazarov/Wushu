@@ -58,13 +58,9 @@ function AgeGroupSection({
 
   return (
     <div className="overflow-hidden rounded-[20px] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm ring-1 ring-black/5 dark:ring-white/5">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between px-4 py-3.5 text-left transition hover:bg-[var(--color-surface-alt)]/70"
-      >
+      <div className="flex w-full items-center justify-between px-4 py-3.5 text-left transition hover:bg-[var(--color-surface-alt)]/70">
         <div className="min-w-0 flex items-center gap-3">
-          <label className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+          <label className="flex items-center gap-2">
             <Checkbox
               checked={allSelected ? true : anySelected ? 'indeterminate' : false}
               onCheckedChange={(checked) => onToggleAll(checked === true)}
@@ -91,10 +87,16 @@ function AgeGroupSection({
             ) : null}
           </div>
         </div>
-        <span className="ml-3 flex h-9 w-9 items-center justify-center rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]">
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          aria-expanded={open}
+          aria-label={open ? 'Collapse' : 'Expand'}
+          className="ml-3 flex h-9 w-9 items-center justify-center rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/40"
+        >
           <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
-        </span>
-      </button>
+        </button>
+      </div>
 
       {open ? (
         <div className="grid grid-cols-1 gap-2 border-t border-[var(--color-border)]/80 bg-[var(--color-surface-alt)]/70 px-4 py-3 sm:grid-cols-2 xl:grid-cols-3">

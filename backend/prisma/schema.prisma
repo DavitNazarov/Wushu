@@ -156,6 +156,7 @@ model User {
   displayName    String
   role           UserRole @default(athlete)
   clubId         String?
+  nationality    String?
   isActive       Boolean  @default(true)
   deletedAt      DateTime?
   dqReason       String?
@@ -217,6 +218,7 @@ model Event {
   id             String         @id @default(cuid())
   organisationId String
   name           String
+  nameKa         String?
   slug           String
   location       String?
   timezone       String         @default("Asia/Tbilisi")
@@ -454,6 +456,7 @@ model Club {
   id             String   @id @default(cuid())
   organisationId String
   name           String
+  nameKa         String?
   city           String?
   country        String?
   createdAt      DateTime @default(now())
@@ -485,9 +488,11 @@ model Athlete {
   organisationId String
   clubId         String?
   firstName      String
+  firstNameKa    String?
   lastName       String
+  lastNameKa     String?
   dateOfBirth    DateTime
-  documentId     String?
+  documentId     String
   sex            AthleteSex?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -502,6 +507,7 @@ model Athlete {
   mergedFrom     AthleteMerge[] @relation("MergePrimary")
   mergedInto     AthleteMerge[] @relation("MergeSecondary")
 
+  @@unique([organisationId, documentId])
   @@index([organisationId, lastName, firstName])
   @@index([organisationId, dateOfBirth, documentId])
 }

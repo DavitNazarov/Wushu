@@ -17,15 +17,18 @@ function getCookieSameSite(): SameSiteValue {
 
 function getCookieBaseOptions(): Pick<
   CookieOptions,
-  'httpOnly' | 'sameSite' | 'secure' | 'path'
+  'httpOnly' | 'sameSite' | 'secure' | 'path' | 'domain'
 > {
   const sameSite = getCookieSameSite();
+  const rawDomain = process.env.COOKIE_DOMAIN?.trim();
+  const domain = rawDomain && rawDomain.length > 0 ? rawDomain : undefined;
   return {
     httpOnly: true,
     sameSite,
     // Secure must be true when sameSite='none'; also always true in production.
     secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
     path: '/',
+    domain,
   };
 }
 

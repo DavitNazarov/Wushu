@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AbstractHttpAdapter } from '@nestjs/core/adapters/http-adapter';
+import express from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -19,14 +20,22 @@ export async function createApp(
 ): Promise<INestApplication> {
   const { httpAdapter, globalPrefix = 'api' } = options;
   const app = httpAdapter
-    ? await NestFactory.create(AppModule, httpAdapter)
-    : await NestFactory.create(AppModule);
+    ? await NestFactory.create(AppModule, httpAdapter, { bodyParser: false })
+    : await NestFactory.create(AppModule, { bodyParser: false });
 
   // Security headers — must run before any other middleware
   app.use(
     helmet({
-      // CSP not set here; configure at the reverse-proxy/CDN layer for HTML pages.
-      contentSecurityPolicy: false,
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          defaultSrc: ["'self'"],
+          imgSrc: ["'self'", 'data:'],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          connectSrc: ["'self'"],
+        },
+      },
       crossOriginEmbedderPolicy: false,
     }),
   );
@@ -40,19 +49,9 @@ export async function createApp(
     expressApp.set('trust proxy', 1);
   }
 
-  // Limit body size to prevent payload-flooding attacks (default Express is 100 kb)
-  app.use(
-    (
-      req: import('express').Request,
-      res: import('express').Response,
-      next: import('express').NextFunction,
-    ) => {
-      // Use express built-in json/urlencoded with explicit limits.
-      // NestJS already applies its own body parser; this middleware is a safety
-      // belt in case a raw body somehow bypasses the NestJS layer.
-      next();
-    },
-  );
+  // Limit body size to prevent payload-flooding attacks
+  app.use(express.json({ limit: '100kb' }));
+  app.use(express.urlencoded({ limit: '100kb', extended: true }));
 
   app.use(cookieParser());
   app.enableCors({

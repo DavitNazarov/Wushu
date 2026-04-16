@@ -54,6 +54,7 @@ export class UsersService {
     displayName: string;
     role: 'admin' | 'coach';
     clubId?: string | null;
+    nationality?: string | null;
   }): Promise<{ id: string }> {
     return this.authUser.registerUser(input);
   }
@@ -66,6 +67,7 @@ export class UsersService {
     displayName?: string;
     role?: 'admin' | 'coach';
     clubId?: string | null;
+    nationality?: string | null;
     isActive?: boolean;
   }): Promise<UserDetailRow> {
     const existing = await this.findManagedUser(
@@ -90,6 +92,7 @@ export class UsersService {
       displayName: input.displayName?.trim(),
       role: nextRole,
       clubId: nextClubId,
+      nationality: input.nationality !== undefined ? (input.nationality?.trim() || null) : undefined,
       isActive: input.isActive ?? existing.isActive,
     };
 

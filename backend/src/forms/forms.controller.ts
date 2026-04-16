@@ -8,13 +8,24 @@ import {
   HttpException,
   HttpStatus,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
+import { z } from 'zod';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CapabilityGuard } from '../auth/capability.guard';
 import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
+
+const contactSchema = z.object({
+  name: z.string().trim().min(1),
+  email: z.string().email(),
+  message: z.string().trim().min(1),
+  clubName: z.string().trim().min(1).nullable().optional(),
+  type: z.enum(['contact', 'membership']),
+  website: z.string().trim().nullable().optional(),
+});
 
 @Controller('forms')
 export class FormsController {
@@ -24,22 +35,24 @@ export class FormsController {
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async contact(
-    @Body()
-    body: {
-      name: string;
-      email: string;
-      message: string;
-      clubName?: string | null;
-      type: 'contact' | 'membership';
-      website?: string | null;
-    },
+    @Body() body: unknown,
   ) {
-    if (body.website?.trim?.()) {
-      return { ok: true };
+    const parsed = contactSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid contact payload',
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
     }
 
-    if (!body.name || !body.email || !body.message) {
-      throw new HttpException('INVALID_INPUT', HttpStatus.BAD_REQUEST);
+    const data = parsed.data;
+
+    if (data.website?.trim()) {
+      return { ok: true };
     }
 
     const org = await this.prisma.organisation.findFirst();
@@ -53,11 +66,11 @@ export class FormsController {
     await this.prisma.contactSubmission.create({
       data: {
         organisationId: org.id,
-        type: body.type,
-        name: body.name,
-        email: body.email,
-        message: body.message,
-        clubName: body.clubName ?? null,
+        type: data.type,
+        name: data.name,
+        email: data.email,
+        message: data.message,
+        clubName: data.clubName ?? null,
       },
     });
 

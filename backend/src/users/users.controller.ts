@@ -50,6 +50,7 @@ export class UsersController {
         displayName: parsed.displayName,
         role: parsed.role,
         clubId: parsed.clubId ?? null,
+        nationality: parsed.nationality ?? null,
       });
     } catch (error) {
       this.rethrowKnownError(error);
@@ -85,6 +86,7 @@ export class UsersController {
         displayName: parsed.displayName,
         role: parsed.role,
         clubId: parsed.clubId,
+        nationality: parsed.nationality,
         isActive: parsed.isActive,
       });
     } catch (error) {

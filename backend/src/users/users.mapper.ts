@@ -9,6 +9,7 @@ export type ManagedUserRecord = {
   displayName: string;
   role: 'admin' | 'coach' | 'athlete' | 'judge' | 'timekeeper';
   clubId: string | null;
+  nationality: string | null;
   isActive: boolean;
   deletedAt: Date | null;
   dqReason: string | null;
@@ -27,6 +28,7 @@ export const userSelect = {
   displayName: true,
   role: true,
   clubId: true,
+  nationality: true,
   isActive: true,
   deletedAt: true,
   dqReason: true,
@@ -54,6 +56,7 @@ export function toListRow(user: ManagedUserRecord): UserListRow {
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
     clubId: user.clubId,
+    nationality: user.nationality,
     club: user.club,
   };
 }
@@ -67,6 +70,7 @@ export function toDetailRow(user: ManagedUserRecord): UserDetailRow {
     status: getUserAccountStatus(user),
     isActive: user.isActive,
     clubId: user.clubId,
+    nationality: user.nationality,
     club: user.club,
     disciplinary: {
       isActive: isUserDqActive(user),

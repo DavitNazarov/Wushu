@@ -117,13 +117,21 @@ export class AthletesService {
       throw new Error('ATHLETE_NOT_IN_COACH_CLUB');
     }
 
+    const documentId = input.documentId?.trim();
+    if (!documentId) {
+      throw new HttpException(
+        { code: 'INVALID_DOCUMENT_ID', message: 'documentId is required' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     const data: Prisma.AthleteUncheckedCreateInput = {
       organisationId: input.organisationId,
       clubId: input.clubId ?? null,
       firstName: input.firstName.trim(),
       lastName: input.lastName.trim(),
       dateOfBirth: input.dateOfBirth,
-      documentId: input.documentId?.trim() || null,
+      documentId,
       sex: input.sex ?? null,
     };
 

@@ -9,7 +9,9 @@ import {
   Query,
   Req,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
+import { z } from 'zod';
 import { RegistrationsService } from './registrations.service';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CapabilityGuard } from '../auth/capability.guard';
@@ -24,6 +26,27 @@ const REGISTRATION_STATUSES: RegistrationStatus[] = [
   'REJECTED',
   'WITHDRAWN',
 ];
+
+const createRegistrationSchema = z.object({
+  eventId: z.string().cuid(),
+  athleteId: z.string().cuid(),
+  eventWeightCategoryId: z.string().cuid(),
+  notes: z.string().trim().max(10_000).nullable().optional(),
+  override: z.boolean().optional(),
+  reason: z.string().trim().max(2_000).nullable().optional(),
+});
+
+const setStatusSchema = z.object({
+  status: z.string().min(1),
+  override: z.boolean().optional(),
+  reason: z.string().trim().max(2_000).nullable().optional(),
+});
+
+const setCategorySchema = z.object({
+  eventWeightCategoryId: z.string().cuid(),
+  override: z.boolean().optional(),
+  reason: z.string().trim().max(2_000).nullable().optional(),
+});
 
 @Controller('registrations')
 @UseGuards(AuthGuard, CapabilityGuard)
@@ -80,15 +103,7 @@ export class RegistrationsController {
   @Post()
   async create(
     @Req() req: AuthenticatedRequest,
-    @Body()
-    body: {
-      eventId: string;
-      athleteId: string;
-      eventWeightCategoryId?: string;
-      notes?: string;
-      override?: boolean;
-      reason?: string;
-    },
+    @Body() body: unknown,
   ) {
     const auth = req.auth!;
     const actorClubId = auth.role === 'coach' ? (auth.clubId ?? null) : null;
@@ -103,28 +118,29 @@ export class RegistrationsController {
       );
     }
 
-    if (
-      !body.eventId ||
-      !body.athleteId ||
-      !body.eventWeightCategoryId
-    ) {
-      throw new HttpException(
-        'VALIDATION_ERROR: eventId, athleteId, and eventWeightCategoryId are required',
-        HttpStatus.BAD_REQUEST,
-      );
+    const parsed = createRegistrationSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid registration payload',
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
     }
 
     try {
       return await this.registrations.create({
         organisationId: auth.organisationId,
         actorUserId: auth.sub,
-        eventId: body.eventId,
-        athleteId: body.athleteId,
-        eventWeightCategoryId: body.eventWeightCategoryId ?? null,
-        notes: body.notes ?? null,
+        eventId: parsed.data.eventId,
+        athleteId: parsed.data.athleteId,
+        eventWeightCategoryId: parsed.data.eventWeightCategoryId,
+        notes: parsed.data.notes ?? null,
         actorClubId,
-        override: body.override ?? false,
-        reason: body.reason ?? null,
+        override: parsed.data.override ?? false,
+        reason: parsed.data.reason ?? null,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
@@ -167,24 +183,31 @@ export class RegistrationsController {
   async setStatus(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
-    @Body()
-    body: {
-      status: string;
-      override?: boolean;
-      reason?: string;
-    },
+    @Body() body: unknown,
   ) {
     const auth = req.auth!;
     const actorClubId = auth.role === 'coach' ? (auth.clubId ?? null) : null;
+
+    const parsed = setStatusSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid registration status payload',
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
+    }
 
     try {
       return await this.registrations.setStatus({
         organisationId: auth.organisationId,
         registrationId: id,
         actorUserId: auth.sub,
-        newStatus: body.status as RegistrationStatus,
-        override: body.override ?? false,
-        reason: body.reason ?? null,
+        newStatus: parsed.data.status as RegistrationStatus,
+        override: parsed.data.override ?? false,
+        reason: parsed.data.reason ?? null,
         actorClubId,
       });
     } catch (e) {
@@ -216,32 +239,32 @@ export class RegistrationsController {
   async setCategory(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
-    @Body()
-    body: {
-      eventWeightCategoryId: string;
-      override?: boolean;
-      reason?: string;
-    },
+    @Body() body: unknown,
   ) {
     const auth = req.auth!;
     const actorClubId = auth.role === 'coach' ? (auth.clubId ?? null) : null;
 
-    if (!body.eventWeightCategoryId) {
-      throw new HttpException(
-        'eventWeightCategoryId_REQUIRED',
-        HttpStatus.BAD_REQUEST,
-      );
+    const parsed = setCategorySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid registration category payload',
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
     }
 
     try {
       return await this.registrations.setCategory({
         organisationId: auth.organisationId,
         registrationId: id,
-        eventWeightCategoryId: body.eventWeightCategoryId,
+        eventWeightCategoryId: parsed.data.eventWeightCategoryId,
         actorUserId: auth.sub,
         actorClubId,
-        override: body.override ?? false,
-        reason: body.reason ?? null,
+        override: parsed.data.override ?? false,
+        reason: parsed.data.reason ?? null,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';

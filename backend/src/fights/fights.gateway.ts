@@ -5,10 +5,12 @@ import {
   MessageBody,
   ConnectedSocket,
   WsException,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { createCorsOriginDelegate } from '../config/runtime-env';
+import { AuthService, JWT_COOKIE_NAME } from '../auth/auth.service';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -22,6 +24,12 @@ function assertUuid(value: unknown, field: string): string {
 
 const SOCKET_IO_PATH = '/api/socket.io';
 
+type SocketWithAuth = Socket & {
+  data: {
+    auth?: import('../auth/auth.service').AuthTokenPayload;
+  };
+};
+
 @WebSocketGateway({
   path: SOCKET_IO_PATH,
   cors: {
@@ -29,27 +37,71 @@ const SOCKET_IO_PATH = '/api/socket.io';
     credentials: true,
   },
 })
-export class FightsGateway {
+export class FightsGateway implements OnGatewayInit<Server> {
   @WebSocketServer()
   server: Server;
   private readonly logger = new Logger(FightsGateway.name);
 
-  handleConnection(client: Socket) {
+  constructor(private readonly auth: AuthService) {}
+
+  afterInit(server: Server) {
+    server.use((socket: SocketWithAuth, next) => {
+      try {
+        const token =
+          this.extractCookieToken(socket.request.headers.cookie) ??
+          this.extractBearerToken(socket.handshake.auth?.token);
+        if (!token) {
+          return next(new WsException('UNAUTHENTICATED'));
+        }
+        const payload = this.auth.verifyToken(token);
+        if (!payload) {
+          return next(new WsException('UNAUTHENTICATED'));
+        }
+        socket.data.auth = payload;
+        return next();
+      } catch {
+        return next(new WsException('UNAUTHENTICATED'));
+      }
+    });
+  }
+
+  private extractCookieToken(rawCookieHeader: string | undefined): string | null {
+    if (!rawCookieHeader) return null;
+    const parts = rawCookieHeader.split(';');
+    for (const part of parts) {
+      const [rawName, ...rest] = part.split('=');
+      const name = rawName?.trim();
+      if (name === JWT_COOKIE_NAME) {
+        return rest.join('=').trim() || null;
+      }
+    }
+    return null;
+  }
+
+  private extractBearerToken(rawAuth: unknown): string | null {
+    if (typeof rawAuth !== 'string') return null;
+    if (!rawAuth.startsWith('Bearer ')) return null;
+    return rawAuth.slice('Bearer '.length).trim() || null;
+  }
+
+  handleConnection(client: SocketWithAuth) {
     this.logger.debug(
       JSON.stringify({
         scope: 'realtime',
         action: 'connect',
         clientId: client.id,
+        userId: client.data.auth?.sub ?? null,
       }),
     );
   }
 
-  handleDisconnect(client: Socket) {
+  handleDisconnect(client: SocketWithAuth) {
     this.logger.debug(
       JSON.stringify({
         scope: 'realtime',
         action: 'disconnect',
         clientId: client.id,
+        userId: client.data.auth?.sub ?? null,
       }),
     );
   }
@@ -57,8 +109,12 @@ export class FightsGateway {
   @SubscribeMessage('join-event')
   handleJoinEvent(
     @MessageBody() data: unknown,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: SocketWithAuth,
   ) {
+    if (!client.data.auth) {
+      throw new WsException('UNAUTHENTICATED');
+    }
+
     const eventId = assertUuid(
       data && typeof data === 'object' ? (data as Record<string, unknown>).eventId : undefined,
       'eventId',
@@ -80,8 +136,12 @@ export class FightsGateway {
   @SubscribeMessage('join-mat')
   handleJoinMat(
     @MessageBody() data: unknown,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: SocketWithAuth,
   ) {
+    if (!client.data.auth) {
+      throw new WsException('UNAUTHENTICATED');
+    }
+
     const matId = assertUuid(
       data && typeof data === 'object' ? (data as Record<string, unknown>).matId : undefined,
       'matId',

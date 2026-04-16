@@ -21,6 +21,7 @@ export class AuthUserService {
     displayName: string;
     role: UserRole;
     clubId?: string | null;
+    nationality?: string | null;
   }): Promise<{ id: string }> {
     const {
       organisationId,
@@ -30,6 +31,7 @@ export class AuthUserService {
       displayName,
       role,
       clubId,
+      nationality,
     } = params;
 
     if (role === 'coach' && !clubId) throw new Error('COACH_CLUB_REQUIRED');
@@ -58,6 +60,7 @@ export class AuthUserService {
           displayName: displayName.trim(),
           role: role as DbUserRole,
           clubId: clubId ?? null,
+          nationality: nationality?.trim() || null,
           isActive: true,
         },
       });

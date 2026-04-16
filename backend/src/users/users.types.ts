@@ -11,6 +11,7 @@ export type UserListRow = {
   createdAt: string;
   updatedAt: string;
   clubId: string | null;
+  nationality: string | null;
   club: { id: string; name: string } | null;
 };
 
@@ -22,6 +23,7 @@ export type UserDetailRow = {
   status: UserAccountStatus;
   isActive: boolean;
   clubId: string | null;
+  nationality: string | null;
   club: { id: string; name: string } | null;
   disciplinary: {
     isActive: boolean;
@@ -61,6 +63,7 @@ export type AuthGuardValidationResult =
         role: 'admin' | 'coach' | 'athlete' | 'judge' | 'timekeeper';
         capabilities: string[];
         clubId: string | null;
+        type: 'access' | 'refresh';
       };
     }
   | { ok: false; code: 'USER_DISABLED' | 'USER_ARCHIVED' | 'USER_SUSPENDED' };

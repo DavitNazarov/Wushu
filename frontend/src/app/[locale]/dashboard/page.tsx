@@ -16,6 +16,9 @@ export default async function DashboardRedirectPage({ params }: Props) {
   if (auth.role === 'admin') redirect(`/${locale}/admin`);
   if (auth.role === 'coach') redirect(`/${locale}/coach`);
   if (auth.role === 'athlete') redirect(`/${locale}/athlete`);
+  if (auth.role === 'judge' || auth.role === 'timekeeper') {
+    redirect(`/${locale}/admin/live`);
+  }
 
   redirect(`/${locale}/admin`);
 }

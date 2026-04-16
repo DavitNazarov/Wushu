@@ -8,6 +8,7 @@ export const createUserSchema = z.object({
   displayName: z.string().trim().min(1),
   role: userRoleSchema,
   clubId: z.string().cuid().optional().nullable(),
+  nationality: z.string().trim().optional().nullable(),
 });
 
 export const updateUserSchema = z
@@ -16,6 +17,7 @@ export const updateUserSchema = z
     displayName: z.string().trim().min(1).optional(),
     role: userRoleSchema.optional(),
     clubId: z.string().cuid().optional().nullable(),
+    nationality: z.string().trim().optional().nullable(),
     isActive: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {

@@ -28,6 +28,7 @@ export type AuthTokenPayload = {
   role: UserRole;
   capabilities: string[];
   clubId?: string | null;
+  type: 'access' | 'refresh';
 };
 
 @Injectable()
@@ -45,21 +46,25 @@ export class AuthService {
     return secret;
   }
 
-  signToken(payload: AuthTokenPayload): string {
-    return jwt.sign(payload, this.getJwtSecret(), {
+  signToken(payload: Omit<AuthTokenPayload, 'type'>): string {
+    return jwt.sign({ ...payload, type: 'access' } satisfies AuthTokenPayload, this.getJwtSecret(), {
       expiresIn: ACCESS_EXPIRES_IN_SECONDS,
     });
   }
 
-  signRefreshToken(payload: AuthTokenPayload): string {
-    return jwt.sign(payload, this.getJwtSecret(), {
+  signRefreshToken(payload: Omit<AuthTokenPayload, 'type'>): string {
+    return jwt.sign({ ...payload, type: 'refresh' } satisfies AuthTokenPayload, this.getJwtSecret(), {
       expiresIn: REFRESH_EXPIRES_IN_SECONDS,
     });
   }
 
   verifyToken(token: string): AuthTokenPayload | null {
     try {
-      return jwt.verify(token, this.getJwtSecret()) as AuthTokenPayload;
+      const decoded = jwt.verify(token, this.getJwtSecret(), {
+        algorithms: ['HS256'],
+      }) as AuthTokenPayload;
+      if (decoded.type !== 'access') return null;
+      return decoded;
     } catch {
       return null;
     }
@@ -67,13 +72,15 @@ export class AuthService {
 
   verifyRefreshToken(token: string): AuthTokenPayload | null {
     try {
-      const decoded = jwt.verify(token, this.getJwtSecret()) as jwt.JwtPayload &
-        AuthTokenPayload;
+      const decoded = jwt.verify(token, this.getJwtSecret(), {
+        algorithms: ['HS256'],
+      }) as jwt.JwtPayload & AuthTokenPayload;
       if (
         typeof decoded.sub !== 'string' ||
         typeof decoded.organisationId !== 'string' ||
         typeof decoded.role !== 'string' ||
-        !Array.isArray(decoded.capabilities)
+        !Array.isArray(decoded.capabilities) ||
+        decoded.type !== 'refresh'
       ) {
         return null;
       }
@@ -83,6 +90,7 @@ export class AuthService {
         role: decoded.role,
         capabilities: decoded.capabilities,
         clubId: decoded.clubId ?? null,
+        type: 'refresh',
       };
     } catch {
       return null;
@@ -109,9 +117,15 @@ export class AuthService {
       });
     } catch (error) {
       if (this.isRefreshTokenStorageUnavailableError(error)) {
+        const isProd = process.env.NODE_ENV === 'production';
         this.logger.warn(
-          '[auth] RefreshToken storage unavailable (missing migration/schema). Continuing in stateless refresh mode.',
+          '[auth] RefreshToken storage unavailable (missing migration/schema).',
         );
+        if (isProd) {
+          throw new Error(
+            'Refresh token storage is unavailable in production. Run migrations before enabling auth.',
+          );
+        }
         return;
       }
       throw error;
@@ -156,9 +170,15 @@ export class AuthService {
       });
     } catch (error) {
       if (this.isRefreshTokenStorageUnavailableError(error)) {
+        const isProd = process.env.NODE_ENV === 'production';
         this.logger.warn(
-          '[auth] RefreshToken table unavailable on refresh; rotating tokens without DB-backed revocation.',
+          '[auth] RefreshToken table unavailable on refresh; DB-backed revocation disabled.',
         );
+        if (isProd) {
+          throw new Error(
+            'Refresh token storage is unavailable in production. Run migrations before enabling auth.',
+          );
+        }
         const accessToken = this.signToken(validated.payload);
         const refreshToken = this.signRefreshToken(validated.payload);
         await this.storeRefreshToken(validated.payload.sub, refreshToken);
@@ -199,9 +219,15 @@ export class AuthService {
       if (!this.isRefreshTokenStorageUnavailableError(error)) {
         throw error;
       }
+      const isProd = process.env.NODE_ENV === 'production';
       this.logger.warn(
-        '[auth] RefreshToken revoke failed due to missing schema; continuing with stateless token rotation.',
+        '[auth] RefreshToken revoke failed due to missing schema.',
       );
+      if (isProd) {
+        throw new Error(
+          'Refresh token storage is unavailable in production. Run migrations before enabling auth.',
+        );
+      }
     }
 
     // Issue new tokens
@@ -239,6 +265,7 @@ export class AuthService {
         role: user.role as UserRole,
         capabilities: allCapabilities,
         clubId: user.clubId ?? null,
+        type: 'access',
       },
     };
   }
@@ -249,6 +276,7 @@ export class AuthService {
     role: UserRole;
     capabilities: string[];
     clubId: string | null;
+    nationality: string | null;
     displayName: string;
     clubName?: string | null;
     organisationName?: string | null;
@@ -262,6 +290,7 @@ export class AuthService {
         id: true,
         displayName: true,
         clubId: true,
+        nationality: true,
         organisation: { select: { name: true } },
       },
     });
@@ -282,6 +311,7 @@ export class AuthService {
       role: validated.payload.role,
       capabilities: validated.payload.capabilities,
       clubId: validated.payload.clubId ?? null,
+      nationality: user.nationality ?? null,
       displayName: user.displayName,
       clubName,
       organisationName: user.organisation?.name ?? null,
@@ -296,9 +326,15 @@ export class AuthService {
       });
     } catch (error) {
       if (this.isRefreshTokenStorageUnavailableError(error)) {
+        const isProd = process.env.NODE_ENV === 'production';
         this.logger.warn(
           '[auth] RefreshToken revoke skipped because storage is unavailable.',
         );
+        if (isProd) {
+          throw new Error(
+            'Refresh token storage is unavailable in production. Run migrations before enabling auth.',
+          );
+        }
         return;
       }
       throw error;
@@ -333,14 +369,14 @@ export class AuthService {
     });
 
     if (!user) return { ok: false, error: 'INVALID_CREDENTIALS' };
-    if (!user.isActive) return { ok: false, error: 'USER_DISABLED' };
-    if (isUserDqActive(user)) return { ok: false, error: 'USER_SUSPENDED' };
+    if (!user.isActive) return { ok: false, error: 'INVALID_CREDENTIALS' };
+    if (isUserDqActive(user)) return { ok: false, error: 'INVALID_CREDENTIALS' };
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return { ok: false, error: 'INVALID_CREDENTIALS' };
 
     const role = user.role;
-    if (!role) return { ok: false, error: 'NO_ROLE' };
+    if (!role) return { ok: false, error: 'INVALID_CREDENTIALS' };
 
     const dbCapabilities = user.capabilities.map((uc) => uc.capability.code);
     const roleCapabilities = getCapabilitiesForRole(role as UserRole);
@@ -348,13 +384,13 @@ export class AuthService {
       ...new Set([...roleCapabilities, ...dbCapabilities]),
     ];
 
-    const tokenPayload: AuthTokenPayload = {
+    const tokenPayload = {
       sub: user.id,
       organisationId: user.organisationId,
       role: role as UserRole,
       capabilities: allCapabilities,
       clubId: user.clubId ?? null,
-    };
+    } as const;
 
     const token = this.signToken(tokenPayload);
     const refreshToken = this.signRefreshToken(tokenPayload);

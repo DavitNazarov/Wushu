@@ -10,8 +10,10 @@ import {
   DEFAULT_CATEGORY_TEMPLATE_SEEDS,
 } from '../src/category-templates/default-category-options';
 
-const connectionString =
-  process.env['DATABASE_URL'] ?? 'postgresql://geo:geo123@localhost:5432/geo_wushu';
+const connectionString = process.env['DATABASE_URL'];
+if (!connectionString) {
+  throw new Error('DATABASE_URL is required to run category template seed');
+}
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({
   adapter,

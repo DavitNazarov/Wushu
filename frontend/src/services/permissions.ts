@@ -127,7 +127,7 @@ export function getAuthRedirectUrl(
 export function canAccessAdmin(role: UserRole | null, capabilities: string[]): boolean {
   if (!role) return false;
   if (role === 'admin') return true;
-  return capabilities.includes('events:manage') || capabilities.includes('CAN_MANAGE_EVENT');
+  return capabilities.includes('EVENTS_MANAGE');
 }
 
 export function canAccessCoach(role: UserRole | null): boolean {

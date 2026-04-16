@@ -48,7 +48,6 @@ export class ClubsController {
   }
 
   @Post()
-  @RequireCapability(CAPABILITIES.ATHLETES_MANAGE)
   async upsert(
     @Req() req: AuthenticatedRequest,
     @Body()
@@ -60,6 +59,10 @@ export class ClubsController {
     },
   ) {
     const auth = req.auth!;
+
+    if (auth.role !== 'admin') {
+      throw new HttpException('FORBIDDEN', HttpStatus.FORBIDDEN);
+    }
 
     if (!body.name?.trim()) {
       throw new HttpException('VALIDATION_ERROR', HttpStatus.BAD_REQUEST);
