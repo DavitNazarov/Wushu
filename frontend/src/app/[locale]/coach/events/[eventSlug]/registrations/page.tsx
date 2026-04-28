@@ -467,7 +467,7 @@ export default function CoachRegistrationsPage({ params }: Props) {
       </Modal>
 
       {/* Edit registration modal */}
-      <Modal open={!!editReg} onClose={closeEdit} title={editReg ? athleteName(editReg) : ''}>
+      <Modal open={!!editReg} onClose={closeEdit} title={editReg ? athleteName(editReg, locale) : ''}>
         {editReg && (
           <div className="space-y-4">
             {/* Current registration info */}
@@ -476,7 +476,7 @@ export default function CoachRegistrationsPage({ params }: Props) {
                 {athleteInitials(editReg)}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-[var(--color-text)]">{athleteName(editReg)}</p>
+                <p className="text-[13px] font-medium text-[var(--color-text)]">{athleteName(editReg, locale)}</p>
                 <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
                   {editReg.categoryCode} · <StatusChip status={editReg.status} label={tReg(`status.${editReg.status}`)} domain="registration" />
                 </p>

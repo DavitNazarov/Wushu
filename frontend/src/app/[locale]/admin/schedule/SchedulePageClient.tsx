@@ -38,6 +38,7 @@ function FightCard({
   fight,
   index,
   sessionId,
+  locale,
   isEditable,
   isGapViolation,
   isDragging,
@@ -49,6 +50,7 @@ function FightCard({
   fight: ScheduleFightRow;
   index: number;
   sessionId: string;
+  locale: string;
   isEditable: boolean;
   isGapViolation: boolean;
   isDragging: boolean;
@@ -465,6 +467,7 @@ export function SchedulePageClient({ eventId }: Props) {
                           fight={fight}
                           index={idx}
                           sessionId={session.id}
+                          locale={locale}
                           isEditable={isEditable}
                           isGapViolation={gapViolations.has(fight.id)}
                           isDragging={dragFight?.fightId === fight.id}
