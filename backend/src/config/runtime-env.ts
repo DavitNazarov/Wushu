@@ -47,16 +47,17 @@ export function createCorsOriginDelegate(): (
   const allowedOrigins = new Set(getAllowedCorsOrigins());
 
   return (origin, callback) => {
-    const normalized = origin ? normalizeOrigin(origin) : '';
-    const isProd = process.env.NODE_ENV === 'production';
-    const isAllowed = normalized && allowedOrigins.has(normalized);
+    // Requests without an Origin header are not cross-origin browser
+    // requests — they're server-to-server (healthchecks, curl, internal
+    // probes) or same-origin. CORS is irrelevant here, so always allow
+    // and let auth/route guards do the access control.
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
 
-    if (!isProd) {
-      if (!origin || isAllowed) {
-        callback(null, true);
-        return;
-      }
-    } else if (isAllowed) {
+    const normalized = normalizeOrigin(origin);
+    if (normalized && allowedOrigins.has(normalized)) {
       callback(null, true);
       return;
     }
