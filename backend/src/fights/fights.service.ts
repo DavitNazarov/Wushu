@@ -173,10 +173,10 @@ export class FightsService {
     return this.prisma.fight.findMany({
       where,
       include: {
-        redAthlete: { select: { id: true, firstName: true, lastName: true } },
-        blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+        redAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
+        blueAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
         winnerAthlete: {
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
         },
         mat: true,
         timerState: true,
@@ -189,10 +189,10 @@ export class FightsService {
     return this.prisma.fight.findFirst({
       where: { id: fightId, organisationId },
       include: {
-        redAthlete: { select: { id: true, firstName: true, lastName: true } },
-        blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+        redAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
+        blueAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
         winnerAthlete: {
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
         },
         mat: true,
         timerState: true,
@@ -347,6 +347,8 @@ export class FightsService {
         notes: fight.notes ?? null,
         redDisplayName: row.redDisplayName,
         blueDisplayName: row.blueDisplayName,
+        redDisplayNameKa: row.redDisplayNameKa,
+        blueDisplayNameKa: row.blueDisplayNameKa,
         matId: row.matId,
         matName: row.matName,
         orderInMat: row.orderInMat,
@@ -393,10 +395,10 @@ export class FightsService {
         eventWeightCategoryId: { not: null },
       },
       include: {
-        redAthlete: { select: { id: true, firstName: true, lastName: true } },
-        blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+        redAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
+        blueAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
         winnerAthlete: {
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
         },
         timerState: true,
         mat: { select: { id: true, name: true } },

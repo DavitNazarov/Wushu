@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale } from 'next-intl';
+import { localizedName } from '@/lib/bilingual';
 import { FightResultBanner } from '@/components/fight/FightResultBanner';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { Card } from '@/components/ui/primitives/card';
@@ -102,6 +104,7 @@ export function LiveFightCard({
     );
   }
 
+  const locale = useLocale();
   const winnerCorner = getFightWinnerCorner({
     winnerAthleteId: fight.winnerAthleteId,
     redAthleteId: fight.redAthleteId,
@@ -113,9 +116,9 @@ export function LiveFightCard({
   });
   const winnerName =
     winnerCorner === 'RED'
-      ? fight.redDisplayName
+      ? localizedName(fight.redDisplayName, fight.redDisplayNameKa, locale)
       : winnerCorner === 'BLUE'
-        ? fight.blueDisplayName
+        ? localizedName(fight.blueDisplayName, fight.blueDisplayNameKa, locale)
         : null;
   const methodLabel = fight.winMethod ? t(`methods.${fight.winMethod}`) : null;
   const nextRoundBlocked = isNextRoundBlocked(fight.timerState);
@@ -163,7 +166,7 @@ export function LiveFightCard({
               {t('red')}
             </p>
             <p className={`mt-2 font-semibold text-[var(--color-text)] ${isControlPanel ? 'text-xl sm:text-2xl' : 'text-lg'}`}>
-              {fight.redDisplayName}
+              {localizedName(fight.redDisplayName, fight.redDisplayNameKa, locale)}
             </p>
           </div>
 
@@ -176,7 +179,7 @@ export function LiveFightCard({
               {t('blue')}
             </p>
             <p className={`mt-2 font-semibold text-[var(--color-text)] ${isControlPanel ? 'text-xl sm:text-2xl' : 'text-lg'}`}>
-              {fight.blueDisplayName}
+              {localizedName(fight.blueDisplayName, fight.blueDisplayNameKa, locale)}
             </p>
           </div>
         </div>

@@ -11,6 +11,7 @@ export type AuthContext =
       role: UserRole;
       capabilities: string[];
       clubId?: string | null;
+      nationality?: string | null;
       displayName?: string;
       clubName?: string | null;
       organisationName?: string | null;
@@ -61,11 +62,13 @@ export async function getAuthContext(): Promise<AuthContext> {
     return { userId: null, organisationId: null, role: null, capabilities: [], blocked: true };
   }
 
-  // 429 = throttled — never treat this as "logged out". Return a needsRefresh
-  // signal so the page can retry rather than bouncing the user to /login (which
-  // would cause an infinite redirect loop because the cookie is still valid).
+  // 429 = throttled — the JWT is still valid, just rate-limited (all SSR
+  // requests come from the same IP). Do NOT return needsRefresh here — that
+  // triggers POST /refresh which can create duplicate tokens and cascade into
+  // an infinite redirect loop. The real fix is @SkipThrottle on /me; this
+  // defensive fallback avoids the loop if throttling ever fires anyway.
   if (res.status === 429) {
-    return { userId: null, organisationId: null, role: null, capabilities: [], needsRefresh: true };
+    return { userId: null, organisationId: null, role: null, capabilities: [] };
   }
 
   // Transient errors: retry once before treating as logout
@@ -89,6 +92,7 @@ export async function getAuthContext(): Promise<AuthContext> {
     role: UserRole | null;
     capabilities: string[];
     clubId?: string | null;
+    nationality?: string | null;
     displayName?: string;
     clubName?: string | null;
     organisationName?: string | null;
@@ -104,6 +108,7 @@ export async function getAuthContext(): Promise<AuthContext> {
     role: data.role ?? 'athlete',
     capabilities: data.capabilities ?? [],
     clubId: data.clubId ?? null,
+    nationality: data.nationality ?? null,
     displayName: data.displayName,
     clubName: data.clubName,
     organisationName: data.organisationName,

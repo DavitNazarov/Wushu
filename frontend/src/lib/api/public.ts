@@ -9,6 +9,7 @@ import type { PublicResultsFeed } from './public-results';
 export type PublicEvent = {
   id: string;
   name: string;
+  nameKa?: string | null;
   slug: string;
   location: string | null;
   lifecycle: string;
@@ -45,9 +46,9 @@ export type BracketFight = {
   id: string;
   round: number;
   boutNo: number;
-  redAthlete?: { id: string; firstName: string; lastName: string } | null;
-  blueAthlete?: { id: string; firstName: string; lastName: string } | null;
-  winnerAthlete?: { id: string; firstName: string; lastName: string } | null;
+  redAthlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null } | null;
+  blueAthlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null } | null;
+  winnerAthlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null } | null;
 };
 
 export type PublicBracket = {
@@ -71,6 +72,8 @@ export type ScheduleFight = {
   scheduleOrder: number | null;
   redDisplayName: string;
   blueDisplayName: string;
+  redDisplayNameKa?: string | null;
+  blueDisplayNameKa?: string | null;
   redSourceScheduleOrder: number | null;
   blueSourceScheduleOrder: number | null;
   isPlayable: boolean;
@@ -111,6 +114,8 @@ export type PublicLiveFight = {
   notes: string | null;
   redDisplayName: string;
   blueDisplayName: string;
+  redDisplayNameKa?: string | null;
+  blueDisplayNameKa?: string | null;
   timerState: TimerState | null;
 };
 
@@ -120,9 +125,9 @@ export type MatFight = {
   boutNo: number;
   round: number;
   status: string;
-  redAthlete?: { id: string; firstName: string; lastName: string } | null;
-  blueAthlete?: { id: string; firstName: string; lastName: string } | null;
-  winnerAthlete?: { id: string; firstName: string; lastName: string } | null;
+  redAthlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null } | null;
+  blueAthlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null } | null;
+  winnerAthlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null } | null;
   timerState?: TimerState | null;
 };
 

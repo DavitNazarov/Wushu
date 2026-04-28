@@ -22,6 +22,7 @@ export class ClubsService {
     actorUserId: string;
     id?: string;
     name: string;
+    nameKa?: string | null;
     city?: string | null;
     country?: string | null;
   }): Promise<Club> {
@@ -34,6 +35,7 @@ export class ClubsService {
     const data: Prisma.ClubUncheckedCreateInput = {
       organisationId: input.organisationId,
       name: input.name.trim(),
+      nameKa: input.nameKa?.trim() || null,
       city: input.city?.trim() || null,
       country: input.country?.trim() || null,
     };
@@ -93,6 +95,8 @@ export class ClubsService {
         id: true,
         firstName: true,
         lastName: true,
+        firstNameKa: true,
+        lastNameKa: true,
         registrations: {
           select: {
             eventWeightCategoryId: true,
@@ -118,6 +122,7 @@ export class ClubsService {
       club: {
         id: club.id,
         name: club.name,
+        nameKa: club.nameKa ?? null,
         city: club.city,
         country: club.country,
       },
@@ -130,9 +135,15 @@ export class ClubsService {
         const weightName = reg?.eventWeightCategory?.categoryTemplateWeight?.name ?? null;
         const ageName = reg?.eventWeightCategory?.eventAgeGroup?.categoryTemplateAgeGroup?.name ?? null;
         const category = [ageName, weightName].filter(Boolean).join(' · ') || null;
+        const hasKaFullName = Boolean(a.firstNameKa && a.lastNameKa);
         return {
           id: a.id,
+          firstName: a.firstName,
+          lastName: a.lastName,
+          firstNameKa: a.firstNameKa ?? null,
+          lastNameKa: a.lastNameKa ?? null,
           name: `${a.firstName} ${a.lastName}`,
+          nameKa: hasKaFullName ? `${a.firstNameKa} ${a.lastNameKa}` : null,
           category,
         };
       }),

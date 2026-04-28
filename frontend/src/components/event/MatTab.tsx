@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { Link } from '@/i18n/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/Card';
+import { localizedFullName } from '@/lib/bilingual';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -12,13 +13,9 @@ import type { MatFight } from '@/lib/api/public';
 
 const DEFAULT_MATS = ['Mat 1', 'Mat 2', 'Mat 3'];
 
-function athleteName(a: { firstName: string; lastName: string } | null | undefined): string {
-  if (!a) return 'BYE';
-  return `${a.firstName} ${a.lastName}`;
-}
-
 export function MatTab({ eventSlug }: { eventSlug: string }) {
   const tPublic = useTranslations('public');
+  const locale = useLocale();
   const tCommon = useTranslations('common');
   const tLive = useTranslations('live');
   const [matName, setMatName] = useState('Mat 1');
@@ -100,11 +97,11 @@ export function MatTab({ eventSlug }: { eventSlug: string }) {
               </h3>
               <div className="flex items-center justify-between gap-4">
                 <div className="text-lg font-semibold text-[var(--color-text)]">
-                  {athleteName(feed.now.redAthlete)}
+                  {feed.now.redAthlete ? localizedFullName(feed.now.redAthlete.firstName, feed.now.redAthlete.lastName, feed.now.redAthlete.firstNameKa, feed.now.redAthlete.lastNameKa, locale) : 'BYE'}
                 </div>
                 <span className="text-[var(--color-text-muted)]">vs</span>
                 <div className="text-lg font-semibold text-[var(--color-text)]">
-                  {athleteName(feed.now.blueAthlete)}
+                  {feed.now.blueAthlete ? localizedFullName(feed.now.blueAthlete.firstName, feed.now.blueAthlete.lastName, feed.now.blueAthlete.firstNameKa, feed.now.blueAthlete.lastNameKa, locale) : 'BYE'}
                 </div>
               </div>
               <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
@@ -119,7 +116,7 @@ export function MatTab({ eventSlug }: { eventSlug: string }) {
                 {tPublic('onDeck')}
               </h3>
               <p className="text-[15px] font-medium text-[var(--color-text)]">
-                {athleteName(feed.onDeck.redAthlete)} vs {athleteName(feed.onDeck.blueAthlete)}
+                {feed.onDeck.redAthlete ? localizedFullName(feed.onDeck.redAthlete.firstName, feed.onDeck.redAthlete.lastName, feed.onDeck.redAthlete.firstNameKa, feed.onDeck.redAthlete.lastNameKa, locale) : 'BYE'} vs {feed.onDeck.blueAthlete ? localizedFullName(feed.onDeck.blueAthlete.firstName, feed.onDeck.blueAthlete.lastName, feed.onDeck.blueAthlete.firstNameKa, feed.onDeck.blueAthlete.lastNameKa, locale) : 'BYE'}
               </p>
               <p className="mt-0.5 text-[13px] text-[var(--color-text-muted)]">
                 {feed.onDeck.categoryCode}
@@ -135,7 +132,7 @@ export function MatTab({ eventSlug }: { eventSlug: string }) {
               <ul className="space-y-2">
                 {feed.next.map((f: MatFight) => (
                   <li key={f.id} className="text-[13px] text-[var(--color-text)]">
-                    {athleteName(f.redAthlete)} vs {athleteName(f.blueAthlete)}
+                    {f.redAthlete ? localizedFullName(f.redAthlete.firstName, f.redAthlete.lastName, f.redAthlete.firstNameKa, f.redAthlete.lastNameKa, locale) : 'BYE'} vs {f.blueAthlete ? localizedFullName(f.blueAthlete.firstName, f.blueAthlete.lastName, f.blueAthlete.firstNameKa, f.blueAthlete.lastNameKa, locale) : 'BYE'}
                     <span className="ml-2 text-[var(--color-text-muted)]">{f.categoryCode}</span>
                   </li>
                 ))}

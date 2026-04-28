@@ -17,6 +17,7 @@ import {
   formatWeightLabel,
 } from './categoryTemplate.utils';
 import { apiGet } from '@/lib/api/client';
+import { localizedName } from '@/lib/bilingual';
 import type { CategoryTemplateDetailRow } from '@/types/api';
 
 type Props = {
@@ -158,7 +159,7 @@ export function CategoryTemplateDetailsDrawer({
                           key={event.id}
                           className="rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
                         >
-                          <p className="text-[13px] font-medium text-[var(--color-text)]">{event.name}</p>
+                          <p className="text-[13px] font-medium text-[var(--color-text)]">{localizedName(event.name, event.nameKa, locale)}</p>
                           <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
                             {event.lifecycle} · {formatDateTime(event.competitionStartDate, locale)}
                           </p>

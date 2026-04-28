@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { localizedName } from '@/lib/bilingual';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -27,10 +28,12 @@ function SessionBlock({
   session,
   fights,
   tPublic,
+  locale,
 }: {
   session: PublicScheduleSession | null; // null = unassigned
   fights: ScheduleFight[];
   tPublic: ReturnType<typeof useTranslations>;
+  locale: string;
 }) {
   return (
     <div>
@@ -63,7 +66,7 @@ function SessionBlock({
                     #{f.orderInSession}
                   </span>
                 )}
-                {f.redDisplayName} vs {f.blueDisplayName}
+                {localizedName(f.redDisplayName, f.redDisplayNameKa, locale)} vs {localizedName(f.blueDisplayName, f.blueDisplayNameKa, locale)}
               </p>
               <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
                 {f.bracketRoundLabel} · Fight {f.bracketFightNumber}
@@ -81,6 +84,7 @@ function SessionBlock({
 }
 
 export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
+  const locale = useLocale();
   const tPublic = useTranslations('public');
   const tCommon = useTranslations('common');
   const eventQuery = usePublicEvent(eventSlug);
@@ -157,11 +161,11 @@ export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
       {sessionGroups
         .filter((g) => g.fights.length > 0)
         .map(({ session, fights: sessionFights }) => (
-          <SessionBlock key={session.id} session={session} fights={sessionFights} tPublic={tPublic} />
+          <SessionBlock key={session.id} session={session} fights={sessionFights} tPublic={tPublic} locale={locale} />
         ))}
 
       {unassigned.length > 0 && (
-        <SessionBlock session={null} fights={unassigned} tPublic={tPublic} />
+        <SessionBlock session={null} fights={unassigned} tPublic={tPublic} locale={locale} />
       )}
     </div>
   );

@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/primitives/select';
 import { ApiError, apiGet, apiPost } from '@/lib/api/client';
+import { localizedFullName, localizedName } from '@/lib/bilingual';
 import { publicVariants } from '@/lib/animations/variants';
 import type { EventRow, RegistrationRow, AthleteRow } from '@/types/api';
 import { CategoryPicker } from '@/components/registration/CategoryPicker';
@@ -40,10 +41,10 @@ function athleteInitials(reg: RegistrationRow): string {
   return `${reg.athlete.firstName[0]}${reg.athlete.lastName[0]}`.toUpperCase();
 }
 
-function athleteName(reg: RegistrationRow): string {
+function athleteName(reg: RegistrationRow, locale: string): string {
   if (!reg.athlete) return reg.athleteId;
   const year = reg.athlete.dateOfBirth ? ` (${new Date(reg.athlete.dateOfBirth).getFullYear()})` : '';
-  return `${reg.athlete.firstName} ${reg.athlete.lastName}${year}`;
+  return `${localizedFullName(reg.athlete.firstName, reg.athlete.lastName, reg.athlete.firstNameKa, reg.athlete.lastNameKa, locale)}${year}`;
 }
 
 const SUB_NAV = [
@@ -233,7 +234,7 @@ export default function CoachRegistrationsPage({ params }: Props) {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">
-                {event?.name ?? eventSlug}
+                {event ? localizedName(event.name, event.nameKa, locale) : eventSlug}
               </h1>
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <p className="text-[13px] text-[var(--color-text-muted)]">{t('title')}</p>
@@ -336,7 +337,7 @@ export default function CoachRegistrationsPage({ params }: Props) {
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-[14px] font-medium text-[var(--color-text)]">
-                        {athleteName(reg)}
+                        {athleteName(reg, locale)}
                       </p>
                       {reg.notes && (
                         <p className="mt-0.5 truncate text-[12px] text-[var(--color-text-muted)]">{reg.notes}</p>
@@ -406,7 +407,7 @@ export default function CoachRegistrationsPage({ params }: Props) {
                     <SelectItem key={a.id} value={a.id}>
                       <span className="flex items-center gap-2">
                         <span>
-                          {a.firstName} {a.lastName}{a.dateOfBirth ? ` (${new Date(a.dateOfBirth).getFullYear()})` : ''}
+                          {localizedFullName(a.firstName, a.lastName, a.firstNameKa, a.lastNameKa, locale)}{a.dateOfBirth ? ` (${new Date(a.dateOfBirth).getFullYear()})` : ''}
                         </span>
                         {reg && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-success-subtle)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-success)]">
@@ -426,7 +427,7 @@ export default function CoachRegistrationsPage({ params }: Props) {
           {alreadyRegistered && (
             <div className="rounded-[var(--radius-input)] border border-[var(--color-warning)]/40 bg-[var(--color-warning-subtle)] px-3 py-2.5 text-[13px] text-[var(--color-warning)]">
               {selectedAthlete
-                ? `${selectedAthlete.firstName} ${selectedAthlete.lastName} is already registered for this event.`
+                ? `${localizedFullName(selectedAthlete.firstName, selectedAthlete.lastName, selectedAthlete.firstNameKa, selectedAthlete.lastNameKa, locale)} is already registered for this event.`
                 : 'This athlete is already registered for this event.'}
             </div>
           )}

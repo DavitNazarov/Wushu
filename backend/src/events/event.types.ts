@@ -77,6 +77,7 @@ const CanonicalDatesSchema = z.object({
 export const CreateEventSchema = z
   .object({
     name: z.string().min(1, 'name is required'),
+    nameKa: z.string().trim().min(1).optional().nullable(),
     slug: z
       .string()
       .min(1, 'slug is required')

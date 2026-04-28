@@ -105,9 +105,11 @@ export type WeighInListEntry = {
   athlete: {
     id: string;
     firstName: string;
+    firstNameKa: string | null;
     lastName: string;
+    lastNameKa: string | null;
     dateOfBirth: string | null;
-    documentId: string | null;
+    documentId: string;
     sex: 'MALE' | 'FEMALE' | null;
   };
   club: {

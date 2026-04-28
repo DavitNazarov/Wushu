@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { localizedName } from '@/lib/bilingual';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusChip } from '@/components/ui/StatusChip';
@@ -62,7 +63,7 @@ export function CoachDashboardUpcomingEvents({ events }: Props) {
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
-                  <p className="text-[14px] font-semibold text-[var(--color-text)]">{event.name}</p>
+                  <p className="text-[14px] font-semibold text-[var(--color-text)]">{localizedName(event.name, event.nameKa, locale)}</p>
                   <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
                     {formatDateRange(event.competitionStartDate, event.competitionEndDate)}
                     {event.location ? ` · ${event.location}` : ''}

@@ -39,6 +39,7 @@ export type DashboardPendingAction = {
 export type DashboardUpcomingEvent = {
   id: string;
   name: string;
+  nameKa: string | null;
   slug: string;
   location: string | null;
   lifecycle: EventLifecycle;

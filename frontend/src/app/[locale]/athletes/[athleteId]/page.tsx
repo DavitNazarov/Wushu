@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getLocale } from 'next-intl/server';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { getServerApiUrl } from '@/lib/api';
+import { localizedFullName, localizedName } from '@/lib/bilingual';
 import type {
   AthleteProfileFightRow,
   AthleteProfileRegistrationRow,
@@ -123,7 +124,7 @@ export default async function PublicAthleteProfilePage({ params }: Props) {
 
   const location = [athlete.club?.city, athlete.club?.country].filter(Boolean).join(', ');
   const backHref = athlete.club?.id ? `/${locale}/clubs/${athlete.club.id}` : `/${locale}/clubs`;
-  const backLabel = athlete.club?.name ?? 'Clubs';
+  const backLabel = athlete.club ? localizedName(athlete.club.name, athlete.club.nameKa, locale) : 'Clubs';
 
   return (
     <PublicLayout>
@@ -154,7 +155,7 @@ export default async function PublicAthleteProfilePage({ params }: Props) {
           </div>
           <div className="space-y-2 pt-1">
             <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">
-              {athlete.fullName}
+              {localizedFullName(athlete.firstName, athlete.lastName, athlete.firstNameKa, athlete.lastNameKa, locale)}
             </h1>
             <div className="flex flex-wrap gap-2">
               {athlete.club && (
@@ -166,7 +167,7 @@ export default async function PublicAthleteProfilePage({ params }: Props) {
                   <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
-                  {athlete.club.name}
+                  {localizedName(athlete.club.name, athlete.club.nameKa, locale)}
                 </Link>
               )}
               {location && (

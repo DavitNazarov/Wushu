@@ -11,6 +11,7 @@ import { Modal } from '@/components/ui/Modal';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost, apiDelete } from '@/lib/api/client';
+import { localizedName } from '@/lib/bilingual';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import type { ScheduleFightRow, ScheduleSessionRow } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
@@ -73,7 +74,7 @@ function FightCard({
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate font-semibold text-[var(--color-text)]">
-          {fight.redDisplayName} <span className="text-[var(--color-text-muted)]">vs</span> {fight.blueDisplayName}
+          {localizedName(fight.redDisplayName, fight.redDisplayNameKa, locale)} <span className="text-[var(--color-text-muted)]">vs</span> {localizedName(fight.blueDisplayName, fight.blueDisplayNameKa, locale)}
         </p>
         <p className="text-[11px] text-[var(--color-text-muted)]">
           {fight.bracketRoundLabel} · #{fight.bracketFightNumber}
@@ -498,7 +499,7 @@ export function SchedulePageClient({ eventId }: Props) {
               <div className="space-y-1">
                 {fightsBySession.unassigned.map((fight) => (
                   <div key={fight.id} className="flex items-center gap-2 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px]">
-                    <span className="font-semibold text-[var(--color-text)]">{fight.redDisplayName} vs {fight.blueDisplayName}</span>
+                    <span className="font-semibold text-[var(--color-text)]">{localizedName(fight.redDisplayName, fight.redDisplayNameKa, locale)} vs {localizedName(fight.blueDisplayName, fight.blueDisplayNameKa, locale)}</span>
                     <span className="text-[var(--color-text-muted)]">{fight.bracketRoundLabel} · #{fight.bracketFightNumber}</span>
                   </div>
                 ))}

@@ -1,6 +1,8 @@
 'use client';
 
+import { useLocale } from 'next-intl';
 import { getFightWinnerCorner } from '@/lib/live/fightPresentation';
+import { localizedName } from '@/lib/bilingual';
 import { Card } from '@/components/ui/primitives/card';
 import type { LiveQueueFightRow } from '@/types/live';
 
@@ -18,6 +20,7 @@ function cornerBadge(corner: 'RED' | 'BLUE' | null): string {
 }
 
 export function LiveQueuePanel({ fights, title, emptyLabel, t }: Props) {
+  const locale = useLocale();
   return (
     <Card className="p-5 !shadow-none">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
@@ -36,9 +39,9 @@ export function LiveQueuePanel({ fights, title, emptyLabel, t }: Props) {
             });
             const winnerName =
               winnerCorner === 'RED'
-                ? fight.redDisplayName
+                ? localizedName(fight.redDisplayName, fight.redDisplayNameKa, locale)
                 : winnerCorner === 'BLUE'
-                  ? fight.blueDisplayName
+                  ? localizedName(fight.blueDisplayName, fight.blueDisplayNameKa, locale)
                   : null;
 
             return (
@@ -52,13 +55,13 @@ export function LiveQueuePanel({ fights, title, emptyLabel, t }: Props) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-1.5">
                     <span className="truncate text-[14px] font-semibold text-[var(--color-text)]">
-                      {fight.redDisplayName}
+                      {localizedName(fight.redDisplayName, fight.redDisplayNameKa, locale)}
                     </span>
                     <span className="shrink-0 text-[11px] font-bold uppercase text-[var(--color-text-muted)]">
                       vs
                     </span>
                     <span className="truncate text-[14px] font-semibold text-[var(--color-text)]">
-                      {fight.blueDisplayName}
+                      {localizedName(fight.blueDisplayName, fight.blueDisplayNameKa, locale)}
                     </span>
                   </div>
                   <p className="mt-0.5 truncate text-[12px] text-[var(--color-text-muted)]">

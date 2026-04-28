@@ -3,19 +3,34 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Building2, ChevronLeft, ChevronRight, Search, Users } from 'lucide-react';
+import { AlertTriangle, Building2, ChevronLeft, ChevronRight, Plus, Search, Users } from 'lucide-react';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { AdminFilterSelect } from '@/components/admin/AdminFilterSelect';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { SecondaryButton } from '@/components/ui/SecondaryButton';
+import { Modal } from '@/components/ui/Modal';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { useToast } from '@/components/ui/Toast';
 import { Input } from '@/components/ui/primitives/input';
-import { apiGet } from '@/lib/api/client';
+import { Label } from '@/components/ui/primitives/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/primitives/select';
+import { ApiError, apiGet, apiPost } from '@/lib/api/client';
+import { localizedFullName, localizedName } from '@/lib/bilingual';
 import type { AthleteRow, ClubRow } from '@/types/api';
 
 const PAGE_SIZE = 10;
+const EMPTY_SEX = '__empty_sex__';
+const EMPTY_CLUB = '__empty_club__';
 
 const CARD_CLASS =
   'rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)]';
@@ -68,17 +83,57 @@ function StatusChip({ label, tone }: StatusChipProps) {
   return <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cls}`}>{label}</span>;
 }
 
+function isGeorgianClub(club: ClubRow | null | undefined): boolean {
+  if (!club) return false;
+  const c = (club.country ?? '').trim().toLowerCase();
+  return c === 'ge' || c === 'georgia';
+}
+
+function toDateInput(iso: string | null | undefined): string {
+  if (!iso) return '';
+  return iso.slice(0, 10);
+}
+
+type AthleteFormState = {
+  firstName: string;
+  lastName: string;
+  firstNameKa: string;
+  lastNameKa: string;
+  dateOfBirth: string;
+  documentId: string;
+  sex: 'MALE' | 'FEMALE' | '';
+  clubId: string;
+};
+
+const EMPTY_ATHLETE_FORM: AthleteFormState = {
+  firstName: '',
+  lastName: '',
+  firstNameKa: '',
+  lastNameKa: '',
+  dateOfBirth: '',
+  documentId: '',
+  sex: '',
+  clubId: '',
+};
+
 export default function AthletesPage() {
   const t = useTranslations('athletes');
   const tCommon = useTranslations('common');
   const tProfile = useTranslations('athleteProfile.identity');
   const locale = useLocale();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const [search, setSearch] = useState('');
   const [selectedClubId, setSelectedClubId] = useState('');
   const [page, setPage] = useState(1);
 
-  // Reset to page 1 on filter change
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingAthlete, setEditingAthlete] = useState<AthleteRow | null>(null);
+  const [form, setForm] = useState<AthleteFormState>(EMPTY_ATHLETE_FORM);
+  const [docIdError, setDocIdError] = useState<string | null>(null);
+
   function setSearchAndReset(v: string) { setSearch(v); setPage(1); }
   function setClubAndReset(v: string) { setSelectedClubId(v); setPage(1); }
 
@@ -101,6 +156,89 @@ export default function AthletesPage() {
   });
 
   const clubMap = useMemo(() => new Map((clubs ?? []).map((c) => [c.id, c])), [clubs]);
+
+  // The club selected in the form (to conditionally show KA fields)
+  const formClub = form.clubId ? (clubMap.get(form.clubId) ?? null) : null;
+  const showKaFields = isGeorgianClub(formClub);
+
+  const saveMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      apiPost<{ athlete: AthleteRow }>('/api/athletes', body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['athletes'] });
+      toast(tCommon('saveSuccess'));
+      closeModal();
+    },
+    onError: (e: unknown) => {
+      if (e instanceof ApiError && e.code === 'DOCUMENT_ID_ALREADY_EXISTS') {
+        setDocIdError(t('errors.documentIdExists'));
+        return;
+      }
+      toast(e instanceof Error ? e.message : tCommon('saveFailed'), 'error');
+    },
+  });
+
+  function openNew() {
+    setEditingAthlete(null);
+    setForm(EMPTY_ATHLETE_FORM);
+    setDocIdError(null);
+    setModalOpen(true);
+  }
+
+  function openEdit(a: AthleteRow) {
+    setEditingAthlete(a);
+    setForm({
+      firstName: a.firstName,
+      lastName: a.lastName,
+      firstNameKa: a.firstNameKa ?? '',
+      lastNameKa: a.lastNameKa ?? '',
+      dateOfBirth: toDateInput(a.dateOfBirth),
+      documentId: a.documentId ?? '',
+      sex: a.sex ?? '',
+      clubId: a.clubId ?? '',
+    });
+    setDocIdError(null);
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setEditingAthlete(null);
+    setForm(EMPTY_ATHLETE_FORM);
+    setDocIdError(null);
+  }
+
+  function handleSave() {
+    setDocIdError(null);
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.dateOfBirth) return;
+    if (!form.documentId.trim()) {
+      setDocIdError(t('errors.documentIdRequired'));
+      return;
+    }
+
+    const body: Record<string, unknown> = {
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      // Preserve KA names regardless of form visibility — moving an athlete
+      // out of a Georgian club shouldn't destroy their existing KA spelling.
+      firstNameKa: form.firstNameKa.trim() || null,
+      lastNameKa: form.lastNameKa.trim() || null,
+      dateOfBirth: form.dateOfBirth,
+      documentId: form.documentId.trim(),
+      sex: form.sex || undefined,
+      clubId: form.clubId || undefined,
+    };
+
+    if (editingAthlete) body.id = editingAthlete.id;
+
+    saveMutation.mutate(body);
+  }
+
+  const formValid =
+    !!form.firstName.trim() &&
+    !!form.lastName.trim() &&
+    !!form.dateOfBirth &&
+    !!form.documentId.trim();
 
   const rows = athletes ?? [];
   const unassignedCount = rows.filter((a) => !a.clubId).length;
@@ -126,7 +264,9 @@ export default function AthletesPage() {
   }
 
   function getClubLabel(athlete: AthleteRow) {
-    return getClub(athlete)?.name ?? t('badges.missingClub');
+    const club = getClub(athlete);
+    if (!club) return t('badges.missingClub');
+    return localizedName(club.name, club.nameKa, locale);
   }
 
   function getClubMeta(athlete: AthleteRow) {
@@ -139,10 +279,135 @@ export default function AthletesPage() {
     return tProfile(`sexValue.${athlete.sex}`);
   }
 
+  const athleteForm = (
+    <div className="space-y-4">
+      {/* English name row */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>{showKaFields ? t('fields.firstNameEn') : t('fields.firstName')} *</Label>
+          <Input
+            type="text"
+            value={form.firstName}
+            onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
+            className="h-10 bg-[var(--color-surface)]"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>{showKaFields ? t('fields.lastNameEn') : t('fields.lastName')} *</Label>
+          <Input
+            type="text"
+            value={form.lastName}
+            onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
+            className="h-10 bg-[var(--color-surface)]"
+          />
+        </div>
+      </div>
+
+      {/* Georgian name row — shown when selected club is Georgian */}
+      {showKaFields && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>{t('fields.firstNameKa')}</Label>
+            <Input
+              type="text"
+              value={form.firstNameKa}
+              onChange={(e) => setForm((f) => ({ ...f, firstNameKa: e.target.value }))}
+              className="h-10 bg-[var(--color-surface)]"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('fields.lastNameKa')}</Label>
+            <Input
+              type="text"
+              value={form.lastNameKa}
+              onChange={(e) => setForm((f) => ({ ...f, lastNameKa: e.target.value }))}
+              className="h-10 bg-[var(--color-surface)]"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>{t('fields.dateOfBirth')} *</Label>
+          <Input
+            type="date"
+            value={form.dateOfBirth}
+            onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))}
+            className="h-10 bg-[var(--color-surface)]"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>{t('fields.sex')}</Label>
+          <Select
+            value={form.sex || EMPTY_SEX}
+            onValueChange={(v) =>
+              setForm((f) => ({ ...f, sex: v === EMPTY_SEX ? '' : (v as 'MALE' | 'FEMALE') }))
+            }
+          >
+            <SelectTrigger className="h-10 w-full">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={EMPTY_SEX}>—</SelectItem>
+              <SelectItem value="MALE">{t('fields.sexOptions.male')}</SelectItem>
+              <SelectItem value="FEMALE">{t('fields.sexOptions.female')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>{t('fields.club')}</Label>
+        <Select
+          value={form.clubId || EMPTY_CLUB}
+          onValueChange={(v) =>
+            setForm((f) => ({ ...f, clubId: v === EMPTY_CLUB ? '' : v }))
+          }
+        >
+          <SelectTrigger className="h-10 w-full">
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={EMPTY_CLUB}>—</SelectItem>
+            {(clubs ?? []).map((c) => (
+              <SelectItem key={c.id} value={c.id}>{localizedName(c.name, c.nameKa, locale)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>{t('fields.documentId')} *</Label>
+        <Input
+          type="text"
+          value={form.documentId}
+          onChange={(e) => {
+            setForm((f) => ({ ...f, documentId: e.target.value }));
+            setDocIdError(null);
+          }}
+          className="h-10 bg-[var(--color-surface)]"
+        />
+        {docIdError && (
+          <p className="text-[12px] text-[var(--color-danger)]">{docIdError}</p>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
-        <PageHeader title={t('title')} subtitle={t('subtitle')} />
+        <PageHeader
+          title={t('title')}
+          subtitle={t('subtitle')}
+          actions={
+            <PrimaryButton onClick={openNew}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              {t('new')}
+            </PrimaryButton>
+          }
+        />
       </motion.div>
 
       {error && (
@@ -188,7 +453,7 @@ export default function AthletesPage() {
           label={t('columns.club')}
           value={selectedClubId}
           emptyLabel={t('filters.allClubs')}
-          options={(clubs ?? []).map((c) => ({ value: c.id, label: c.name }))}
+          options={(clubs ?? []).map((c) => ({ value: c.id, label: localizedName(c.name, c.nameKa, locale) }))}
           onValueChange={setClubAndReset}
           className="sm:min-w-[200px]"
         />
@@ -226,9 +491,8 @@ export default function AthletesPage() {
                     <motion.tr
                       key={athlete.id}
                       variants={rowItem}
-                      whileHover={{ backgroundColor: 'var(--color-surface-alt)', x: 1 }}
-                      transition={{ duration: 0.12 }}
-                      className="group bg-[var(--color-surface)]"
+                      className="group bg-[var(--color-surface)] cursor-pointer"
+                      onClick={() => openEdit(athlete)}
                     >
                       {/* Name */}
                       <td className="px-5 py-3.5">
@@ -241,12 +505,9 @@ export default function AthletesPage() {
                             {getInitials(athlete)}
                           </motion.div>
                           <div>
-                            <Link
-                              href={`/${locale}/admin/athletes/${athlete.id}`}
-                              className="font-semibold text-[var(--color-text)] transition-colors hover:text-[var(--color-primary)]"
-                            >
-                              {athlete.lastName} {athlete.firstName}
-                            </Link>
+                            <p className="font-semibold text-[var(--color-text)] transition-colors hover:text-[var(--color-primary)]">
+                              {localizedFullName(athlete.firstName, athlete.lastName, athlete.firstNameKa, athlete.lastNameKa, locale)}
+                            </p>
                             <p className="text-[12px] text-[var(--color-text-muted)]">{getSexLabel(athlete)}</p>
                           </div>
                         </div>
@@ -260,7 +521,7 @@ export default function AthletesPage() {
                       <td className="px-5 py-3.5">
                         <p className="text-[var(--color-text)]">{formatDob(athlete.dateOfBirth)}</p>
                         <p className="text-[12px] text-[var(--color-text-muted)]/70">
-                          {athlete.documentId ?? t('badges.missingDocument')}
+                          {athlete.documentId || '—'}
                         </p>
                       </td>
                       {/* Status badges */}
@@ -270,11 +531,10 @@ export default function AthletesPage() {
                             <StatusChip tone="warning" label={t('badges.duplicateCount', { count: duplicateCount })} />
                           )}
                           {!athlete.clubId && <StatusChip tone="warning" label={t('badges.missingClub')} />}
-                          {!athlete.documentId && <StatusChip tone="muted" label={t('badges.missingDocument')} />}
                         </div>
                       </td>
                       {/* Arrow */}
-                      <td className="px-5 py-3.5 text-right">
+                      <td className="px-5 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                         <Link href={`/${locale}/admin/athletes/${athlete.id}`}>
                           <ChevronRight className="h-4 w-4 text-[var(--color-primary)] opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100" />
                         </Link>
@@ -297,9 +557,10 @@ export default function AthletesPage() {
                   whileHover={{ y: -2, boxShadow: '0 6px 20px -6px rgba(0,0,0,0.18)' }}
                   transition={{ duration: 0.15 }}
                 >
-                  <Link
-                    href={`/${locale}/admin/athletes/${athlete.id}`}
-                    className={`${CARD_CLASS} group flex items-start gap-3 p-4 transition-colors hover:bg-[var(--color-surface-alt)]/30`}
+                  <button
+                    type="button"
+                    onClick={() => openEdit(athlete)}
+                    className={`${CARD_CLASS} group flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-[var(--color-surface-alt)]/30`}
                   >
                     <motion.div
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-subtle)] text-[11px] font-bold uppercase text-[var(--color-primary)]"
@@ -309,19 +570,18 @@ export default function AthletesPage() {
                       {getInitials(athlete)}
                     </motion.div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{athlete.lastName} {athlete.firstName}</p>
+                      <p className="font-semibold text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{localizedFullName(athlete.firstName, athlete.lastName, athlete.firstNameKa, athlete.lastNameKa, locale)}</p>
                       <p className="text-[12px] text-[var(--color-text-muted)]">{getClubLabel(athlete)} · {getSexLabel(athlete)}</p>
                       <p className="text-[12px] text-[var(--color-text-muted)]">{formatDob(athlete.dateOfBirth)}</p>
-                      {(duplicateCount > 1 || !athlete.clubId || !athlete.documentId) && (
+                      {(duplicateCount > 1 || !athlete.clubId) && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {duplicateCount > 1 && <StatusChip tone="warning" label={t('badges.duplicateCount', { count: duplicateCount })} />}
                           {!athlete.clubId && <StatusChip tone="warning" label={t('badges.missingClub')} />}
-                          {!athlete.documentId && <StatusChip tone="muted" label={t('badges.missingDocument')} />}
                         </div>
                       )}
                     </div>
                     <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary)] opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100" />
-                  </Link>
+                  </button>
                 </motion.div>
               );
             })}
@@ -388,6 +648,39 @@ export default function AthletesPage() {
           )}
         </div>
       )}
+
+      {/* Create / Edit athlete modal */}
+      <Modal
+        open={modalOpen}
+        onClose={closeModal}
+        title={editingAthlete
+          ? localizedFullName(editingAthlete.firstName, editingAthlete.lastName, editingAthlete.firstNameKa, editingAthlete.lastNameKa, locale)
+          : t('new')}
+        footer={
+          <>
+            <SecondaryButton onClick={closeModal}>{tCommon('cancel')}</SecondaryButton>
+            <PrimaryButton
+              disabled={!formValid || saveMutation.isPending}
+              onClick={handleSave}
+            >
+              {saveMutation.isPending ? tCommon('loading') : tCommon('save')}
+            </PrimaryButton>
+          </>
+        }
+      >
+        {editingAthlete && (
+          <div className="mb-4 flex items-center justify-between">
+            <Link
+              href={`/${locale}/admin/athletes/${editingAthlete.id}`}
+              onClick={closeModal}
+              className="text-[13px] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:underline"
+            >
+              {t('viewProfile')} →
+            </Link>
+          </div>
+        )}
+        {athleteForm}
+      </Modal>
     </div>
   );
 }
@@ -400,7 +693,6 @@ function getInitials(athlete: AthleteRow) {
   return `${athlete.firstName.charAt(0)}${athlete.lastName.charAt(0)}`.toUpperCase();
 }
 
-/** Returns page numbers and '…' ellipsis markers for the pagination bar. */
 function getPaginationPages(current: number, total: number): (number | '…')[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
   const pages: (number | '…')[] = [1];

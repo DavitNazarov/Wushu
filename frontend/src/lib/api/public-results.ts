@@ -1,7 +1,9 @@
 export type PublicResultPerson = {
   athleteId: string;
   fullName: string;
+  fullNameKa?: string | null;
   clubName: string | null;
+  clubNameKa?: string | null;
   corner: 'RED' | 'BLUE';
 };
 
@@ -9,7 +11,9 @@ export type PublicResultPlacement = {
   rank: 1 | 2 | 3;
   athleteId: string;
   athleteName: string;
+  athleteNameKa?: string | null;
   clubName: string | null;
+  clubNameKa?: string | null;
   medal: 'GOLD' | 'SILVER' | 'BRONZE';
 };
 

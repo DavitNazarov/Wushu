@@ -1,6 +1,8 @@
 'use client';
 
+import { useLocale } from 'next-intl';
 import { getResolvedAgeGroup } from '@/lib/weighin/category';
+import { localizedFullName } from '@/lib/bilingual';
 import type { WeighInListEntry } from '@/types/weighin';
 import {
   getQueueStatusMeta,
@@ -20,6 +22,7 @@ type Props = {
 };
 
 export function WeighInAthleteSummaryCard({ entry, t }: Props) {
+  const locale = useLocale();
   const ageGroup = getResolvedAgeGroup(entry.eventWeightCategory?.eventAgeGroup);
   const status = getQueueStatusMeta(entry);
   const divisionLabel =
@@ -43,7 +46,7 @@ export function WeighInAthleteSummaryCard({ entry, t }: Props) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-[18px] font-bold text-[var(--color-text)] leading-tight">
-            {entry.athlete.firstName} {entry.athlete.lastName}
+            {localizedFullName(entry.athlete.firstName, entry.athlete.lastName, entry.athlete.firstNameKa, entry.athlete.lastNameKa, locale)}
           </h2>
           <span
             className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${STATUS_BADGE[status.tone]}`}

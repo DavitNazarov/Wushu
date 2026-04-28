@@ -51,6 +51,7 @@ export interface EventDates {
 
 export interface EventCreateInput {
   name: string;
+  nameKa?: string | null;
   slug: string;
   location: string;
   timezone: string;
@@ -79,6 +80,7 @@ export interface ValidationIssue {
 export interface EventRow {
   id: string;
   name: string;
+  nameKa: string | null;
   slug: string;
   lifecycle: EventLifecycle;
   location: string | null;
@@ -146,6 +148,7 @@ export interface CategoryTemplateGroupRow {
 export interface CategoryTemplateUsageEventRow {
   id: string;
   name: string;
+  nameKa?: string | null;
   lifecycle: string;
   competitionStartDate: string;
 }
@@ -232,6 +235,7 @@ export type CategorySelection = {
 export interface ClubRow {
   id: string;
   name: string;
+  nameKa: string | null;
   city: string | null;
   country: string | null;
 }
@@ -239,10 +243,12 @@ export interface ClubRow {
 export interface AthleteRow {
   id: string;
   firstName: string;
+  firstNameKa: string | null;
   lastName: string;
+  lastNameKa: string | null;
   dateOfBirth: string | null;
   sex: AthleteSex | null;
-  documentId: string | null;
+  documentId: string;
   clubId: string | null;
   club?: ClubRow | null;
   duplicateCount?: number;
@@ -261,7 +267,7 @@ export interface RegistrationRow {
   notes: string | null;
   createdAt?: string;
   updatedAt?: string;
-  athlete?: { id: string; firstName: string; lastName: string; dateOfBirth: string };
+  athlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null; dateOfBirth: string };
   club?: ClubRow | null;
 }
 
@@ -687,6 +693,8 @@ export interface ScheduleFightRow {
   scheduleOrder: number | null;
   redDisplayName: string;
   blueDisplayName: string;
+  redDisplayNameKa?: string | null;
+  blueDisplayNameKa?: string | null;
   redSourceScheduleOrder: number | null;
   blueSourceScheduleOrder: number | null;
   isPlayable: boolean;
@@ -864,6 +872,7 @@ export interface AthleteProfileCoachRow {
 export interface AthleteProfileClubRow {
   id: string;
   name: string;
+  nameKa: string | null;
   city: string | null;
   country: string | null;
 }
@@ -920,10 +929,13 @@ export interface AthleteProfileResponse {
   athlete: {
     id: string;
     firstName: string;
+    firstNameKa: string | null;
     lastName: string;
+    lastNameKa: string | null;
     fullName: string;
     sex: AthleteSex | null;
     dateOfBirth?: string | null;
+    documentId?: string | null;
     club: AthleteProfileClubRow | null;
     coaches?: AthleteProfileCoachRow[];
   };
@@ -973,6 +985,7 @@ export interface UserRow {
   createdAt: string;
   updatedAt: string;
   clubId: string | null;
+  nationality: string | null;
   club: { id: string; name: string } | null;
 }
 
@@ -984,6 +997,7 @@ export interface UserDetailRow {
   status: 'ACTIVE' | 'DQ' | 'ARCHIVED' | 'INACTIVE';
   isActive: boolean;
   clubId: string | null;
+  nationality: string | null;
   club: { id: string; name: string } | null;
   disciplinary: {
     isActive: boolean;

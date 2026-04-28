@@ -11,6 +11,7 @@ import { InlineAlert } from '@/components/ui/InlineAlert';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { ApiError, apiGet } from '@/lib/api/client';
+import { localizedName } from '@/lib/bilingual';
 import type { EventRow, ScheduleFightRow } from '@/types/api';
 
 type Props = { params: Promise<{ locale: string; eventSlug: string }> };
@@ -140,11 +141,11 @@ export default function CoachSchedulePage({ params }: Props) {
                       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <div className="flex min-w-0 items-center gap-2">
                           <span className={`truncate text-[13px] font-medium ${isRunning ? 'text-[var(--color-primary)]' : 'text-[var(--color-text)]'}`}>
-                            {f.redDisplayName}
+                            {localizedName(f.redDisplayName, f.redDisplayNameKa, locale)}
                           </span>
                           <Swords className="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" />
                           <span className={`truncate text-[13px] font-medium ${isRunning ? 'text-[var(--color-primary)]' : 'text-[var(--color-text)]'}`}>
-                            {f.blueDisplayName}
+                            {localizedName(f.blueDisplayName, f.blueDisplayNameKa, locale)}
                           </span>
                         </div>
                         {isRunning && (

@@ -12,7 +12,8 @@ import { usePublicLive } from '@/hooks/usePublicApi';
 import { useRealtimeQuerySync } from '@/hooks/useRealtimeQuerySync';
 import { getFightDisplayTone, getFightWinnerCorner } from '@/lib/live/fightPresentation';
 import type { PublicLiveFeed } from '@/lib/api/public';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { localizedName } from '@/lib/bilingual';
 
 type Props = {
   eventSlug: string;
@@ -35,9 +36,11 @@ function phaseLabel(
 function UpcomingCard({
   label,
   fight,
+  locale,
 }: {
   label: string;
   fight: PublicLiveFeed['current'];
+  locale: string;
 }) {
   const tPublic = useTranslations('public');
 
@@ -49,7 +52,7 @@ function UpcomingCard({
       {fight ? (
         <div className="mt-3 space-y-2">
           <p className="text-lg font-semibold text-[var(--color-text)]">
-            {fight.redDisplayName} {tPublic('versus')} {fight.blueDisplayName}
+            {localizedName(fight.redDisplayName, fight.redDisplayNameKa, locale)} {tPublic('versus')} {localizedName(fight.blueDisplayName, fight.blueDisplayNameKa, locale)}
           </p>
           <p className="text-[13px] text-[var(--color-text-muted)]">
             {fight.categoryName} · #{fight.scheduleOrder ?? fight.boutNo} · {fight.bracketRoundLabel}
@@ -65,6 +68,7 @@ function UpcomingCard({
 }
 
 export function PublicLivePanel({ eventSlug }: Props) {
+  const locale = useLocale();
   const tCommon = useTranslations('common');
   const tPublic = useTranslations('public');
   const tLive = useTranslations('live');
@@ -121,9 +125,9 @@ export function PublicLivePanel({ eventSlug }: Props) {
     : null;
   const winnerName =
     winnerCorner === 'RED'
-      ? currentFight?.redDisplayName ?? null
+      ? localizedName(currentFight?.redDisplayName ?? '', currentFight?.redDisplayNameKa, locale) || null
       : winnerCorner === 'BLUE'
-        ? currentFight?.blueDisplayName ?? null
+        ? localizedName(currentFight?.blueDisplayName ?? '', currentFight?.blueDisplayNameKa, locale) || null
         : null;
   const latestResultCorner = data.latestResult
     ? getFightWinnerCorner({
@@ -134,9 +138,9 @@ export function PublicLivePanel({ eventSlug }: Props) {
     : null;
   const latestResultWinner =
     latestResultCorner === 'RED'
-      ? data.latestResult?.redDisplayName ?? null
+      ? localizedName(data.latestResult?.redDisplayName ?? '', data.latestResult?.redDisplayNameKa, locale) || null
       : latestResultCorner === 'BLUE'
-        ? data.latestResult?.blueDisplayName ?? null
+        ? localizedName(data.latestResult?.blueDisplayName ?? '', data.latestResult?.blueDisplayNameKa, locale) || null
         : null;
 
   return (
@@ -178,7 +182,7 @@ export function PublicLivePanel({ eventSlug }: Props) {
                   {tLive('red')}
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-[var(--color-text)] sm:text-3xl">
-                  {currentFight.redDisplayName}
+                  {localizedName(currentFight.redDisplayName, currentFight.redDisplayNameKa, locale)}
                 </p>
               </div>
 
@@ -187,7 +191,7 @@ export function PublicLivePanel({ eventSlug }: Props) {
                   {tLive('blue')}
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-[var(--color-text)] sm:text-3xl">
-                  {currentFight.blueDisplayName}
+                  {localizedName(currentFight.blueDisplayName, currentFight.blueDisplayNameKa, locale)}
                 </p>
               </div>
             </div>
@@ -228,7 +232,7 @@ export function PublicLivePanel({ eventSlug }: Props) {
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <UpcomingCard label={tPublic('onDeck')} fight={data.onDeck} />
+        <UpcomingCard label={tPublic('onDeck')} fight={data.onDeck} locale={locale} />
         <Card>
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-muted)]">
             {tPublic('next')}
@@ -241,7 +245,7 @@ export function PublicLivePanel({ eventSlug }: Props) {
                   className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/50 p-4"
                 >
                   <p className="text-[15px] font-semibold text-[var(--color-text)]">
-                    {fight.redDisplayName} {tPublic('versus')} {fight.blueDisplayName}
+                    {localizedName(fight.redDisplayName, fight.redDisplayNameKa, locale)} {tPublic('versus')} {localizedName(fight.blueDisplayName, fight.blueDisplayNameKa, locale)}
                   </p>
                   <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
                     {fight.categoryName} · #{fight.scheduleOrder ?? fight.boutNo} · {fight.bracketRoundLabel}

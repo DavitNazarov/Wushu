@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { localizedName } from '@/lib/bilingual';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api/client';
 import { useRealtimeQuerySync } from '@/hooks/useRealtimeQuerySync';
@@ -80,6 +81,7 @@ type Props = {
 
 export function DisplayPageClient({ eventId }: Props) {
   const t = useTranslations('live');
+  const locale = useLocale();
 
   const liveQueryKey = useMemo(
     () => ['display-board', eventId] as const,
@@ -149,11 +151,11 @@ export function DisplayPageClient({ eventId }: Props) {
             </p>
             <div className="mt-4 flex items-center gap-6">
               <span className="text-3xl font-bold text-[var(--color-danger)]">
-                {onDeckFight.redDisplayName}
+                {localizedName(onDeckFight.redDisplayName, onDeckFight.redDisplayNameKa, locale)}
               </span>
               <span className="text-xl font-bold text-[var(--color-text-muted)]">vs</span>
               <span className="text-3xl font-bold text-sky-400">
-                {onDeckFight.blueDisplayName}
+                {localizedName(onDeckFight.blueDisplayName, onDeckFight.blueDisplayNameKa, locale)}
               </span>
             </div>
             <p className="mt-3 text-lg text-[var(--color-text-muted)]">
@@ -233,7 +235,7 @@ export function DisplayPageClient({ eventId }: Props) {
               {t('red' as Parameters<typeof t>[0])}
             </p>
             <p className="mt-4 text-5xl font-bold text-[var(--color-text)] sm:text-6xl lg:text-7xl">
-              {currentFight.redDisplayName}
+              {localizedName(currentFight.redDisplayName, currentFight.redDisplayNameKa, locale)}
             </p>
             {winnerCorner === 'RED' && (
               <p className="mt-4 text-2xl font-bold uppercase tracking-wider text-[var(--color-danger)]">
@@ -261,7 +263,7 @@ export function DisplayPageClient({ eventId }: Props) {
               {t('blue' as Parameters<typeof t>[0])}
             </p>
             <p className="mt-4 text-5xl font-bold text-[var(--color-text)] sm:text-6xl lg:text-7xl">
-              {currentFight.blueDisplayName}
+              {localizedName(currentFight.blueDisplayName, currentFight.blueDisplayNameKa, locale)}
             </p>
             {winnerCorner === 'BLUE' && (
               <p className="mt-4 text-2xl font-bold uppercase tracking-wider text-sky-400">

@@ -12,7 +12,9 @@ import {
   SelectValue,
 } from '@/components/ui/primitives/select';
 import { Textarea } from '@/components/ui/primitives/textarea';
+import { useLocale } from 'next-intl';
 import { getFightWinnerCorner } from '@/lib/live/fightPresentation';
+import { localizedName } from '@/lib/bilingual';
 import { cn } from '@/lib/utils';
 import type { LiveQueueFightRow } from '@/types/live';
 
@@ -48,8 +50,11 @@ export function LiveResultDialog({
   t,
   tCommon,
 }: Props) {
+  const locale = useLocale();
   const previewWinnerName =
-    winner === 'RED' ? fight?.redDisplayName ?? t('red') : fight?.blueDisplayName ?? t('blue');
+    winner === 'RED'
+      ? localizedName(fight?.redDisplayName ?? t('red'), fight?.redDisplayNameKa, locale)
+      : localizedName(fight?.blueDisplayName ?? t('blue'), fight?.blueDisplayNameKa, locale);
   const previewCorner = getFightWinnerCorner({
     winnerAthleteId:
       winner === 'RED' ? fight?.redAthleteId ?? null : fight?.blueAthleteId ?? null,
@@ -107,7 +112,7 @@ export function LiveResultDialog({
                     {t('red')}
                   </p>
                   <p className="mt-2 text-lg font-semibold text-[var(--color-text)]">
-                    {fight?.redDisplayName ?? t('red')}
+                    {localizedName(fight?.redDisplayName ?? t('red'), fight?.redDisplayNameKa, locale)}
                   </p>
                 </button>
 
@@ -124,7 +129,7 @@ export function LiveResultDialog({
                     {t('blue')}
                   </p>
                   <p className="mt-2 text-lg font-semibold text-[var(--color-text)]">
-                    {fight?.blueDisplayName ?? t('blue')}
+                    {localizedName(fight?.blueDisplayName ?? t('blue'), fight?.blueDisplayNameKa, locale)}
                   </p>
                 </button>
               </div>

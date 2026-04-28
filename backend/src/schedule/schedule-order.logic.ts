@@ -3,6 +3,7 @@ import {
   buildFightCandidates,
   compareFightCandidate,
   displayName,
+  displayNameKa,
   isFightPlayable,
 } from './schedule-fight-candidates.logic';
 import type {
@@ -51,6 +52,8 @@ export function buildScheduleRows(fights: ScheduleSourceFight[]): BuiltScheduleR
         athlete: candidate.fight.blueAthlete,
         sourceScheduleOrder: blueSourceScheduleOrder,
       }),
+      redDisplayNameKa: displayNameKa({ athlete: candidate.fight.redAthlete }),
+      blueDisplayNameKa: displayNameKa({ athlete: candidate.fight.blueAthlete }),
       redSourceScheduleOrder,
       blueSourceScheduleOrder,
       isPlayable: isFightPlayable({

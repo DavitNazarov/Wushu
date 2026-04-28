@@ -24,6 +24,7 @@ import { SkeletonKpiRow, SkeletonRows } from '@/components/ui/Skeleton';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { apiGet } from '@/lib/api/client';
 import { adminVariants } from '@/lib/animations/variants';
+import { localizedName } from '@/lib/bilingual';
 import type { EventRow } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
@@ -112,7 +113,7 @@ function LiveBanner({ events, locale, t }: { events: EventRow[]; locale: string;
       </span>
       <div className="flex-1 min-w-0">
         <span className="text-[13px] font-semibold text-[var(--color-success)]">{t('liveNow')}: </span>
-        <span className="text-[13px] font-medium text-[var(--color-text)]">{ev.name}</span>
+        <span className="text-[13px] font-medium text-[var(--color-text)]">{localizedName(ev.name, ev.nameKa, locale)}</span>
         {ev.location && (
           <span className="ml-2 text-[12px] text-[var(--color-text-muted)]">
             <MapPin className="mb-0.5 mr-0.5 inline h-3 w-3" />
@@ -145,9 +146,11 @@ const PIPELINE_STAGES: { key: string; color: string }[] = [
 
 function EventPipeline({
   events,
+  locale,
   tEvents,
 }: {
   events: EventRow[];
+  locale: string;
   tEvents: (k: string) => string;
 }) {
   const byStage = PIPELINE_STAGES.map((stage) => ({
@@ -179,7 +182,7 @@ function EventPipeline({
           <div className="space-y-1">
             {stage.events.map((ev) => (
               <p key={ev.id} className="truncate text-[12px] font-medium text-[var(--color-text)]">
-                {ev.name}
+                {localizedName(ev.name, ev.nameKa, locale)}
               </p>
             ))}
           </div>
@@ -215,7 +218,7 @@ function NextEventCountdown({ events, locale, t }: { events: EventRow[]; locale:
         <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
           {t('nextEvent')}
         </p>
-        <p className="truncate text-[15px] font-semibold text-[var(--color-text)]">{next.name}</p>
+        <p className="truncate text-[15px] font-semibold text-[var(--color-text)]">{localizedName(next.name, next.nameKa, locale)}</p>
         <p className="text-[12px] text-[var(--color-text-muted)]">
           {next.location && <><MapPin className="mb-0.5 mr-0.5 inline h-3 w-3" />{next.location} · </>}
           {formatDate(next.competitionStartDate)}
@@ -315,7 +318,7 @@ function EventListRow({
           href={`/${locale}/admin/events`}
           className="text-[13px] font-medium text-[var(--color-text)] hover:underline"
         >
-          {ev.name}
+          {localizedName(ev.name, ev.nameKa, locale)}
         </Link>
         <p className="text-[11px] text-[var(--color-text-muted)]">
           {ev.location ? `${ev.location} · ` : ''}
@@ -432,7 +435,7 @@ export default function AdminDashboardPage() {
             <Zap className="h-3.5 w-3.5 text-[var(--color-primary)]" />
             {t('pipelineTitle')}
           </h2>
-          <EventPipeline events={events} tEvents={(k) => tEvents(k as Parameters<typeof tEvents>[0])} />
+          <EventPipeline events={events} locale={locale} tEvents={(k) => tEvents(k as Parameters<typeof tEvents>[0])} />
         </motion.section>
       )}
 

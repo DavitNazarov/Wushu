@@ -41,6 +41,7 @@ export function EditEventModal({ open, onClose, event }: Props) {
   );
 
   const [name, setName] = useState(event.name);
+  const [nameKa, setNameKa] = useState(event.nameKa ?? '');
   const [slug, setSlug] = useState(event.slug);
   const [location, setLocation] = useState(event.location ?? '');
   const [timezone, setTimezone] = useState(event.timezone);
@@ -106,6 +107,7 @@ export function EditEventModal({ open, onClose, event }: Props) {
     mutationFn: async () => {
       const payload: EventCreateInput = {
         name: name.trim(),
+        nameKa: nameKa.trim() || null,
         slug: slug.trim(),
         location: location.trim().replace(/,\s*$/, ''),
         timezone: timezone.trim() || 'Asia/Tbilisi',
@@ -158,6 +160,7 @@ export function EditEventModal({ open, onClose, event }: Props) {
 
   function handleClose() {
     setName(event.name);
+    setNameKa(event.nameKa ?? '');
     setSlug(event.slug);
     setLocation(event.location ?? '');
     setTimezone(event.timezone);
@@ -192,6 +195,7 @@ export function EditEventModal({ open, onClose, event }: Props) {
         >
           <EventBasicsFields
             name={name}
+            nameKa={nameKa}
             slug={slug}
             location={location}
             timezone={timezone}
@@ -201,6 +205,7 @@ export function EditEventModal({ open, onClose, event }: Props) {
               setName(value);
               setIssues(null);
             }}
+            onNameKaChange={setNameKa}
             onSlugChange={(value) => {
               setSlug(value);
               setIssues(null);

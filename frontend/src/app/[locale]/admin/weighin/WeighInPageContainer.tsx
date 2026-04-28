@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast';
 import { resolveEventControlGate } from '@/domain/events/controlPageGate';
 import { useAdminEventRoute } from '@/features/admin-events/hooks/useAdminEventRoute';
 import { apiPost } from '@/lib/api/client';
+import { localizedFullName } from '@/lib/bilingual';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import { buildWeighInQueueGroups, formatWeighInQueueGroupHeading } from '@/lib/weighin/queue';
 import type { WeighInDecision, WeighInQueueFilter } from '@/types/weighin';
@@ -173,7 +174,7 @@ export function WeighInPageContainer({ eventId }: Props) {
   const lifecycleStage = resolveWeighInLifecycleStage(selectedEvent?.lifecycle);
   const lifecycleIndex = lifecycleSteps.findIndex((step) => step.stage === lifecycleStage);
   const selectedAthleteName = selectedEntry
-    ? `${selectedEntry.athlete.firstName} ${selectedEntry.athlete.lastName}`.trim()
+    ? localizedFullName(selectedEntry.athlete.firstName, selectedEntry.athlete.lastName, selectedEntry.athlete.firstNameKa, selectedEntry.athlete.lastNameKa, locale)
     : '';
 
   const isMobileViewport = () => typeof window !== 'undefined' && window.innerWidth < 768;

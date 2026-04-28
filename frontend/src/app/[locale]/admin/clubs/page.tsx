@@ -13,14 +13,20 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
+import { localizedName } from '@/lib/bilingual';
 import type { ClubRow } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 const INPUT_CLASS =
   'h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
 
-type FormState = { name: string; city: string; country: string };
-const EMPTY_FORM: FormState = { name: '', city: '', country: '' };
+type FormState = { name: string; nameKa: string; city: string; country: string };
+const EMPTY_FORM: FormState = { name: '', nameKa: '', city: '', country: '' };
+
+function isGeorgianCountry(country: string): boolean {
+  const c = country.trim().toLowerCase();
+  return c === 'ge' || c === 'georgia';
+}
 
 export default function ClubsPage() {
   const t = useTranslations('clubs');
@@ -73,7 +79,7 @@ export default function ClubsPage() {
 
   function openEdit(club: ClubRow) {
     setEditingClub(club);
-    setForm({ name: club.name, city: club.city ?? '', country: club.country ?? '' });
+    setForm({ name: club.name, nameKa: club.nameKa ?? '', city: club.city ?? '', country: club.country ?? '' });
     setModalOpen(true);
   }
 
@@ -88,7 +94,9 @@ export default function ClubsPage() {
   }
 
   function handleSave() {
-    const body: Record<string, unknown> = { ...form };
+    const { nameKa, ...rest } = form;
+    const body: Record<string, unknown> = { ...rest };
+    if (isGeorgianCountry(form.country)) body.nameKa = nameKa.trim() || null;
     if (editingClub) body.id = editingClub.id;
     saveMutation.mutate(body);
   }
@@ -169,9 +177,9 @@ export default function ClubsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-subtle)] text-[11px] font-bold uppercase text-[var(--color-primary)] transition-transform duration-200 group-hover:scale-110">
-                          {club.name.slice(0, 2).toUpperCase()}
+                          {localizedName(club.name, club.nameKa, locale).slice(0, 2).toUpperCase()}
                         </div>
-                        <span className="font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{club.name}</span>
+                        <span className="font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{localizedName(club.name, club.nameKa, locale)}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">{club.city || '—'}</td>
@@ -215,10 +223,10 @@ export default function ClubsPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-subtle)] text-[12px] font-bold uppercase text-[var(--color-primary)]">
-                      {club.name.slice(0, 2).toUpperCase()}
+                      {localizedName(club.name, club.nameKa, locale).slice(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-[13px] font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{club.name}</p>
+                      <p className="truncate text-[13px] font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{localizedName(club.name, club.nameKa, locale)}</p>
                       <p className="text-[12px] text-[var(--color-text-muted)]">
                         {[club.city, club.country].filter(Boolean).join(', ') || '—'}
                       </p>
@@ -262,8 +270,36 @@ export default function ClubsPage() {
       >
         <div className="space-y-4">
           {renderField('name')}
+          <div>
+            <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">
+              {t('fields.country')}
+            </label>
+            <input
+              className={INPUT_CLASS}
+              value={form.country}
+              onChange={(e) => {
+                const next = e.target.value;
+                setForm((f) => ({
+                  ...f,
+                  country: next,
+                  nameKa: isGeorgianCountry(next) ? f.nameKa : '',
+                }));
+              }}
+            />
+          </div>
+          {isGeorgianCountry(form.country) && (
+            <div>
+              <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">
+                {t('fields.nameKa')}
+              </label>
+              <input
+                className={INPUT_CLASS}
+                value={form.nameKa}
+                onChange={(e) => setForm((f) => ({ ...f, nameKa: e.target.value }))}
+              />
+            </div>
+          )}
           {renderField('city')}
-          {renderField('country')}
         </div>
       </Modal>
     </div>

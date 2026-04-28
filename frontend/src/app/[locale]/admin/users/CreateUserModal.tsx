@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { localizedName } from '@/lib/bilingual';
 import { useQuery } from '@tanstack/react-query';
 import { Modal } from '@/components/ui/Modal';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
@@ -26,6 +27,7 @@ type CreateUserModalProps = {
 export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
   const t = useTranslations('admin.users');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
   const { toast } = useToast();
 
   const [email, setEmail] = useState('');
@@ -33,6 +35,7 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
   const [displayName, setDisplayName] = useState('');
   const [role, setRole] = useState<UserRole>('coach');
   const [clubId, setClubId] = useState('');
+  const [nationality, setNationality] = useState<'GE' | 'INTL'>('GE');
   const [error, setError] = useState<string | null>(null);
   const [clubError, setClubError] = useState<string | null>(null);
 
@@ -52,6 +55,7 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
     setDisplayName('');
     setRole('coach');
     setClubId('');
+    setNationality('GE');
     setError(null);
     setClubError(null);
   }
@@ -79,6 +83,7 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
         displayName: displayName.trim(),
         role,
         clubId: role === 'coach' ? clubId || null : null,
+        nationality: role === 'coach' ? (nationality === 'GE' ? 'GE' : null) : null,
       },
       {
         onSuccess: () => {
@@ -174,6 +179,30 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
             {t('passwordHint')}
           </p>
         </div>
+        {/* Nationality shown right after password, before display name */}
+        {showClubField && (
+          <div>
+            <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">
+              {t('fieldNationality')}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['GE', 'INTL'] as const).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setNationality(opt)}
+                  className={`h-10 rounded-[var(--radius-input)] border px-3 text-[13px] font-medium transition ${
+                    nationality === opt
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50'
+                  }`}
+                >
+                  {opt === 'GE' ? t('nationalityGeorgian') : t('nationalityInternational')}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">
             {t('fieldDisplayName')}
@@ -183,8 +212,17 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
             className={INPUT_CLASS}
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder={t('displayNamePlaceholder')}
+            placeholder={
+              showClubField && nationality === 'GE'
+                ? 'მაგ. გიორგი ბერიძე'
+                : t('displayNamePlaceholder')
+            }
           />
+          {showClubField && nationality === 'GE' && (
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+              {t('displayNameGeorgianHint')}
+            </p>
+          )}
         </div>
         <div>
           <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">
@@ -228,7 +266,7 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
               </option>
               {(clubs ?? []).map((club) => (
                 <option key={club.id} value={club.id}>
-                  {club.name}
+                  {localizedName(club.name, club.nameKa, locale)}
                 </option>
               ))}
             </select>

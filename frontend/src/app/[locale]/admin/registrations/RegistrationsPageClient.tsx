@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost } from '@/lib/api/client';
+import { localizedFullName, localizedName } from '@/lib/bilingual';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import type { ClubRow, RegistrationBulkStatusResponse, RegistrationRow } from '@/types/api';
 import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
@@ -241,7 +242,7 @@ export function RegistrationsPageClient({ eventId }: Props) {
               action,
               reason: '',
               scope: 'single',
-              description: `${reg.athlete ? `${reg.athlete.firstName} ${reg.athlete.lastName}`.trim() : reg.athleteId} · ${reg.club?.name ?? '—'} · ${reg.categoryCode}`,
+              description: `${reg.athlete ? localizedFullName(reg.athlete.firstName, reg.athlete.lastName, reg.athlete.firstNameKa, reg.athlete.lastNameKa, locale) : reg.athleteId} · ${reg.club ? localizedName(reg.club.name, reg.club.nameKa, locale) : '—'} · ${reg.categoryCode}`,
             })
           }
         />

@@ -163,8 +163,7 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @SkipThrottle()
   async me(
     @Req() req: Express.Request,
     @Res({ passthrough: true }) res: Express.Response,

@@ -9,13 +9,16 @@ import { Card } from '@/components/ui/Card';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { ApiError, apiGet } from '@/lib/api/client';
+import { localizedFullName, localizedName } from '@/lib/bilingual';
 import type { EventRow } from '@/types/api';
+
+type AthleteSlot = { firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null };
 
 type MatFeed = {
   mat: { id: string; name: string };
-  now: { id: string; redAthlete?: { firstName: string; lastName: string }; blueAthlete?: { firstName: string; lastName: string }; status?: string } | null;
-  onDeck: { id: string; redAthlete?: { firstName: string; lastName: string }; blueAthlete?: { firstName: string; lastName: string } } | null;
-  next: Array<{ id: string; redAthlete?: { firstName: string; lastName: string }; blueAthlete?: { firstName: string; lastName: string } }>;
+  now: { id: string; redAthlete?: AthleteSlot; blueAthlete?: AthleteSlot; status?: string } | null;
+  onDeck: { id: string; redAthlete?: AthleteSlot; blueAthlete?: AthleteSlot } | null;
+  next: Array<{ id: string; redAthlete?: AthleteSlot; blueAthlete?: AthleteSlot }>;
 };
 
 type Props = { params: Promise<{ locale: string; eventSlug: string }> };
@@ -53,7 +56,7 @@ export default function CoachLivePage({ params }: Props) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={event?.name ?? eventSlug}
+        title={event ? localizedName(event.name, event.nameKa, locale) : eventSlug}
         subtitle={`${t('title')} — ${matName}`}
         actions={
           <div className="flex gap-2">
@@ -93,8 +96,8 @@ export default function CoachLivePage({ params }: Props) {
             <Card className="border-2 border-[var(--color-primary)] bg-[var(--color-primary-subtle)]">
               <h3 className="text-[12px] font-semibold uppercase tracking-wider text-[var(--color-primary)]">{t('now')}</h3>
               <p className="mt-2 text-[18px] font-semibold">
-                {feed.now.redAthlete ? `${feed.now.redAthlete.firstName} ${feed.now.redAthlete.lastName}` : 'TBD'} vs{' '}
-                {feed.now.blueAthlete ? `${feed.now.blueAthlete.firstName} ${feed.now.blueAthlete.lastName}` : 'TBD'}
+                {feed.now.redAthlete ? localizedFullName(feed.now.redAthlete.firstName, feed.now.redAthlete.lastName, feed.now.redAthlete.firstNameKa, feed.now.redAthlete.lastNameKa, locale) : 'TBD'} vs{' '}
+                {feed.now.blueAthlete ? localizedFullName(feed.now.blueAthlete.firstName, feed.now.blueAthlete.lastName, feed.now.blueAthlete.firstNameKa, feed.now.blueAthlete.lastNameKa, locale) : 'TBD'}
               </p>
             </Card>
           ) : (
@@ -108,8 +111,8 @@ export default function CoachLivePage({ params }: Props) {
             <Card>
               <h3 className="text-[12px] font-semibold uppercase text-[var(--color-text-muted)]">{t('onDeck')}</h3>
               <p className="mt-2 text-[15px]">
-                {feed.onDeck.redAthlete ? `${feed.onDeck.redAthlete.firstName} ${feed.onDeck.redAthlete.lastName}` : 'TBD'} vs{' '}
-                {feed.onDeck.blueAthlete ? `${feed.onDeck.blueAthlete.firstName} ${feed.onDeck.blueAthlete.lastName}` : 'TBD'}
+                {feed.onDeck.redAthlete ? localizedFullName(feed.onDeck.redAthlete.firstName, feed.onDeck.redAthlete.lastName, feed.onDeck.redAthlete.firstNameKa, feed.onDeck.redAthlete.lastNameKa, locale) : 'TBD'} vs{' '}
+                {feed.onDeck.blueAthlete ? localizedFullName(feed.onDeck.blueAthlete.firstName, feed.onDeck.blueAthlete.lastName, feed.onDeck.blueAthlete.firstNameKa, feed.onDeck.blueAthlete.lastNameKa, locale) : 'TBD'}
               </p>
             </Card>
           )}
@@ -120,8 +123,8 @@ export default function CoachLivePage({ params }: Props) {
               <ul className="mt-2 space-y-1 text-[14px]">
                 {feed.next.map((f) => (
                   <li key={f.id}>
-                    {f.redAthlete ? `${f.redAthlete.firstName} ${f.redAthlete.lastName}` : 'TBD'} vs{' '}
-                    {f.blueAthlete ? `${f.blueAthlete.firstName} ${f.blueAthlete.lastName}` : 'TBD'}
+                    {f.redAthlete ? localizedFullName(f.redAthlete.firstName, f.redAthlete.lastName, f.redAthlete.firstNameKa, f.redAthlete.lastNameKa, locale) : 'TBD'} vs{' '}
+                    {f.blueAthlete ? localizedFullName(f.blueAthlete.firstName, f.blueAthlete.lastName, f.blueAthlete.firstNameKa, f.blueAthlete.lastNameKa, locale) : 'TBD'}
                   </li>
                 ))}
               </ul>

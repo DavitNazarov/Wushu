@@ -193,6 +193,8 @@ export class RegistrationsService {
             id: true,
             firstName: true,
             lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
             dateOfBirth: true,
           },
         },

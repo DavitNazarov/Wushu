@@ -4,6 +4,7 @@ import { Activity, Layers3, MapPin, ShieldCheck, Users, UserRound } from 'lucide
 import { useLocale, useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import type { ClubDetailsResponse } from '@/types/clubs';
+import { localizedName } from '@/lib/bilingual';
 import { formatClubDate, formatClubLocation } from './clubProfile.utils';
 
 type Props = Pick<ClubDetailsResponse, 'club' | 'overview'>;
@@ -53,14 +54,14 @@ export function ClubProfileOverview({ club, overview }: Props) {
               whileHover={{ scale: 1.07, rotate: 2 }}
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
             >
-              {club.name.slice(0, 2).toUpperCase()}
+              {localizedName(club.name, club.nameKa, locale).slice(0, 2).toUpperCase()}
             </motion.div>
             <div className="min-w-0 pt-0.5">
               <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-[var(--color-text-muted)]/70">
                 {t('overview.eyebrow')}
               </p>
               <h2 className="mt-1 text-[24px] font-bold tracking-tight text-[var(--color-text)] leading-tight">
-                {club.name}
+                {localizedName(club.name, club.nameKa, locale)}
               </h2>
               <div className="mt-2.5 flex flex-wrap gap-1.5">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)]/60 bg-[var(--color-surface)]/70 px-2.5 py-1 text-[12px] text-[var(--color-text-muted)] backdrop-blur-sm">

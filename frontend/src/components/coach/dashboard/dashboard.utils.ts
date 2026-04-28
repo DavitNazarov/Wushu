@@ -244,6 +244,7 @@ export function buildCoachDashboardModel({
       return {
         id: event.id,
         name: event.name,
+        nameKa: event.nameKa,
         slug: event.slug,
         location: event.location,
         lifecycle: event.lifecycle,

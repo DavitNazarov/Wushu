@@ -4,12 +4,14 @@ import { useTranslations } from 'next-intl';
 
 type Props = {
   name: string;
+  nameKa: string;
   slug: string;
   location: string;
   timezone: string;
   slugIsValid: boolean;
   issuesByPath: Map<string, string[]>;
   onNameChange: (value: string) => void;
+  onNameKaChange: (value: string) => void;
   onSlugChange: (value: string) => void;
   onLocationChange: (value: string) => void;
   onTimezoneChange: (value: string) => void;
@@ -17,12 +19,14 @@ type Props = {
 
 export function EventBasicsFields({
   name,
+  nameKa,
   slug,
   location,
   timezone,
   slugIsValid,
   issuesByPath,
   onNameChange,
+  onNameKaChange,
   onSlugChange,
   onLocationChange,
   onTimezoneChange,
@@ -41,6 +45,16 @@ export function EventBasicsFields({
           className={inputClassName}
           value={name}
           onChange={(event) => onNameChange(event.target.value)}
+        />
+      </div>
+
+      <div>
+        <label className={labelClassName}>{tEvents('form.nameKaLabel')}</label>
+        <input
+          className={inputClassName}
+          value={nameKa}
+          onChange={(event) => onNameKaChange(event.target.value)}
+          placeholder={tEvents('form.nameKaPlaceholder')}
         />
       </div>
 

@@ -22,7 +22,9 @@ const athleteBodySchema = z.object({
   id: z.string().cuid().optional(),
   clubId: z.string().cuid().optional().nullable(),
   firstName: z.string().trim().min(1),
+  firstNameKa: z.string().trim().min(1).optional().nullable(),
   lastName: z.string().trim().min(1),
+  lastNameKa: z.string().trim().min(1).optional().nullable(),
   dateOfBirth: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'dateOfBirth must be YYYY-MM-DD' })
@@ -33,7 +35,7 @@ const athleteBodySchema = z.object({
       },
       { message: 'Invalid dateOfBirth' },
     ),
-  documentId: z.string().trim().min(1).optional().nullable(),
+  documentId: z.string().trim().min(1),
   sex: z.enum(['MALE', 'FEMALE']).optional().nullable(),
 });
 
@@ -108,9 +110,11 @@ export class AthletesController {
           clubId: effectiveClubId,
           actorClubId: auth.role === 'coach' ? (auth.clubId ?? null) : null,
           firstName: parsed.firstName,
+          firstNameKa: parsed.firstNameKa ?? null,
           lastName: parsed.lastName,
+          lastNameKa: parsed.lastNameKa ?? null,
           dateOfBirth: dob,
-          documentId: parsed.documentId ?? null,
+          documentId: parsed.documentId,
           sex: parsed.sex ?? null,
         });
 
@@ -119,6 +123,12 @@ export class AthletesController {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'ATHLETE_NOT_IN_COACH_CLUB') {
         throw new HttpException(msg, HttpStatus.FORBIDDEN);
+      }
+      if (msg === 'DOCUMENT_ID_ALREADY_EXISTS') {
+        throw new HttpException(
+          { code: 'DOCUMENT_ID_ALREADY_EXISTS', message: 'An athlete with this document ID already exists' },
+          HttpStatus.CONFLICT,
+        );
       }
       throw e;
     }

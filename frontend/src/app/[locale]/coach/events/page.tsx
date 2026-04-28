@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/primitives/select';
 import { apiGet } from '@/lib/api/client';
+import { localizedName } from '@/lib/bilingual';
 import type { EventRow } from '@/types/api';
 
 const ALL_LIFECYCLE = '__all__';
@@ -148,7 +149,7 @@ export default function CoachEventsPage() {
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3">
                   <h2 className="text-[15px] font-semibold text-[var(--color-text)] leading-snug">
-                    {event.name}
+                    {localizedName(event.name, event.nameKa, locale)}
                   </h2>
                   <StatusChip
                     status={event.lifecycle}

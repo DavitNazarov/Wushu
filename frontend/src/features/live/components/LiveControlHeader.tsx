@@ -1,6 +1,7 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { localizedName } from '@/lib/bilingual';
 import { PageHeader } from '@/components/ui/PageHeader';
 import {
   Select,
@@ -27,6 +28,7 @@ export function LiveControlHeader({
   onEventChange,
 }: Props) {
   const t = useTranslations('live');
+  const locale = useLocale();
 
   return (
     <PageHeader
@@ -49,7 +51,7 @@ export function LiveControlHeader({
                     value={event.id}
                     className="rounded-[10px] py-2 text-[13px]"
                   >
-                    {event.name}
+                    {localizedName(event.name, event.nameKa, locale)}
                   </SelectItem>
                 ))}
               </SelectContent>

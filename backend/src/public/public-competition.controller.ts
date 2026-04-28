@@ -143,13 +143,13 @@ export class PublicCompetitionController {
         fights: {
           include: {
             redAthlete: {
-              select: { id: true, firstName: true, lastName: true },
+              select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
             },
             blueAthlete: {
-              select: { id: true, firstName: true, lastName: true },
+              select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
             },
             winnerAthlete: {
-              select: { id: true, firstName: true, lastName: true },
+              select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
             },
           },
           orderBy: [{ round: 'asc' }, { boutNo: 'asc' }],

@@ -14,6 +14,7 @@ import { EventStageStepper, STEPPER_STAGES } from '@/components/event/EventStage
 import { EventTabs } from '@/components/event/EventTabs';
 import { PublicLivePanel } from '@/components/event/PublicLivePanel';
 import { usePublicEvent } from '@/hooks/usePublicApi';
+import { localizedName } from '@/lib/bilingual';
 import type { EventLifecycle } from '@/types/api';
 
 type Props = { params: Promise<{ slug: string }> };
@@ -164,7 +165,7 @@ export default function PublicEventDetailPage({ params }: Props) {
 
               <div className="pt-1">
                 <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">
-                  {event.name}
+                  {localizedName(event.name, event.nameKa, locale)}
                 </h1>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <LifecyclePill lifecycle={event.lifecycle} />

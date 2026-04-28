@@ -36,6 +36,7 @@ export function CreateEventModal({ open, onClose }: Props) {
   const { toast } = useToast();
 
   const [name, setName] = useState('');
+  const [nameKa, setNameKa] = useState('');
   const [slug, setSlug] = useState('');
   const [location, setLocation] = useState('');
   const [timezone, setTimezone] = useState('Asia/Tbilisi');
@@ -89,6 +90,7 @@ export function CreateEventModal({ open, onClose }: Props) {
     mutationFn: async () => {
       const payload: EventCreateInput = {
         name: name.trim(),
+        nameKa: nameKa.trim() || null,
         slug: slug.trim(),
         location: location.trim().replace(/,\s*$/, ''),
         timezone: timezone.trim() || 'Asia/Tbilisi',
@@ -132,6 +134,7 @@ export function CreateEventModal({ open, onClose }: Props) {
   function handleClose() {
     onClose();
     setName('');
+    setNameKa('');
     setSlug('');
     setLocation('');
     setTimezone('Asia/Tbilisi');
@@ -177,6 +180,7 @@ export function CreateEventModal({ open, onClose }: Props) {
         >
           <EventBasicsFields
             name={name}
+            nameKa={nameKa}
             slug={slug}
             location={location}
             timezone={timezone}
@@ -186,6 +190,7 @@ export function CreateEventModal({ open, onClose }: Props) {
               setName(value);
               if (!slug || slug === slugifyName(name)) setSlug(slugifyName(value));
             }}
+            onNameKaChange={setNameKa}
             onSlugChange={setSlug}
             onLocationChange={setLocation}
             onTimezoneChange={setTimezone}

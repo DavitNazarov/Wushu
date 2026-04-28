@@ -61,11 +61,13 @@ export interface ClubDetailsAthleteLatestRegistration {
 export interface ClubDetailsAthleteRow {
   id: string;
   firstName: string;
+  firstNameKa: string | null;
   lastName: string;
+  lastNameKa: string | null;
   fullName: string;
   dateOfBirth: string;
   sex: AthleteSex | null;
-  documentId: string | null;
+  documentId: string;
   createdAt: string;
   registrationCount: number;
   activeRegistrationCount: number;
@@ -77,6 +79,7 @@ export interface ClubDetailsResponse {
   club: {
     id: string;
     name: string;
+    nameKa: string | null;
     city: string | null;
     country: string | null;
     createdAt: string;

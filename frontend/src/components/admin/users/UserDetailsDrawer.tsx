@@ -169,6 +169,7 @@ export function UserDetailsDrawer({ userId, currentUserId, open, onClose }: Prop
     email: string;
     role: 'admin' | 'coach';
     clubId: string | null;
+    nationality: string | null;
     isActive: boolean;
   }) {
     if (!user) return;

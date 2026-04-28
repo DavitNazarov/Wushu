@@ -38,7 +38,7 @@ export class ScheduleService {
   }
 
   private displayName(input: {
-    athlete: { firstName: string; lastName: string } | null;
+    athlete: { firstName: string; lastName: string; firstNameKa?: string | null; lastNameKa?: string | null } | null;
     sourceScheduleOrder: number | null;
   }): string {
     if (input.athlete) {
@@ -222,10 +222,10 @@ export class ScheduleService {
         },
         include: {
           mat: true,
-          redAthlete: { select: { id: true, firstName: true, lastName: true } },
-          blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+          redAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
+          blueAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
           winnerAthlete: {
-            select: { id: true, firstName: true, lastName: true },
+            select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
           },
           eventWeightCategory: {
             select: {

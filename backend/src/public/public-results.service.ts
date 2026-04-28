@@ -16,6 +16,7 @@ import {
 import {
   bucketKey,
   fullName,
+  fullNameKa,
   type PublicResultCategory,
   type PublicResultFight,
 } from './public-results.types';
@@ -36,10 +37,10 @@ export class PublicResultsService {
       },
       include: {
         mat: { select: { name: true } },
-        redAthlete: { select: { id: true, firstName: true, lastName: true } },
-        blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+        redAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
+        blueAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
         winnerAthlete: {
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
         },
         eventWeightCategory: {
           select: {
@@ -64,16 +65,22 @@ export class PublicResultsService {
       select: {
         athleteId: true,
         clubId: true,
-        club: { select: { name: true } },
+        club: { select: { name: true, nameKa: true } },
       },
     });
 
     const athleteClubById = new Map(
       registrations.map((row) => [
         row.athleteId,
-        { clubId: row.clubId, clubName: row.club?.name ?? null },
+        { clubId: row.clubId, clubName: row.club?.name ?? null, clubNameKa: row.club?.nameKa ?? null },
       ]),
     );
+
+    const athleteNameKaById = new Map<string, string | null>();
+    for (const fight of fights) {
+      if (fight.redAthlete) athleteNameKaById.set(fight.redAthlete.id, fullNameKa(fight.redAthlete));
+      if (fight.blueAthlete) athleteNameKaById.set(fight.blueAthlete.id, fullNameKa(fight.blueAthlete));
+    }
 
     const placements = buildPlacementsFromConfirmedFights(
       fights
@@ -177,20 +184,24 @@ export class PublicResultsService {
 
         const winnerCorner =
           fight.winnerAthleteId === fight.redAthleteId ? 'RED' : 'BLUE';
+        const redClub = athleteClubById.get(fight.redAthleteId);
+        const blueClub = athleteClubById.get(fight.blueAthleteId);
         const winner =
           winnerCorner === 'RED'
             ? {
                 athleteId: fight.redAthleteId,
                 fullName: fullName(fight.redAthlete),
-                clubName:
-                  athleteClubById.get(fight.redAthleteId)?.clubName ?? null,
+                fullNameKa: fullNameKa(fight.redAthlete),
+                clubName: redClub?.clubName ?? null,
+                clubNameKa: redClub?.clubNameKa ?? null,
                 corner: 'RED' as const,
               }
             : {
                 athleteId: fight.blueAthleteId,
                 fullName: fullName(fight.blueAthlete),
-                clubName:
-                  athleteClubById.get(fight.blueAthleteId)?.clubName ?? null,
+                fullNameKa: fullNameKa(fight.blueAthlete),
+                clubName: blueClub?.clubName ?? null,
+                clubNameKa: blueClub?.clubNameKa ?? null,
                 corner: 'BLUE' as const,
               };
         const opponent =
@@ -198,15 +209,17 @@ export class PublicResultsService {
             ? {
                 athleteId: fight.blueAthleteId,
                 fullName: fullName(fight.blueAthlete),
-                clubName:
-                  athleteClubById.get(fight.blueAthleteId)?.clubName ?? null,
+                fullNameKa: fullNameKa(fight.blueAthlete),
+                clubName: blueClub?.clubName ?? null,
+                clubNameKa: blueClub?.clubNameKa ?? null,
                 corner: 'BLUE' as const,
               }
             : {
                 athleteId: fight.redAthleteId,
                 fullName: fullName(fight.redAthlete),
-                clubName:
-                  athleteClubById.get(fight.redAthleteId)?.clubName ?? null,
+                fullNameKa: fullNameKa(fight.redAthlete),
+                clubName: redClub?.clubName ?? null,
+                clubNameKa: redClub?.clubNameKa ?? null,
                 corner: 'RED' as const,
               };
 
@@ -238,6 +251,7 @@ export class PublicResultsService {
       const placements = buildPublicPlacements({
         placements: categoryResults.placements,
         athleteClubById,
+        athleteNameKaById,
         isComplete: categoryResults.isComplete,
       });
 

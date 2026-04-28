@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale } from 'next-intl';
+import { localizedName } from '@/lib/bilingual';
 import type { ScheduleFightRow, ScheduleSessionRow } from '@/types/api';
 
 function statusTone(status: ScheduleFightRow['liveStatus']) {
@@ -28,6 +30,7 @@ function FightCard({
   fightReadyLabel: string;
   fightWaitingLabel: string;
 }) {
+  const locale = useLocale();
   return (
     <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <div className="flex items-center justify-between gap-2">
@@ -47,8 +50,8 @@ function FightCard({
         {fight.bracketRoundLabel} • {fight.bracketFightNumber}
       </div>
 
-      <div className="mt-2 text-[13px] font-medium text-red-400">{fight.redDisplayName}</div>
-      <div className="text-[13px] font-medium text-blue-400">{fight.blueDisplayName}</div>
+      <div className="mt-2 text-[13px] font-medium text-red-400">{localizedName(fight.redDisplayName, fight.redDisplayNameKa, locale)}</div>
+      <div className="text-[13px] font-medium text-blue-400">{localizedName(fight.blueDisplayName, fight.blueDisplayNameKa, locale)}</div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-text-muted)]">
         <span>{fight.isPlayable ? fightReadyLabel : fightWaitingLabel}</span>

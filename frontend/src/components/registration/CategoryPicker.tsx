@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useLocale } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api/client';
+import { localizedFullName } from '@/lib/bilingual';
 import {
   Select,
   SelectContent,
@@ -71,6 +73,7 @@ export function CategoryPicker({
   disabled,
   athlete,
 }: Props) {
+  const locale = useLocale();
   const url = eventSlug
     ? `/api/public/events/${eventSlug}/categories`
     : eventId
@@ -129,7 +132,7 @@ export function CategoryPicker({
 
   // Athlete selected but no eligible categories
   if (athlete && ageGroups.length === 0) {
-    const name = `${athlete.firstName} ${athlete.lastName}`;
+    const name = localizedFullName(athlete.firstName, athlete.lastName, athlete.firstNameKa, athlete.lastNameKa, locale);
     return (
       <p className="rounded-[var(--radius-input)] border border-[var(--color-warning)]/40 bg-[var(--color-warning-subtle)] px-3 py-2.5 text-[13px] text-[var(--color-warning)]">
         {name} cannot participate — no available categories match their age and sex.

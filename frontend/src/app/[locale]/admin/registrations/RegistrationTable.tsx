@@ -1,6 +1,8 @@
 'use client';
 
+import { useLocale } from 'next-intl';
 import { StatusChip } from '@/components/ui/StatusChip';
+import { localizedFullName, localizedName } from '@/lib/bilingual';
 import type { RegistrationRow } from '@/types/api';
 import {
   canApplyRegistrationAction,
@@ -11,8 +13,14 @@ const TD = 'px-4 py-3';
 const TH = 'px-4 py-3 text-left font-medium text-[var(--color-text-muted)]';
 const SMALL_BTN = '!h-7 !px-2 text-[11px]';
 
-export function athleteName(reg: RegistrationRow): string {
-  return reg.athlete ? `${reg.athlete.firstName} ${reg.athlete.lastName}`.trim() : reg.athleteId;
+export function athleteName(reg: RegistrationRow, locale: string): string {
+  if (!reg.athlete) return reg.athleteId;
+  return localizedFullName(reg.athlete.firstName, reg.athlete.lastName, reg.athlete.firstNameKa, reg.athlete.lastNameKa, locale);
+}
+
+function clubName(reg: RegistrationRow, locale: string): string {
+  if (!reg.club) return '—';
+  return localizedName(reg.club.name, reg.club.nameKa, locale);
 }
 
 export function formatRelative(dateStr: string): string {
@@ -63,6 +71,7 @@ interface RegistrationTableProps {
 }
 
 export function RegistrationTable({ rows, isLocked, t, onAction }: RegistrationTableProps) {
+  const locale = useLocale();
   return (
     <>
       {/* Desktop table */}
@@ -82,8 +91,8 @@ export function RegistrationTable({ rows, isLocked, t, onAction }: RegistrationT
           <tbody className="divide-y divide-[var(--color-border)]">
             {rows.map((reg) => (
               <tr key={reg.id} className="bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]">
-                <td className={`${TD} font-medium text-[var(--color-text)]`}>{athleteName(reg)}</td>
-                <td className={`${TD} text-[var(--color-text-muted)]`}>{reg.club?.name ?? '—'}</td>
+                <td className={`${TD} font-medium text-[var(--color-text)]`}>{athleteName(reg, locale)}</td>
+                <td className={`${TD} text-[var(--color-text-muted)]`}>{clubName(reg, locale)}</td>
                 <td className={`${TD} text-[var(--color-text)]`}>{reg.categoryCode}</td>
                 <td className={TD}>
                   <StatusChip
@@ -126,11 +135,11 @@ export function RegistrationTable({ rows, isLocked, t, onAction }: RegistrationT
         {rows.map((reg) => (
           <div key={reg.id} className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-[13px] font-medium text-[var(--color-text)]">{athleteName(reg)}</p>
+              <p className="truncate text-[13px] font-medium text-[var(--color-text)]">{athleteName(reg, locale)}</p>
               <StatusChip status={reg.status} label={t(`status.${reg.status}`)} domain="registration" />
             </div>
             <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-              {reg.club?.name ?? '—'} · {reg.categoryCode}
+              {clubName(reg, locale)} · {reg.categoryCode}
             </p>
             {reg.notes && (
               <p className="mt-1 truncate text-[12px] text-[var(--color-text-muted)]">{reg.notes}</p>

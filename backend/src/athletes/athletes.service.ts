@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import type { Athlete, AthleteSex, Club, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import type { Athlete, AthleteSex, Club } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 
@@ -65,12 +66,12 @@ export class AthletesService {
     const duplicateMap = new Map<string, number>();
     for (const a of athletes) {
       const key = this.getDuplicateKey(a);
-      if (key) duplicateMap.set(key, (duplicateMap.get(key) ?? 0) + 1);
+      duplicateMap.set(key, (duplicateMap.get(key) ?? 0) + 1);
     }
 
     return athletes.map((a) => ({
       ...a,
-      duplicateCount: duplicateMap.get(this.getDuplicateKey(a) ?? '') ?? 0,
+      duplicateCount: duplicateMap.get(this.getDuplicateKey(a)) ?? 0,
     }));
   }
 
@@ -81,9 +82,11 @@ export class AthletesService {
     clubId?: string | null;
     actorClubId?: string | null;
     firstName: string;
+    firstNameKa?: string | null;
     lastName: string;
+    lastNameKa?: string | null;
     dateOfBirth: Date;
-    documentId?: string | null;
+    documentId: string;
     sex?: AthleteSex | null;
   }): Promise<{ athlete: Athlete; possibleDuplicates: Athlete[] }> {
     if (input.clubId) {
@@ -117,19 +120,28 @@ export class AthletesService {
       throw new Error('ATHLETE_NOT_IN_COACH_CLUB');
     }
 
-    const documentId = input.documentId?.trim();
-    if (!documentId) {
-      throw new HttpException(
-        { code: 'INVALID_DOCUMENT_ID', message: 'documentId is required' },
-        HttpStatus.BAD_REQUEST,
-      );
+    const documentId = input.documentId.trim();
+
+    // Check documentId uniqueness within organisation (excluding self on update)
+    const conflictingAthlete = await this.prisma.athlete.findFirst({
+      where: {
+        organisationId: input.organisationId,
+        documentId,
+        ...(existing ? { id: { not: existing.id } } : {}),
+      },
+      select: { id: true },
+    });
+    if (conflictingAthlete) {
+      throw new Error('DOCUMENT_ID_ALREADY_EXISTS');
     }
 
     const data: Prisma.AthleteUncheckedCreateInput = {
       organisationId: input.organisationId,
       clubId: input.clubId ?? null,
       firstName: input.firstName.trim(),
+      firstNameKa: input.firstNameKa?.trim() || null,
       lastName: input.lastName.trim(),
+      lastNameKa: input.lastNameKa?.trim() || null,
       dateOfBirth: input.dateOfBirth,
       documentId,
       sex: input.sex ?? null,
@@ -140,27 +152,40 @@ export class AthletesService {
       firstName: data.firstName,
       lastName: data.lastName,
       dateOfBirth: data.dateOfBirth,
-      documentId: data.documentId ?? undefined,
+      documentId,
       excludeId: existing?.id,
     });
 
-    const athlete = await this.prisma.$transaction(async (tx) => {
-      const saved = existing
-        ? await tx.athlete.update({ where: { id: existing.id }, data })
-        : await tx.athlete.create({ data });
+    let athlete: Athlete;
+    try {
+      athlete = await this.prisma.$transaction(async (tx) => {
+        const saved = existing
+          ? await tx.athlete.update({ where: { id: existing.id }, data })
+          : await tx.athlete.create({ data });
 
-      await this.audit.write({
-        organisationId: input.organisationId,
-        actorUserId: input.actorUserId,
-        action: existing ? 'ATHLETE_UPDATED' : 'ATHLETE_CREATED',
-        entityType: 'athlete',
-        entityId: saved.id,
-        before: existing as unknown as Prisma.JsonValue | null,
-        after: saved as unknown as Prisma.JsonValue,
+        await this.audit.write({
+          organisationId: input.organisationId,
+          actorUserId: input.actorUserId,
+          action: existing ? 'ATHLETE_UPDATED' : 'ATHLETE_CREATED',
+          entityType: 'athlete',
+          entityId: saved.id,
+          before: existing as unknown as Prisma.JsonValue | null,
+          after: saved as unknown as Prisma.JsonValue,
+        });
+
+        return saved;
       });
-
-      return saved;
-    });
+    } catch (e) {
+      // The findFirst above is racy — a concurrent insert may slip through and
+      // hit the @@unique([organisationId, documentId]) constraint instead.
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        throw new Error('DOCUMENT_ID_ALREADY_EXISTS');
+      }
+      throw e;
+    }
 
     return { athlete, possibleDuplicates };
   }
@@ -259,8 +284,7 @@ export class AthletesService {
     });
   }
 
-  private getDuplicateKey(athlete: Athlete): string | null {
-    if (!athlete.dateOfBirth || !athlete.documentId) return null;
+  private getDuplicateKey(athlete: Athlete): string {
     return `${athlete.organisationId}:${athlete.dateOfBirth.toISOString()}:${athlete.documentId.toLowerCase()}`;
   }
 
@@ -269,26 +293,23 @@ export class AthletesService {
     firstName: string;
     lastName: string;
     dateOfBirth: Date | string;
-    documentId?: string;
+    documentId: string;
     excludeId?: string;
   }): Promise<Athlete[]> {
     const andConditions: Prisma.AthleteWhereInput[] = [];
     if (input.excludeId) andConditions.push({ id: { not: input.excludeId } });
 
-    const nameFilter: Prisma.AthleteWhereInput = {
-      lastName: { equals: input.lastName, mode: 'insensitive' },
-      firstName: { equals: input.firstName, mode: 'insensitive' },
-    };
-
-    const docFilter: Prisma.AthleteWhereInput | null = input.documentId
-      ? { documentId: { equals: input.documentId, mode: 'insensitive' } }
-      : null;
-
     const where: Prisma.AthleteWhereInput = {
       organisationId: input.organisationId,
       dateOfBirth: input.dateOfBirth,
       AND: andConditions.length > 0 ? andConditions : undefined,
-      ...(docFilter ? { OR: [nameFilter, docFilter] } : nameFilter),
+      OR: [
+        {
+          lastName: { equals: input.lastName, mode: 'insensitive' },
+          firstName: { equals: input.firstName, mode: 'insensitive' },
+        },
+        { documentId: { equals: input.documentId, mode: 'insensitive' } },
+      ],
     };
 
     return this.prisma.athlete.findMany({

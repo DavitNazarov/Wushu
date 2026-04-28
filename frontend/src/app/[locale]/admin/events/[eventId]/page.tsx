@@ -16,6 +16,7 @@ import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { useToast } from '@/components/ui/Toast';
 import { ApiError, apiGet, apiPost } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
+import { localizedName } from '@/lib/bilingual';
 import { EditEventModal } from '@/features/events/components/EditEventModal';
 import type { EventRow, EventLifecycle } from '@/types/api';
 import { EVENT_LIFECYCLE_ORDER, nextEventLifecycle } from '@/domain/events/lifecycle';
@@ -162,7 +163,7 @@ export default function EventDetailPage() {
         </button>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-[22px] font-bold leading-tight text-[var(--color-text)]">{event.name}</h1>
+            <h1 className="text-[22px] font-bold leading-tight text-[var(--color-text)]">{localizedName(event.name, event.nameKa, locale)}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <StatusChip
                 status={event.lifecycle}

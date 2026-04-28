@@ -10,12 +10,14 @@ type AthleteClubLookup = Map<
   {
     clubId: string | null;
     clubName: string | null;
+    clubNameKa: string | null;
   }
 >;
 
 export function buildPublicPlacements(input: {
   placements: CategoryPlacementRow[];
   athleteClubById: AthleteClubLookup;
+  athleteNameKaById?: Map<string, string | null>;
   isComplete: boolean;
 }): PublicResultCategory['placements'] {
   const toPlacement = (
@@ -28,12 +30,14 @@ export function buildPublicPlacements(input: {
       return null;
     }
 
+    const club = input.athleteClubById.get(placement.athleteId);
     return {
       rank: placement.rank,
       athleteId: placement.athleteId,
       athleteName: placement.athleteName,
-      clubName:
-        input.athleteClubById.get(placement.athleteId)?.clubName ?? null,
+      athleteNameKa: input.athleteNameKaById?.get(placement.athleteId) ?? null,
+      clubName: club?.clubName ?? null,
+      clubNameKa: club?.clubNameKa ?? null,
       medal: placement.medal,
     };
   };

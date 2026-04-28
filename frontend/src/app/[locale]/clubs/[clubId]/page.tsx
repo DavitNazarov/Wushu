@@ -3,16 +3,18 @@ import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { getServerApiUrl } from '@/lib/api';
+import { localizedName } from '@/lib/bilingual';
 
 type ClubPublicDetails = {
   club: {
     id: string;
     name: string;
+    nameKa?: string | null;
     city: string | null;
     country: string | null;
   };
   coaches: { id: string; displayName: string }[];
-  athletes: { id: string; name: string; category: string | null }[];
+  athletes: { id: string; name: string; nameKa?: string | null; category: string | null }[];
   stats: { coachCount: number; athleteCount: number };
 };
 
@@ -33,6 +35,7 @@ export default async function PublicClubPage({ params }: Props) {
   const { club, coaches, athletes, stats } = data;
 
   const location = [club.city, club.country].filter(Boolean).join(', ');
+  const clubDisplayName = localizedName(club.name, club.nameKa, locale);
 
   return (
     <PublicLayout>
@@ -52,11 +55,11 @@ export default async function PublicClubPage({ params }: Props) {
         {/* Club header */}
         <div className="flex items-start gap-5">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-primary-subtle)] text-[20px] font-bold text-[var(--color-primary)]">
-            {club.name.slice(0, 2).toUpperCase()}
+            {clubDisplayName.slice(0, 2).toUpperCase()}
           </div>
           <div className="pt-1">
             <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">
-              {club.name}
+              {clubDisplayName}
             </h1>
             {location && (
               <p className="mt-1 flex items-center gap-1.5 text-[13px] text-[var(--color-text-muted)]">
@@ -105,7 +108,9 @@ export default async function PublicClubPage({ params }: Props) {
               {tPublic('clubAthletes')} <span className="ml-1 font-normal normal-case tracking-normal">({athletes.length})</span>
             </h2>
             <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)]">
-              {athletes.map((athlete, i) => (
+              {athletes.map((athlete, i) => {
+                const athleteDisplayName = localizedName(athlete.name, athlete.nameKa, locale);
+                return (
                 <Link
                   key={athlete.id}
                   href={`/${locale}/athletes/${athlete.id}`}
@@ -115,10 +120,10 @@ export default async function PublicClubPage({ params }: Props) {
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-surface-alt)] text-[10px] font-semibold text-[var(--color-text-muted)] transition-colors group-hover:bg-[var(--color-primary-subtle)] group-hover:text-[var(--color-primary)]">
-                      {athlete.name.slice(0, 1).toUpperCase()}
+                      {athleteDisplayName.slice(0, 1).toUpperCase()}
                     </div>
                     <span className="text-[14px] text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">
-                      {athlete.name}
+                      {athleteDisplayName}
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
@@ -138,7 +143,8 @@ export default async function PublicClubPage({ params }: Props) {
                     </svg>
                   </div>
                 </Link>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}

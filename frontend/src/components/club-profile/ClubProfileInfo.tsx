@@ -3,6 +3,7 @@
 import { useLocale, useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import { Building2, CalendarDays, Mail, MapPin, RefreshCw, Tag } from 'lucide-react';
+import { localizedName } from '@/lib/bilingual';
 import { Card } from '@/components/ui/Card';
 import type { ClubDetailsResponse } from '@/types/clubs';
 import { formatClubDate, formatClubLocation } from './clubProfile.utils';
@@ -26,7 +27,7 @@ export function ClubProfileInfo({ club, overview }: Props) {
         </div>
 
         <div className="divide-y divide-[var(--color-border)]/50">
-          <InfoRow icon={Building2} label={t('info.fields.name')} value={club.name} />
+          <InfoRow icon={Building2} label={t('info.fields.name')} value={localizedName(club.name, club.nameKa, locale)} />
           <InfoRow icon={MapPin} label={t('info.fields.location')} value={formatClubLocation(club.city, club.country, t('locationMissing'))} />
           <InfoRow icon={CalendarDays} label={t('info.fields.created')} value={formatClubDate(club.createdAt, locale)} />
           <InfoRow icon={RefreshCw} label={t('info.fields.updated')} value={formatClubDate(club.updatedAt, locale)} />

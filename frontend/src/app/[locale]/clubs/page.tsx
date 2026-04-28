@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { getServerApiUrl } from '@/lib/api';
+import { localizedName } from '@/lib/bilingual';
 
-type Club = { id: string; name: string; city: string | null; country: string | null };
+type Club = { id: string; name: string; nameKa: string | null; city: string | null; country: string | null };
 
 const ACCENTS = ['#3b82f6','#8b5cf6','#22c55e','#f59e0b','#ec4899','#06b6d4','#f97316','#a855f7'];
 
@@ -51,6 +52,7 @@ export default async function ClubsPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {clubs.map((club, i) => {
               const accent = ACCENTS[i % ACCENTS.length];
+              const displayName = localizedName(club.name, club.nameKa, locale);
               return (
                 <Link
                   key={club.id}
@@ -67,11 +69,11 @@ export default async function ClubsPage() {
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold transition-transform duration-200 group-hover:scale-105"
                     style={{ background: `${accent}18`, color: accent }}
                   >
-                    {initials(club.name)}
+                    {initials(displayName)}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-semibold text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">
-                      {club.name}
+                      {displayName}
                     </p>
                     {(club.city || club.country) && (
                       <p className="mt-0.5 truncate text-[12px] text-[var(--color-text-muted)]">

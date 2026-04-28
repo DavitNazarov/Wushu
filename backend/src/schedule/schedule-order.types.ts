@@ -5,6 +5,8 @@ type FightAthlete = {
   id: string;
   firstName: string;
   lastName: string;
+  firstNameKa?: string | null;
+  lastNameKa?: string | null;
 };
 
 type FightMat = {
@@ -60,6 +62,8 @@ export type BuiltScheduleRow = {
   scheduleOrder: number | null;
   redDisplayName: string;
   blueDisplayName: string;
+  redDisplayNameKa: string | null;
+  blueDisplayNameKa: string | null;
   redSourceScheduleOrder: number | null;
   blueSourceScheduleOrder: number | null;
   isPlayable: boolean;

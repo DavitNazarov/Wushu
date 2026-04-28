@@ -10,6 +10,7 @@ type CreateUserInput = {
   displayName: string;
   role: 'admin' | 'coach';
   clubId: string | null;
+  nationality?: string | null;
 };
 
 type UpdateUserInput = {
@@ -18,6 +19,7 @@ type UpdateUserInput = {
   displayName?: string;
   role?: 'admin' | 'coach';
   clubId?: string | null;
+  nationality?: string | null;
   isActive?: boolean;
 };
 

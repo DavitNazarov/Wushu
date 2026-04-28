@@ -9,6 +9,7 @@ import { StatusChip } from '@/components/ui/StatusChip';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { apiGet } from '@/lib/api/client';
+import { localizedName } from '@/lib/bilingual';
 import type { EventRow } from '@/types/api';
 import {
   ADMIN_EVENT_NAV_PAGES,
@@ -79,7 +80,7 @@ export function AdminEventScopeLayout({ eventId, children }: Props) {
                 </Link>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="truncate text-[18px] font-semibold text-[var(--color-text)]">
-                    {event.name}
+                    {localizedName(event.name, event.nameKa, locale)}
                   </h2>
                   <StatusChip
                     status={event.lifecycle}

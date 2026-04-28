@@ -128,6 +128,14 @@ export class AuthService {
         }
         return;
       }
+      // P2002 = unique constraint violation on tokenHash — concurrent refresh request
+      // already stored this token; treat as success.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return;
+      }
       throw error;
     }
   }

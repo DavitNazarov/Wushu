@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import type { PublicResultRow } from '@/lib/api/public-results';
+import { localizedName } from '@/lib/bilingual';
 import {
   formatPublicResultStage,
   formatPublicResultTime,
@@ -36,7 +37,7 @@ export function PublicResultCard({ result }: Props) {
             </p>
             <PublicAthleteNameLink
               athleteId={result.winner.athleteId}
-              label={result.winner.fullName}
+              label={localizedName(result.winner.fullName, result.winner.fullNameKa, locale)}
               className="mt-1 block text-lg font-semibold text-[var(--color-text)]"
             />
             <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
@@ -50,7 +51,7 @@ export function PublicResultCard({ result }: Props) {
             </p>
             <PublicAthleteNameLink
               athleteId={result.opponent.athleteId}
-              label={result.opponent.fullName}
+              label={localizedName(result.opponent.fullName, result.opponent.fullNameKa, locale)}
               className="mt-1 block text-[15px] font-medium text-[var(--color-text)]"
             />
             <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">

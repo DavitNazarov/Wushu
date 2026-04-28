@@ -150,7 +150,7 @@ function EventRow({ event, locale, divider, muted = false }: {
 
       <div className="min-w-0 flex-1">
         <p className={`truncate text-[15px] font-semibold text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)] ${muted ? 'opacity-60' : ''}`}>
-          {event.name}
+          {locale === 'ka' && event.nameKa ? event.nameKa : event.name}
         </p>
         <p className={`mt-0.5 text-[12px] text-[var(--color-text-muted)] ${muted ? 'opacity-50' : ''}`}>
           {[event.location, dateRange].filter(Boolean).join(' · ')}

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { localizedName } from '@/lib/bilingual';
 import { useQuery } from '@tanstack/react-query';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
@@ -22,6 +23,7 @@ type Props = {
     email: string;
     role: 'admin' | 'coach';
     clubId: string | null;
+    nationality: string | null;
     isActive: boolean;
   }) => void;
 };
@@ -35,11 +37,15 @@ export function UserEditForm({
 }: Props) {
   const t = useTranslations('admin.users');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
 
   const [displayName, setDisplayName] = useState(user.displayName);
   const [email, setEmail] = useState(user.email);
   const [role, setRole] = useState<'admin' | 'coach'>(user.role);
   const [clubId, setClubId] = useState(user.clubId ?? '');
+  const [nationality, setNationality] = useState<'GE' | 'INTL'>(
+    user.nationality === 'GE' ? 'GE' : 'INTL',
+  );
   const [isActive, setIsActive] = useState(user.isActive);
   const [clubError, setClubError] = useState<string | null>(null);
 
@@ -63,6 +69,7 @@ export function UserEditForm({
       email: email.trim(),
       role,
       clubId: showClubField ? clubId : null,
+      nationality: showClubField ? (nationality === 'GE' ? 'GE' : null) : null,
       isActive,
     });
   }
@@ -148,13 +155,37 @@ export function UserEditForm({
             </option>
             {(clubs ?? []).map((club) => (
               <option key={club.id} value={club.id}>
-                {club.name}
+                {localizedName(club.name, club.nameKa, locale)}
               </option>
             ))}
           </select>
           {clubError && (
             <p className="mt-1 text-[12px] text-[var(--color-danger)]">{clubError}</p>
           )}
+        </div>
+      )}
+
+      {showClubField && (
+        <div>
+          <label className="mb-1 block text-[12px] text-[var(--color-text-muted)]">
+            {t('fieldNationality')}
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {(['GE', 'INTL'] as const).map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => setNationality(opt)}
+                className={`h-10 rounded-[var(--radius-input)] border px-3 text-[13px] font-medium transition ${
+                  nationality === opt
+                    ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                    : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50'
+                }`}
+              >
+                {opt === 'GE' ? t('nationalityGeorgian') : t('nationalityInternational')}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

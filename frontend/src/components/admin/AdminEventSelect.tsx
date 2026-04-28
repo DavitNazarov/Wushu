@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { useLocale } from 'next-intl';
+import { localizedName } from '@/lib/bilingual';
 import type { EventRow } from '@/types/api';
 import {
   AdminFilterSelect,
@@ -40,16 +41,17 @@ export function AdminEventSelect({
   const options = useMemo<AdminFilterOption[]>(
     () =>
       (events ?? []).map((event) => {
+        const displayName = localizedName(event.name, event.nameKa, locale);
         if (!event.competitionStartDate) {
-          return { value: event.id, label: event.name };
+          return { value: event.id, label: displayName };
         }
 
         const parsed = parseEventDate(event.competitionStartDate);
         return {
           value: event.id,
           label: Number.isNaN(parsed.getTime())
-            ? event.name
-            : `${event.name} (${new Intl.DateTimeFormat(locale).format(parsed)})`,
+            ? displayName
+            : `${displayName} (${new Intl.DateTimeFormat(locale).format(parsed)})`,
         };
       }),
     [events, locale],

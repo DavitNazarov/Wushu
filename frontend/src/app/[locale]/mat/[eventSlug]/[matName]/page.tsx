@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { use } from 'react';
+import { useLocale } from 'next-intl';
 import { io, type Socket } from 'socket.io-client';
 import { logRealtime } from '@/lib/realtime/realtimeLogger';
 import { getSocketServerUrl, SOCKET_IO_PATH } from '@/lib/realtime/socketUrl';
+import { localizedFullName } from '@/lib/bilingual';
 
-type Athlete = { id: string; firstName: string; lastName: string } | null;
+type Athlete = { id: string; firstName: string; lastName: string; firstNameKa?: string | null; lastNameKa?: string | null } | null;
 type TimerState = {
   state: 'IDLE' | 'RUNNING' | 'PAUSED' | 'FINISHED';
   startedAt: string | null;
@@ -32,9 +34,9 @@ type MatFeed = {
   next: Fight[];
 };
 
-function athleteName(a: Athlete) {
+function athleteName(a: Athlete, locale: string) {
   if (!a) return 'BYE';
-  return `${a.firstName} ${a.lastName}`;
+  return localizedFullName(a.firstName, a.lastName, a.firstNameKa, a.lastNameKa, locale);
 }
 
 function useTimer(timerState: TimerState | null) {
@@ -69,6 +71,7 @@ export default function MatScreenPage({
   params: Promise<{ eventSlug: string; matName: string }>;
 }) {
   const { eventSlug, matName } = use(params);
+  const locale = useLocale();
   const [feed, setFeed] = useState<MatFeed | null>(null);
   const [connected, setConnected] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -204,11 +207,11 @@ export default function MatScreenPage({
                 On Deck
               </div>
               <div className="text-3xl font-bold">
-                {athleteName(feed.onDeck.redAthlete)}
+                {athleteName(feed.onDeck.redAthlete, locale)}
               </div>
               <div className="my-3 text-xl opacity-50">vs</div>
               <div className="text-3xl font-bold">
-                {athleteName(feed.onDeck.blueAthlete)}
+                {athleteName(feed.onDeck.blueAthlete, locale)}
               </div>
               <div className="mt-2 text-base opacity-60">{feed.onDeck.categoryCode}</div>
             </div>
@@ -220,7 +223,7 @@ export default function MatScreenPage({
               </div>
               {feed.next.map((f) => (
                 <div key={f.id} className="mb-2 text-lg opacity-70">
-                  {athleteName(f.redAthlete)} vs {athleteName(f.blueAthlete)}
+                  {athleteName(f.redAthlete, locale)} vs {athleteName(f.blueAthlete, locale)}
                   <span className="ml-3 text-sm opacity-50">{f.categoryCode}</span>
                 </div>
               ))}
@@ -242,7 +245,7 @@ export default function MatScreenPage({
                 className="text-4xl font-bold leading-tight"
                 style={{ color: '#ef4444' }}
               >
-                {athleteName(feed.now.redAthlete)}
+                {athleteName(feed.now.redAthlete, locale)}
               </div>
             </div>
 
@@ -258,7 +261,7 @@ export default function MatScreenPage({
                 className="text-4xl font-bold leading-tight"
                 style={{ color: '#60a5fa' }}
               >
-                {athleteName(feed.now.blueAthlete)}
+                {athleteName(feed.now.blueAthlete, locale)}
               </div>
             </div>
           </div>
@@ -269,7 +272,7 @@ export default function MatScreenPage({
                 On Deck
               </div>
               <div className="text-2xl opacity-80">
-                {athleteName(feed.onDeck.redAthlete)} vs {athleteName(feed.onDeck.blueAthlete)}
+                {athleteName(feed.onDeck.redAthlete, locale)} vs {athleteName(feed.onDeck.blueAthlete, locale)}
               </div>
               <div className="mt-1 text-sm opacity-50">{feed.onDeck.categoryCode}</div>
             </div>
@@ -282,7 +285,7 @@ export default function MatScreenPage({
               </div>
               {feed.next.map((f) => (
                 <div key={f.id} className="mb-1 text-lg opacity-60">
-                  {athleteName(f.redAthlete)} vs {athleteName(f.blueAthlete)}
+                  {athleteName(f.redAthlete, locale)} vs {athleteName(f.blueAthlete, locale)}
                   <span className="ml-2 text-sm opacity-50">{f.categoryCode}</span>
                 </div>
               ))}

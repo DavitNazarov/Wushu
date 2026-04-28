@@ -4,6 +4,7 @@ import { Building2, CalendarDays, ShieldCheck, Trophy, Users } from 'lucide-reac
 import { useLocale, useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import type { AthleteProfileFightRow, AthleteProfileRegistrationRow, AthleteProfileResponse } from '@/types/api';
+import { localizedFullName, localizedName } from '@/lib/bilingual';
 import { fightOutcomeForAthlete, formatAthleteDate } from './athleteProfile.utils';
 
 type Props = {
@@ -26,6 +27,7 @@ export function AthleteProfileOverview({ athlete, registrations, fights, scope }
     (a, b) => new Date(b.competitionStartDate).getTime() - new Date(a.competitionStartDate).getTime(),
   )[0];
   const clubMeta = [athlete.club?.city, athlete.club?.country].filter(Boolean).join(', ');
+  const displayFullName = localizedFullName(athlete.firstName, athlete.lastName, athlete.firstNameKa, athlete.lastNameKa, locale);
   const initials = `${athlete.firstName.charAt(0)}${athlete.lastName.charAt(0)}`.toUpperCase();
 
   return (
@@ -64,10 +66,10 @@ export function AthleteProfileOverview({ athlete, registrations, fights, scope }
                 {t('eyebrow')}
               </p>
               <h2 className="mt-1 truncate text-[22px] font-semibold tracking-tight text-[var(--color-text)] leading-tight">
-                {athlete.fullName}
+                {displayFullName}
               </h2>
               <div className="mt-2.5 flex flex-wrap gap-1.5">
-                <Pill icon={Building2}>{athlete.club?.name ?? t('unassignedClub')}</Pill>
+                <Pill icon={Building2}>{athlete.club ? localizedName(athlete.club.name, athlete.club.nameKa, locale) : t('unassignedClub')}</Pill>
                 {scope !== 'public' && (
                   <Pill icon={CalendarDays}>{formatAthleteDate(athlete.dateOfBirth, locale)}</Pill>
                 )}

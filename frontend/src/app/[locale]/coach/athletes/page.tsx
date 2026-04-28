@@ -30,7 +30,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/primitives/select';
-import { apiGet, apiPost } from '@/lib/api/client';
+import { ApiError, apiGet, apiPost } from '@/lib/api/client';
+import { localizedFullName } from '@/lib/bilingual';
+import { useCurrentUser, useIsGeorgian } from '@/hooks/useCurrentUser';
 import type { AthleteRow } from '@/types/api';
 
 const EMPTY_SEX = '__none__';
@@ -64,6 +66,9 @@ export default function CoachAthletesPage() {
   const locale = useLocale();
   const { toast } = useToast();
 
+  const { data: currentUser } = useCurrentUser();
+  const isGeorgian = useIsGeorgian(currentUser?.nationality);
+
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
@@ -76,8 +81,11 @@ export default function CoachAthletesPage() {
   // Shared form fields (used by both add and edit)
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [firstNameKa, setFirstNameKa] = useState('');
+  const [lastNameKa, setLastNameKa] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [documentId, setDocumentId] = useState('');
+  const [docIdError, setDocIdError] = useState<string | null>(null);
   const [sex, setSex] = useState<'MALE' | 'FEMALE' | ''>('');
 
   const queryPath = search.trim()
@@ -93,9 +101,11 @@ export default function CoachAthletesPage() {
     mutationFn: (body: {
       id?: string;
       firstName: string;
+      firstNameKa?: string | null;
       lastName: string;
+      lastNameKa?: string | null;
       dateOfBirth: string;
-      documentId?: string;
+      documentId: string;
       sex?: 'MALE' | 'FEMALE';
     }) => apiPost<{ athlete: AthleteRow }>('/api/athletes', body),
     onSuccess: () => {
@@ -103,7 +113,13 @@ export default function CoachAthletesPage() {
       closeModals();
       toast(tC('saveSuccess'));
     },
-    onError: (e: { message?: string }) => toast(e?.message ?? tC('error'), 'error'),
+    onError: (e: unknown) => {
+      if (e instanceof ApiError && e.code === 'DOCUMENT_ID_ALREADY_EXISTS') {
+        setDocIdError(t('errors.documentIdExists'));
+        return;
+      }
+      toast(e instanceof Error ? e.message : tC('error'), 'error');
+    },
   });
 
   function closeModals() {
@@ -111,8 +127,11 @@ export default function CoachAthletesPage() {
     setEditAthlete(null);
     setFirstName('');
     setLastName('');
+    setFirstNameKa('');
+    setLastNameKa('');
     setDateOfBirth('');
     setDocumentId('');
+    setDocIdError(null);
     setSex('');
   }
 
@@ -124,24 +143,39 @@ export default function CoachAthletesPage() {
   function openEdit(a: AthleteRow) {
     setFirstName(a.firstName);
     setLastName(a.lastName);
+    setFirstNameKa(a.firstNameKa ?? '');
+    setLastNameKa(a.lastNameKa ?? '');
     setDateOfBirth(toDateInput(a.dateOfBirth));
     setDocumentId(a.documentId ?? '');
+    setDocIdError(null);
     setSex(a.sex ?? '');
     setEditAthlete(a);
   }
 
   function handleSave(editingId?: string) {
+    setDocIdError(null);
     if (!firstName.trim() || !lastName.trim() || !dateOfBirth) return;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
       toast('Date must be YYYY-MM-DD', 'error');
       return;
     }
+    if (!documentId.trim()) {
+      setDocIdError(isGeorgian ? t('errors.nationalIdRequired') : t('errors.passportRequired'));
+      return;
+    }
+    if (isGeorgian && !/^\d{11}$/.test(documentId.trim())) {
+      setDocIdError(t('errors.nationalIdFormat'));
+      return;
+    }
+
     saveMut.mutate({
       id: editingId,
       firstName: firstName.trim(),
+      firstNameKa: isGeorgian ? firstNameKa.trim() || null : null,
       lastName: lastName.trim(),
+      lastNameKa: isGeorgian ? lastNameKa.trim() || null : null,
       dateOfBirth,
-      documentId: documentId.trim() || undefined,
+      documentId: documentId.trim(),
       sex: sex || undefined,
     });
   }
@@ -162,30 +196,79 @@ export default function CoachAthletesPage() {
   const safePage = Math.min(page, totalPages);
   const rows = allRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  // Form validity check
-  const formValid = !!firstName.trim() && !!lastName.trim() && !!dateOfBirth;
+  // Form validity
+  const hasKaNames = !isGeorgian || (!!firstNameKa.trim() && !!lastNameKa.trim());
+  const hasValidDocId =
+    !!documentId.trim() &&
+    (!isGeorgian || /^\d{11}$/.test(documentId.trim()));
+  const formValid =
+    !!firstName.trim() && !!lastName.trim() && !!dateOfBirth && hasKaNames && hasValidDocId;
 
   // Athlete form fields (shared between add + edit modals)
   const athleteForm = (
     <div className="space-y-4">
+      {/* English name row */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label>{t('fields.firstName')} *</Label>
-          <Input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="h-10 bg-[var(--color-surface)]" />
+          <Label>{isGeorgian ? t('fields.firstNameEn') : t('fields.firstName')} *</Label>
+          <Input
+            type="text"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            className="h-10 bg-[var(--color-surface)]"
+          />
         </div>
         <div className="space-y-1.5">
-          <Label>{t('fields.lastName')} *</Label>
-          <Input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className="h-10 bg-[var(--color-surface)]" />
+          <Label>{isGeorgian ? t('fields.lastNameEn') : t('fields.lastName')} *</Label>
+          <Input
+            type="text"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            className="h-10 bg-[var(--color-surface)]"
+          />
         </div>
       </div>
+
+      {/* Georgian name row — only for Georgian coaches */}
+      {isGeorgian && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>{t('fields.firstNameKa')} *</Label>
+            <Input
+              type="text"
+              value={firstNameKa}
+              onChange={(e) => setFirstNameKa(e.target.value)}
+              className="h-10 bg-[var(--color-surface)]"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('fields.lastNameKa')} *</Label>
+            <Input
+              type="text"
+              value={lastNameKa}
+              onChange={(e) => setLastNameKa(e.target.value)}
+              className="h-10 bg-[var(--color-surface)]"
+            />
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>{t('fields.dateOfBirth')} *</Label>
-          <Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10 bg-[var(--color-surface)]" />
+          <Input
+            type="date"
+            value={dateOfBirth}
+            onChange={(e) => setDateOfBirth(e.target.value)}
+            className="h-10 bg-[var(--color-surface)]"
+          />
         </div>
         <div className="space-y-1.5">
           <Label>{t('fields.sex')}</Label>
-          <Select value={sex || EMPTY_SEX} onValueChange={(v) => setSex(v === EMPTY_SEX ? '' : (v as 'MALE' | 'FEMALE'))}>
+          <Select
+            value={sex || EMPTY_SEX}
+            onValueChange={(v) => setSex(v === EMPTY_SEX ? '' : (v as 'MALE' | 'FEMALE'))}
+          >
             <SelectTrigger className="h-10 w-full">
               <SelectValue placeholder="—" />
             </SelectTrigger>
@@ -197,9 +280,34 @@ export default function CoachAthletesPage() {
           </Select>
         </div>
       </div>
+
       <div className="space-y-1.5">
-        <Label>{t('fields.documentId')}</Label>
-        <Input type="text" value={documentId} onChange={(e) => setDocumentId(e.target.value)} className="h-10 bg-[var(--color-surface)]" />
+        <Label>
+          {isGeorgian ? t('fields.nationalId') : t('fields.passportNumber')} *
+        </Label>
+        <Input
+          type="text"
+          inputMode={isGeorgian ? 'numeric' : undefined}
+          maxLength={isGeorgian ? 11 : undefined}
+          value={documentId}
+          onChange={(e) => {
+            const val = isGeorgian
+              ? e.target.value.replace(/\D/g, '').slice(0, 11)
+              : e.target.value;
+            setDocumentId(val);
+            setDocIdError(null);
+          }}
+          className="h-10 bg-[var(--color-surface)]"
+          placeholder={isGeorgian ? '00000000000' : ''}
+        />
+        {isGeorgian && (
+          <p className="text-[12px] text-[var(--color-text-muted)]">
+            {t('fields.nationalIdHint')}
+          </p>
+        )}
+        {docIdError && (
+          <p className="text-[12px] text-[var(--color-danger)]">{docIdError}</p>
+        )}
       </div>
     </div>
   );
@@ -227,7 +335,14 @@ export default function CoachAthletesPage() {
       />
 
       {error && (
-        <InlineAlert variant="error" actions={<button onClick={() => refetch()} className="text-[13px] font-medium underline">{tC('retry')}</button>}>
+        <InlineAlert
+          variant="error"
+          actions={
+            <button onClick={() => refetch()} className="text-[13px] font-medium underline">
+              {tC('retry')}
+            </button>
+          }
+        >
           {tC('loadError')}
         </InlineAlert>
       )}
@@ -265,7 +380,7 @@ export default function CoachAthletesPage() {
                       <div className="flex items-center gap-3">
                         <AthleteAvatar initials={getInitials(a)} size="sm" />
                         <span className="font-medium text-[var(--color-text)]">
-                          {a.firstName} {a.lastName}
+                          {localizedFullName(a.firstName, a.lastName, a.firstNameKa, a.lastNameKa, locale)}
                         </span>
                       </div>
                     </td>
@@ -303,16 +418,11 @@ export default function CoachAthletesPage() {
                   <AthleteAvatar initials={getInitials(a)} size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-semibold text-[var(--color-text)]">
-                      {a.firstName} {a.lastName}
+                      {localizedFullName(a.firstName, a.lastName, a.firstNameKa, a.lastNameKa, locale)}
                     </p>
                     <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
                       {formatDob(a.dateOfBirth)}{a.sex ? ` · ${tProfile(`sexValue.${a.sex}`)}` : ''}
                     </p>
-                    {!a.documentId && (
-                      <span className="mt-1 inline-flex rounded-full bg-[var(--color-warning-subtle)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-warning)]">
-                        {t('missingDocument')}
-                      </span>
-                    )}
                   </div>
                   <ChevronRight className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
                 </div>
@@ -361,7 +471,7 @@ export default function CoachAthletesPage() {
       <Modal
         open={!!editAthlete}
         onClose={closeModals}
-        title={editAthlete ? `${editAthlete.firstName} ${editAthlete.lastName}` : ''}
+        title={editAthlete ? localizedFullName(editAthlete.firstName, editAthlete.lastName, editAthlete.firstNameKa, editAthlete.lastNameKa, locale) : ''}
       >
         <div className="space-y-5">
           {/* Athlete info header */}

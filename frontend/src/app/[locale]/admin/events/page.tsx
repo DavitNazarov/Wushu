@@ -14,6 +14,7 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Modal } from '@/components/ui/Modal';
 import { apiGet, apiDelete } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
+import { localizedName } from '@/lib/bilingual';
 import { adminVariants } from '@/lib/animations/variants';
 import { CreateEventModal } from '@/features/events/components/CreateEventModal';
 import type { EventRow } from '@/types/api';
@@ -56,7 +57,10 @@ export default function EventsPage() {
     const q = search.trim().toLowerCase();
     const base = q
       ? events.filter(
-          (e) => e.name.toLowerCase().includes(q) || e.location?.toLowerCase().includes(q),
+          (e) =>
+            e.name.toLowerCase().includes(q) ||
+            (e.nameKa ?? '').toLowerCase().includes(q) ||
+            e.location?.toLowerCase().includes(q),
         )
       : events;
     return {
@@ -145,7 +149,7 @@ export default function EventsPage() {
                           className="group cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)]"
                           variants={adminVariants.staggerChild}
                         >
-                          <td className="px-4 py-3 font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{ev.name}</td>
+                          <td className="px-4 py-3 font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{localizedName(ev.name, ev.nameKa, locale)}</td>
                           <td className="px-4 py-3 text-[var(--color-text-muted)]">
                             {new Date(ev.competitionStartDate).toLocaleDateString()}
                             {ev.competitionEndDate && ev.competitionEndDate !== ev.competitionStartDate &&
@@ -192,7 +196,7 @@ export default function EventsPage() {
                         className="block w-full text-left"
                       >
                         <div className="flex items-center justify-between gap-2 pr-8">
-                          <p className="truncate text-[13px] font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{ev.name}</p>
+                          <p className="truncate text-[13px] font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{localizedName(ev.name, ev.nameKa, locale)}</p>
                           <StatusChip
                             status={ev.lifecycle}
                             label={tEvents(`lifecycle.${ev.lifecycle}` as Parameters<typeof tEvents>[0])}
@@ -224,7 +228,7 @@ export default function EventsPage() {
         open={!!pendingDelete}
         onClose={() => !deleting && setPendingDelete(null)}
         title={tEvents('delete.title')}
-        description={pendingDelete?.name}
+        description={pendingDelete ? localizedName(pendingDelete.name, pendingDelete.nameKa, locale) : undefined}
         footer={
           <>
             <button

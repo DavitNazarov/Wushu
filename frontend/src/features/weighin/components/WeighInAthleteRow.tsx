@@ -1,6 +1,8 @@
 'use client';
 
+import { useLocale } from 'next-intl';
 import { getResolvedAgeGroup, getResolvedWeightDefinition } from '@/lib/weighin/category';
+import { localizedFullName } from '@/lib/bilingual';
 import type { WeighInListEntry } from '@/types/weighin';
 import {
   getQueueStatusMeta,
@@ -34,6 +36,7 @@ type Props = {
 };
 
 export function WeighInAthleteRow({ entry, selected, onSelect, t }: Props) {
+  const locale = useLocale();
   const status = getQueueStatusMeta(entry);
   const lastAttempt = entry.weighIns[entry.weighIns.length - 1] ?? null;
   const ageGroup = getResolvedAgeGroup(entry.eventWeightCategory?.eventAgeGroup);
@@ -73,7 +76,7 @@ export function WeighInAthleteRow({ entry, selected, onSelect, t }: Props) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <p className="truncate text-[14px] font-semibold text-[var(--color-text)] leading-snug">
-              {entry.athlete.firstName} {entry.athlete.lastName}
+              {localizedFullName(entry.athlete.firstName, entry.athlete.lastName, entry.athlete.firstNameKa, entry.athlete.lastNameKa, locale)}
             </p>
             {status.requiresAction && (
               <span className="shrink-0 text-amber-400 text-[13px]">!</span>

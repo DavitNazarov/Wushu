@@ -28,6 +28,8 @@ export interface LiveQueueFightRow {
   notes: string | null;
   redDisplayName: string;
   blueDisplayName: string;
+  redDisplayNameKa?: string | null;
+  blueDisplayNameKa?: string | null;
   matId: string | null;
   matName: string | null;
   orderInMat: number | null;

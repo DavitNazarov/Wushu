@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { ClubDetailsAthleteRow } from '@/types/clubs';
+import { localizedFullName } from '@/lib/bilingual';
 import { formatClubDate, latestDivisionLabel, registrationStatusVariant, splitCategoryCodes } from './clubProfile.utils';
 
 type Props = { athletes: ClubDetailsAthleteRow[] };
@@ -54,7 +55,8 @@ export function ClubProfileAthletes({ athletes }: Props) {
         ) : (
           <motion.div className="divide-y divide-[var(--color-border)]/50" variants={container} initial="hidden" animate="show">
             {athletes.map((athlete) => {
-              const initials = athlete.fullName.split(' ').map((n: string) => n.charAt(0)).slice(0, 2).join('').toUpperCase();
+              const displayName = localizedFullName(athlete.firstName, athlete.lastName, athlete.firstNameKa, athlete.lastNameKa, locale);
+              const initials = `${athlete.firstName.charAt(0)}${athlete.lastName.charAt(0)}`.toUpperCase();
               const categories = splitCategoryCodes(athlete.categoryCodes);
               const division = latestDivisionLabel(athlete.latestRegistration, t('unknownDivision'));
 
@@ -73,7 +75,7 @@ export function ClubProfileAthletes({ athletes }: Props) {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                         <p className="text-[14px] font-semibold text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">
-                          {athlete.fullName}
+                          {displayName}
                         </p>
                         {athlete.sex && (
                           <span className="text-[11px] text-[var(--color-text-muted)]">

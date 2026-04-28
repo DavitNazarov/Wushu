@@ -141,7 +141,7 @@ export class EventsService {
     actorUserId: string,
     dto: CreateEventDto,
   ): Promise<EventWithCategoryTemplateId> {
-    const { name, slug, location, timezone, autoAdvanceStage, policies } = dto;
+    const { name, nameKa, slug, location, timezone, autoAdvanceStage, policies } = dto;
     const normalized = this.normalizeDates(dto, timezone);
     const resolvedPolicies = resolveEventPolicies(policies);
     const requestedCategoryTemplateId = dto.categoryTemplateId ?? dto.rulesetId;
@@ -164,6 +164,7 @@ export class EventsService {
         data: {
           organisation: { connect: { id: organisationId } },
           name,
+          nameKa: nameKa?.trim() || null,
           slug,
           location,
           timezone,
@@ -227,7 +228,7 @@ export class EventsService {
     const existing = await this.getById(eventId, organisationId);
     if (!existing) throw new Error('EVENT_NOT_FOUND');
 
-    const { name, slug, location, timezone, autoAdvanceStage, policies } = dto;
+    const { name, nameKa, slug, location, timezone, autoAdvanceStage, policies } = dto;
     const normalized = this.normalizeDates(dto, timezone);
     const resolvedPolicies = resolveEventPolicies({
       ...readEventPolicies(existing),
@@ -239,6 +240,7 @@ export class EventsService {
         where: { id: eventId },
         data: {
           name,
+          nameKa: nameKa?.trim() || null,
           slug,
           location,
           timezone,

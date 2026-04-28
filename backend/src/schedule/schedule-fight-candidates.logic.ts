@@ -38,6 +38,15 @@ export function displayName(input: {
   return 'TBD';
 }
 
+export function displayNameKa(input: {
+  athlete: ScheduleDisplayAthlete;
+}): string | null {
+  if (input.athlete?.firstNameKa && input.athlete?.lastNameKa) {
+    return `${input.athlete.firstNameKa} ${input.athlete.lastNameKa}`;
+  }
+  return null;
+}
+
 function bracketRoundLabel(input: {
   round: number;
   maxRound: number;

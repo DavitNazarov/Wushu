@@ -3,7 +3,9 @@ import type { WinMethod } from '@prisma/client';
 export type PublicResultPerson = {
   athleteId: string;
   fullName: string;
+  fullNameKa: string | null;
   clubName: string | null;
+  clubNameKa: string | null;
   corner: 'RED' | 'BLUE';
 };
 
@@ -11,7 +13,9 @@ export type PublicResultPlacement = {
   rank: 1 | 2 | 3;
   athleteId: string;
   athleteName: string;
+  athleteNameKa: string | null;
   clubName: string | null;
+  clubNameKa: string | null;
   medal: 'GOLD' | 'SILVER' | 'BRONZE';
 };
 
@@ -64,6 +68,19 @@ export function fullName(
 ): string {
   if (!input) return 'TBD';
   return `${input.firstName} ${input.lastName}`;
+}
+
+export function fullNameKa(
+  input:
+    | {
+        firstNameKa?: string | null;
+        lastNameKa?: string | null;
+      }
+    | null
+    | undefined,
+): string | null {
+  if (!input?.firstNameKa || !input?.lastNameKa) return null;
+  return `${input.firstNameKa} ${input.lastNameKa}`;
 }
 
 export function bucketKey(fight: {

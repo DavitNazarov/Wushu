@@ -241,6 +241,8 @@ export class WeighinService {
               id: true,
               firstName: true,
               lastName: true,
+              firstNameKa: true,
+              lastNameKa: true,
               dateOfBirth: true,
               documentId: true,
               sex: true,
