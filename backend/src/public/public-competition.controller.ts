@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Event } from '@prisma/client';
 import { BracketsService } from '../draw/brackets.service';
+import type { BracketParticipantView, BracketRoundColumn } from '../draw/brackets.types';
 import { EventsService } from '../events/events.service';
 import { canViewCompetitionDataPublicly } from '../events/public-event-access';
 import { FightsService } from '../fights/fights.service';
@@ -115,7 +116,7 @@ export class PublicCompetitionController {
         },
         category: details.category,
         summary: details.summary,
-        rounds: details.rounds,
+        rounds: this.redactParticipantDocumentIds(details.rounds),
         fights: details.fights,
       };
     } catch (error) {
@@ -284,5 +285,30 @@ export class PublicCompetitionController {
         .slice(0, 3),
       fights: orderedFights,
     };
+  }
+
+  /**
+   * Replaces athleteCode (which contains documentId / national ID) with the
+   * athlete's UUID before returning bracket data to unauthenticated callers.
+   * Admin/coach routes use getCategoryDetails directly and retain the full value.
+   */
+  private redactParticipantDocumentIds(rounds: BracketRoundColumn[]): BracketRoundColumn[] {
+    const redact = (p: BracketParticipantView | null) =>
+      p ? { ...p, athleteCode: p.athleteId } : null;
+
+    return rounds.map((round) => ({
+      ...round,
+      matchups: round.matchups.map((matchup) => ({
+        ...matchup,
+        participants: {
+          red: redact(matchup.participants.red),
+          blue: redact(matchup.participants.blue),
+        },
+        slots: {
+          red: { ...matchup.slots.red, athlete: redact(matchup.slots.red.athlete) },
+          blue: { ...matchup.slots.blue, athlete: redact(matchup.slots.blue.athlete) },
+        },
+      })),
+    }));
   }
 }

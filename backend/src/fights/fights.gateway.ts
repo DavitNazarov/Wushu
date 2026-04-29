@@ -11,6 +11,7 @@ import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { createCorsOriginDelegate } from '../config/runtime-env';
 import { AuthService, JWT_COOKIE_NAME } from '../auth/auth.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -42,7 +43,10 @@ export class FightsGateway implements OnGatewayInit<Server> {
   server: Server;
   private readonly logger = new Logger(FightsGateway.name);
 
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   afterInit(server: Server) {
     server.use((socket: SocketWithAuth, next) => {
@@ -107,7 +111,7 @@ export class FightsGateway implements OnGatewayInit<Server> {
   }
 
   @SubscribeMessage('join-event')
-  handleJoinEvent(
+  async handleJoinEvent(
     @MessageBody() data: unknown,
     @ConnectedSocket() client: SocketWithAuth,
   ) {
@@ -119,8 +123,17 @@ export class FightsGateway implements OnGatewayInit<Server> {
       data && typeof data === 'object' ? (data as Record<string, unknown>).eventId : undefined,
       'eventId',
     );
+
+    const event = await this.prisma.event.findFirst({
+      where: { id: eventId, organisationId: client.data.auth.organisationId },
+      select: { id: true },
+    });
+    if (!event) {
+      throw new WsException('FORBIDDEN');
+    }
+
     const room = `event:${eventId}`;
-    void client.join(room);
+    await client.join(room);
     this.logger.debug(
       JSON.stringify({
         scope: 'realtime',
@@ -134,7 +147,7 @@ export class FightsGateway implements OnGatewayInit<Server> {
   }
 
   @SubscribeMessage('join-mat')
-  handleJoinMat(
+  async handleJoinMat(
     @MessageBody() data: unknown,
     @ConnectedSocket() client: SocketWithAuth,
   ) {
@@ -146,8 +159,17 @@ export class FightsGateway implements OnGatewayInit<Server> {
       data && typeof data === 'object' ? (data as Record<string, unknown>).matId : undefined,
       'matId',
     );
+
+    const mat = await this.prisma.mat.findFirst({
+      where: { id: matId, organisationId: client.data.auth.organisationId },
+      select: { id: true },
+    });
+    if (!mat) {
+      throw new WsException('FORBIDDEN');
+    }
+
     const room = `mat:${matId}`;
-    void client.join(room);
+    await client.join(room);
     this.logger.debug(
       JSON.stringify({
         scope: 'realtime',
