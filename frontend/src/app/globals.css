@@ -170,3 +170,22 @@ textarea:-webkit-autofill:focus {
 .bracket-round.bracket-round--last .bracket-bout::before {
   display: none;
 }
+
+/* Hero backdrop keyframes — CSS-only so blobs animate on the compositor thread */
+@keyframes hero-pulse-a {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50%       { transform: translate(-50%, -50%) scale(1.08); }
+}
+@keyframes hero-pulse-b {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.12); }
+}
+@keyframes hero-pulse-c {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.18); }
+}
+@keyframes hero-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
