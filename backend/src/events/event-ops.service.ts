@@ -116,6 +116,7 @@ export class EventOpsService {
       });
       await tx.timerState.deleteMany({ where: { fight: { eventId } } });
       await tx.fight.deleteMany({ where: { eventId } });
+      await tx.scheduleSession.deleteMany({ where: { eventId } });
       await tx.bracket.deleteMany({ where: { eventId } });
       await tx.mat.deleteMany({ where: { eventId } });
       await tx.weighInAttempt.deleteMany({ where: { eventId } });
