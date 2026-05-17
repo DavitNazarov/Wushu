@@ -39,6 +39,8 @@
   --color-success-subtle: rgba(16, 185, 129, 0.12);
   --color-info: #3b82f6;
   --color-info-subtle: rgba(59, 130, 246, 0.12);
+  --color-inverse-surface: #020817;
+  --color-inverse-surface-2: #0f1929;
 }
 
 [data-theme='light'] {
@@ -59,12 +61,33 @@
   --color-success-subtle: rgba(5, 150, 105, 0.08);
   --color-info: #2563eb;
   --color-info-subtle: rgba(37, 99, 235, 0.08);
+  --color-inverse-surface: #0f172a;
+  --color-inverse-surface-2: #1e293b;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   font-family: var(--font-sans), system-ui, sans-serif;
   background: var(--color-bg);
   color: var(--color-text);
+}
+
+/* Honour reduced-motion globally: no smooth-scroll, neutralise keyframes */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 button,
