@@ -11,6 +11,7 @@ import { ClubsService } from '../clubs/clubs.service';
 import { EventCategoriesService } from '../events/event-categories.service';
 import { getRegistrationStatus } from '../events/event-dates.helper';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolvePublicOrg } from '../common/public-org';
 import { AthleteProfileService } from '../athletes/athlete-profile.service';
 
 function withRegistrationStatus(event: Event) {
@@ -50,7 +51,7 @@ export class PublicController {
 
   @Get('news')
   async listPublishedNews() {
-    const org = await this.prisma.organisation.findFirst();
+    const org = await resolvePublicOrg(this.prisma);
     if (!org) return [];
 
     return this.prisma.newsPost.findMany({

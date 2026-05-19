@@ -13,6 +13,7 @@ import {
 import { z } from 'zod';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolvePublicOrg } from '../common/public-org';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CapabilityGuard } from '../auth/capability.guard';
 import { RequireCapability } from '../auth/capability.decorator';
@@ -55,7 +56,7 @@ export class FormsController {
       return { ok: true };
     }
 
-    const org = await this.prisma.organisation.findFirst();
+    const org = await resolvePublicOrg(this.prisma);
     if (!org) {
       throw new HttpException(
         'NO_ORGANISATION',

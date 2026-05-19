@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Club, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { resolvePublicOrg } from '../common/public-org';
 
 @Injectable()
 export class ClubsService {
@@ -65,7 +66,7 @@ export class ClubsService {
   }
 
   async listPublic(): Promise<Club[]> {
-    const org = await this.prisma.organisation.findFirst();
+    const org = await resolvePublicOrg(this.prisma);
     if (!org) return [];
 
     return this.prisma.club.findMany({
@@ -75,7 +76,7 @@ export class ClubsService {
   }
 
   async getPublicDetails(clubId: string) {
-    const org = await this.prisma.organisation.findFirst();
+    const org = await resolvePublicOrg(this.prisma);
     if (!org) return null;
 
     const club = await this.prisma.club.findFirst({
