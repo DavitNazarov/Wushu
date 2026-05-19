@@ -1,14 +1,12 @@
 'use client';
 
-import { useRef, useCallback, type PointerEvent } from 'react';
+import { useRef } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   motion,
   useScroll,
   useTransform,
-  useMotionValue,
-  useSpring,
   useReducedMotion,
   type MotionValue,
 } from 'framer-motion';
@@ -79,33 +77,6 @@ export function CinematicHero() {
   const markRotate = useTransform(scrollYProgress, [0, 1], [0, 14]);
   const markOpacity = useTransform(scrollYProgress, [0, 0.9], [1, 0]);
 
-  // Pointer parallax (desktop fine-pointer only).
-  const pxRaw = useMotionValue(0);
-  const pyRaw = useMotionValue(0);
-  const px = useSpring(pxRaw, { stiffness: 60, damping: 18, mass: 0.4 });
-  const py = useSpring(pyRaw, { stiffness: 60, damping: 18, mass: 0.4 });
-
-  const onPointer = useCallback(
-    (e: PointerEvent) => {
-      if (reduce || e.pointerType !== 'mouse') return;
-      const r = ref.current?.getBoundingClientRect();
-      if (!r) return;
-      pxRaw.set(((e.clientX - r.left) / r.width - 0.5) * 2);
-      pyRaw.set(((e.clientY - r.top) / r.height - 0.5) * 2);
-    },
-    [reduce, pxRaw, pyRaw],
-  );
-  const onLeave = useCallback(() => {
-    pxRaw.set(0);
-    pyRaw.set(0);
-  }, [pxRaw, pyRaw]);
-
-  const markPX = useTransform(px, (v) => v * 34);
-  const markPY = useTransform(py, (v) => v * 34);
-  const glowPX = useTransform(px, (v) => v * 64);
-  const glowPY = useTransform(py, (v) => v * 64);
-  const titlePX = useTransform(px, (v) => v * -12);
-
   const words = tPublic('heroTitle').split(' ');
 
   const authHref =
@@ -122,22 +93,20 @@ export function CinematicHero() {
   return (
     <section
       ref={ref}
-      onPointerMove={onPointer}
-      onPointerLeave={onLeave}
       className="relative flex min-h-[100svh] items-center justify-center overflow-hidden"
       style={{ background: 'var(--color-inverse-surface)' }}
     >
       {/* ── deep background ─────────────────────────────────────────── */}
-      <motion.div
+      {/* Static radial glow — a pre-blurred gradient costs the compositor
+          nothing, unlike an animated blur(120px) filter on a 120vmin box. */}
+      <div
         aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={reduce ? undefined : { x: glowPX, y: glowPY }}
-      >
-        <div
-          className="absolute left-1/2 top-1/2 h-[120vmin] w-[120vmin] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[120px]"
-          style={{ background: 'var(--color-primary)', opacity: 0.22 }}
-        />
-      </motion.div>
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[120vmin] w-[120vmin] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        style={{
+          background:
+            'radial-gradient(circle, color-mix(in srgb, var(--color-primary) 24%, transparent) 0%, color-mix(in srgb, var(--color-primary) 13%, transparent) 38%, transparent 72%)',
+        }}
+      />
 
       {/* fine grid texture */}
       <div
@@ -153,10 +122,9 @@ export function CinematicHero() {
       />
 
       {/* rotating octagon seal */}
-      <motion.div
+      <div
         aria-hidden
         className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-        style={reduce ? undefined : { x: markPX, y: markPY }}
       >
         <motion.div
           style={
@@ -187,7 +155,7 @@ export function CinematicHero() {
             <circle cx="300" cy="300" r="150" stroke="var(--color-primary)" strokeOpacity="0.10" strokeWidth="1" />
           </svg>
         </motion.div>
-      </motion.div>
+      </div>
 
       {/* bottom fade into the next (light) section */}
       <div
@@ -213,8 +181,7 @@ export function CinematicHero() {
           </span>
         </motion.div>
 
-        <motion.h1
-          style={reduce ? undefined : { x: titlePX }}
+        <h1
           className="mx-auto flex max-w-[16ch] flex-wrap justify-center gap-x-[0.28em] gap-y-1 text-[clamp(2.8rem,9vw,7rem)] font-black leading-[0.92] tracking-[-0.03em] text-white"
         >
           {words.map((w, i) => (
@@ -229,7 +196,7 @@ export function CinematicHero() {
               {w}
             </Word>
           ))}
-        </motion.h1>
+        </h1>
 
         <motion.p
           initial={{ opacity: 0, y: 16 }}

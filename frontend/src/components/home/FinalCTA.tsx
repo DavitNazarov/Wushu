@@ -7,8 +7,6 @@ import {
   motion,
   useScroll,
   useTransform,
-  useVelocity,
-  useSpring,
   useReducedMotion,
 } from 'framer-motion';
 import { ArrowRight, Globe } from 'lucide-react';
@@ -23,14 +21,7 @@ export function FinalCTA() {
     target: ref,
     offset: ['start end', 'end start'],
   });
-  const { scrollY } = useScroll();
-  const velocity = useVelocity(scrollY);
-  const smoothVel = useSpring(velocity, { damping: 50, stiffness: 300 });
-
   const glowY = useTransform(scrollYProgress, [0, 1], [-120, 120]);
-  const glowScale = useTransform(smoothVel, [-2500, 0, 2500], [1.35, 1, 1.35], {
-    clamp: true,
-  });
   const headlineY = useTransform(scrollYProgress, [0, 1], [60, -60]);
 
   return (
@@ -39,14 +30,21 @@ export function FinalCTA() {
       className="relative overflow-hidden"
       style={{ background: 'var(--color-primary)' }}
     >
-      {/* velocity-reactive glow */}
+      {/* soft scroll-drift glow — pre-blurred gradient, no blur() filter */}
       <motion.div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-1/2 h-[80vmin] w-[80vmin] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white blur-[120px]"
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[80vmin] w-[80vmin] -translate-x-1/2 -translate-y-1/2 rounded-full"
         style={
           reduce
-            ? { opacity: 0.08 }
-            : { opacity: 0.1, y: glowY, scale: glowScale }
+            ? {
+                background:
+                  'radial-gradient(circle, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.05) 40%, transparent 72%)',
+              }
+            : {
+                background:
+                  'radial-gradient(circle, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.05) 40%, transparent 72%)',
+                y: glowY,
+              }
         }
       />
       <div

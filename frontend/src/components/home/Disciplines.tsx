@@ -1,141 +1,180 @@
 'use client';
 
+import { useRef } from 'react';
 import { useTranslations } from 'next-intl';
-import { motion } from 'framer-motion';
-import { Wind, Flame, Users, Swords, type LucideIcon } from 'lucide-react';
-import { Parallax } from '@/components/ui/motion/Parallax';
+import {
+  motion,
+  useScroll,
+  useTransform,
+  useSpring,
+  useReducedMotion,
+} from 'framer-motion';
 
-type Discipline = {
-  icon: LucideIcon;
-  name: string;
+type Panel = {
+  index: number;
+  img: string;
+  alt: string;
   tag: string;
+  name: string;
   desc: string;
 };
 
-function DisciplineCard({
-  d,
-  index,
-}: {
-  d: Discipline;
-  index: number;
-}) {
-  const Icon = d.icon;
-  // alternating depth so the cards drift at different rates as you scroll
-  const offset = index % 2 === 0 ? 46 : -46;
+/* ─── one cinematic discipline: small centered card → full-bleed reveal ───── */
 
-  return (
-    <Parallax offset={offset} className="h-full">
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-80px' }}
-        transition={{
-          delay: index * 0.08,
-          duration: 0.6,
-          ease: [0.22, 1, 0.36, 1],
-        }}
-        className="group relative flex h-full flex-col overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-8 transition-colors duration-300 hover:border-[var(--color-primary)]/40 sm:p-9"
-      >
-        {/* ghost index */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -right-2 -top-6 select-none text-[8rem] font-black leading-none tracking-tighter text-[var(--color-text)] opacity-[0.035]"
-        >
-          {String(index + 1).padStart(2, '0')}
-        </span>
+function CinematicPanel({ index, img, alt, tag, name, desc }: Panel) {
+  const ref = useRef<HTMLDivElement>(null);
+  const reduce = useReducedMotion();
 
-        {/* hover glow */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -left-16 -top-16 h-52 w-52 rounded-full blur-3xl transition-opacity duration-500 group-hover:opacity-100"
-          style={{ background: 'var(--color-primary)', opacity: 0 }}
-        />
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ['start start', 'end end'],
+  });
+  // Spring smooths a fast scroll flick into a controlled grow instead of a snap.
+  const smooth = useSpring(scrollYProgress, {
+    stiffness: 60,
+    damping: 26,
+    mass: 0.5,
+    restDelta: 0.0004,
+  });
 
-        <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-primary)] transition-transform duration-500 group-hover:-translate-y-0.5 group-hover:scale-105">
-          <Icon className="h-7 w-7" strokeWidth={1.7} />
-        </div>
+  // tiny centered frame grows to fill the viewport, then holds for the dwell
+  const scale = useTransform(smooth, [0, 0.5], [0.46, 1], { clamp: true });
+  const radius = useTransform(smooth, [0, 0.5], [40, 0], { clamp: true });
+  // gentle counter-zoom so the photo settles as the frame opens (ken-burns)
+  const imgScale = useTransform(smooth, [0, 0.5, 1], [1.28, 1.08, 1], {
+    clamp: true,
+  });
+  // scrim + caption only once the frame is near full size
+  const scrim = useTransform(smooth, [0.4, 0.62], [0, 1], { clamp: true });
+  const textY = useTransform(smooth, [0.46, 0.74], [48, 0], { clamp: true });
+  const textOpacity = useTransform(smooth, [0.46, 0.68], [0, 1], {
+    clamp: true,
+  });
 
-        <div className="relative mt-7">
-          <span className="text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--color-primary)]">
-            {d.tag}
-          </span>
-          <h3 className="mt-2 text-[clamp(1.6rem,2.6vw,2.4rem)] font-black tracking-tight text-[var(--color-text)]">
-            {d.name}
-          </h3>
-        </div>
+  const Caption = (
+    <>
+      <span className="text-[12px] font-bold uppercase tracking-[0.36em] text-[var(--color-primary)]">
+        {String(index + 1).padStart(2, '0')} · {tag}
+      </span>
+      <h3 className="mt-4 text-[clamp(3rem,11vw,9rem)] font-black leading-[0.9] tracking-tight text-white">
+        {name}
+      </h3>
+      <p className="mt-5 max-w-[56ch] text-[15px] leading-relaxed text-white/85 sm:text-[19px]">
+        {desc}
+      </p>
+    </>
+  );
 
-        {/* description reveals on hover (CSS-only) */}
-        <div className="relative mt-4 grid grid-rows-[0fr] opacity-0 transition-all duration-500 ease-out group-hover:grid-rows-[1fr] group-hover:opacity-100 motion-reduce:grid-rows-[1fr] motion-reduce:opacity-100">
-          <p className="overflow-hidden text-[14px] leading-relaxed text-[var(--color-text-muted)]">
-            {d.desc}
-          </p>
-        </div>
-
-        <div className="relative mt-auto pt-7">
-          <div className="h-px w-full bg-[var(--color-border)]">
-            <div className="h-px w-0 bg-[var(--color-primary)] transition-all duration-700 ease-out group-hover:w-full" />
+  if (reduce) {
+    return (
+      <div className="mx-auto max-w-[1280px] px-4 md:px-6">
+        <div className="relative overflow-hidden rounded-[28px]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={img}
+            alt={alt}
+            className="h-[72svh] w-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
+          <div
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.45) 40%, transparent 78%)',
+            }}
+          />
+          <div className="absolute inset-x-0 bottom-0 mx-auto max-w-[1280px] px-7 pb-12 sm:px-12">
+            {Caption}
           </div>
         </div>
-      </motion.div>
-    </Parallax>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative h-[260vh]">
+      <div className="sticky top-0 flex h-[100svh] items-center justify-center overflow-hidden px-4">
+        <motion.div
+          style={{ scale, borderRadius: radius }}
+          className="relative h-[100svh] w-full overflow-hidden bg-[var(--color-surface)] [will-change:transform]"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <motion.img
+            src={img}
+            alt={alt}
+            style={{ scale: imgScale }}
+            className="absolute inset-0 h-full w-full object-cover [will-change:transform]"
+            loading="lazy"
+            decoding="async"
+          />
+          <motion.div
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              opacity: scrim,
+              background:
+                'linear-gradient(to top, rgba(0,0,0,0.86) 0%, rgba(0,0,0,0.45) 38%, rgba(0,0,0,0.12) 70%, transparent 100%)',
+            }}
+          />
+          <motion.div
+            style={{ y: textY, opacity: textOpacity }}
+            className="absolute inset-x-0 bottom-0 mx-auto max-w-[1280px] px-6 pb-[12vh] sm:px-12"
+          >
+            {Caption}
+          </motion.div>
+        </motion.div>
+      </div>
+    </div>
   );
 }
 
 export function Disciplines() {
   const tPublic = useTranslations('public');
 
-  const disciplines: Discipline[] = [
+  const panels: Omit<Panel, 'index'>[] = [
     {
-      icon: Wind,
-      name: tPublic('disciplineTaoluName'),
+      img: '/images/discipline-taolu.jpg',
+      alt: tPublic('disciplineTaoluName'),
       tag: tPublic('disciplineTaoluTag'),
+      name: tPublic('disciplineTaoluName'),
       desc: tPublic('disciplineTaoluDesc'),
     },
     {
-      icon: Flame,
-      name: tPublic('disciplineSandaName'),
+      img: '/images/discipline-sanda.jpg',
+      alt: tPublic('disciplineSandaName'),
       tag: tPublic('disciplineSandaTag'),
+      name: tPublic('disciplineSandaName'),
       desc: tPublic('disciplineSandaDesc'),
-    },
-    {
-      icon: Users,
-      name: tPublic('disciplineDuilianName'),
-      tag: tPublic('disciplineDuilianTag'),
-      desc: tPublic('disciplineDuilianDesc'),
-    },
-    {
-      icon: Swords,
-      name: tPublic('disciplineWeaponsName'),
-      tag: tPublic('disciplineWeaponsTag'),
-      desc: tPublic('disciplineWeaponsDesc'),
     },
   ];
 
   return (
-    <section className="relative mx-auto max-w-[1200px] px-4 py-28 md:px-6 md:py-36">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-80px' }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="mb-16 max-w-[640px]"
-      >
-        <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.34em] text-[var(--color-primary)]">
-          {tPublic('disciplinesEyebrow')}
-        </p>
-        <h2 className="text-[clamp(2rem,5vw,3.5rem)] font-black leading-[1.05] tracking-tight text-[var(--color-text)]">
-          {tPublic('disciplinesTitle')}
-        </h2>
-        <p className="mt-5 text-[15px] leading-relaxed text-[var(--color-text-muted)] sm:text-[16px]">
-          {tPublic('disciplinesSubtitle')}
-        </p>
-      </motion.div>
-
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {disciplines.map((d, i) => (
-          <DisciplineCard key={d.name} d={d} index={i} />
-        ))}
+    <section className="relative">
+      <div className="mx-auto max-w-[1280px] px-4 pb-10 pt-28 md:px-6 md:pt-36">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="max-w-[640px]"
+        >
+          <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.34em] text-[var(--color-primary)]">
+            {tPublic('disciplinesEyebrow')}
+          </p>
+          <h2 className="text-[clamp(2rem,5vw,3.5rem)] font-black leading-[1.05] tracking-tight text-[var(--color-text)]">
+            {tPublic('disciplinesTitle')}
+          </h2>
+          <p className="mt-5 text-[15px] leading-relaxed text-[var(--color-text-muted)] sm:text-[16px]">
+            {tPublic('disciplinesSubtitle')}
+          </p>
+        </motion.div>
       </div>
+
+      {panels.map((p, i) => (
+        <CinematicPanel key={p.name} index={i} {...p} />
+      ))}
     </section>
   );
 }

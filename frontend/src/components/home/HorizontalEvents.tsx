@@ -213,7 +213,30 @@ export function HorizontalEvents() {
       if (barRef.current) barRef.current.style.transform = '';
       return;
     }
-    const recompute = () => {
+    // Cached element top — refreshed only when layout can actually change
+    // (mount / resize / track-size), never read on the scroll path.
+    let start = 0;
+
+    // Scroll path: pure arithmetic + two compositor-only transform writes.
+    // No getBoundingClientRect / scrollWidth reads and no setState here, so
+    // scrolling triggers zero forced reflow. Stays synchronous (no rAF) so
+    // the scrub still tracks scroll exactly and survives tab throttling.
+    const apply = () => {
+      const tk = trackRef.current;
+      if (!tk) return;
+      const overflow = maxX.current;
+      if (overflow <= 0) {
+        tk.style.transform = 'translate3d(0,0,0)';
+        if (barRef.current) barRef.current.style.transform = 'scaleX(0)';
+        return;
+      }
+      const p = Math.min(1, Math.max(0, (window.scrollY - start) / overflow));
+      tk.style.transform = `translate3d(${-p * overflow}px,0,0)`;
+      if (barRef.current) barRef.current.style.transform = `scaleX(${p})`;
+    };
+
+    // Measure path: the only place that reads layout (forces reflow once).
+    const measure = () => {
       const el = outerRef.current;
       const vp = viewportRef.current;
       const tk = trackRef.current;
@@ -221,29 +244,23 @@ export function HorizontalEvents() {
       const overflow = Math.max(0, tk.scrollWidth - vp.clientWidth);
       maxX.current = overflow;
       setPinHeight(overflow > 0 ? window.innerHeight + overflow : 0);
-      if (overflow <= 0) {
-        tk.style.transform = 'translate3d(0,0,0)';
-        if (barRef.current) barRef.current.style.transform = 'scaleX(0)';
-        return;
-      }
-      const start = el.getBoundingClientRect().top + window.scrollY;
-      const p = Math.min(1, Math.max(0, (window.scrollY - start) / overflow));
-      tk.style.transform = `translate3d(${-p * overflow}px,0,0)`;
-      if (barRef.current) barRef.current.style.transform = `scaleX(${p})`;
+      start = el.getBoundingClientRect().top + window.scrollY;
+      apply();
     };
-    recompute();
-    const t1 = setTimeout(recompute, 60);
-    const t2 = setTimeout(recompute, 250);
-    window.addEventListener('scroll', recompute, { passive: true });
-    window.addEventListener('resize', recompute);
-    const ro = new ResizeObserver(recompute);
+
+    measure();
+    const t1 = setTimeout(measure, 60);
+    const t2 = setTimeout(measure, 250);
+    window.addEventListener('scroll', apply, { passive: true });
+    window.addEventListener('resize', measure);
+    const ro = new ResizeObserver(measure);
     if (trackRef.current) ro.observe(trackRef.current);
     if (viewportRef.current) ro.observe(viewportRef.current);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
-      window.removeEventListener('scroll', recompute);
-      window.removeEventListener('resize', recompute);
+      window.removeEventListener('scroll', apply);
+      window.removeEventListener('resize', measure);
       ro.disconnect();
     };
   }, [canPin, events.length]);
