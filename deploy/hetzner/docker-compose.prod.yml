@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# [FUTURE HETZNER MIGRATION] — NOT USED BY THE CURRENT RENDER DEPLOYMENT.
+# Production stack for a single Hetzner box — CURRENT deployment target.
 #
-# Self-hosted production stack for a single Hetzner box:
+# Self-hosted production stack:
 #   nginx (TLS + reverse proxy)  ->  app (combined Next/Nest)  ->  postgres 16
 # Plus a one-shot `migrate` service that applies DB migrations before the app
 # starts, so the app container itself never races migrations.

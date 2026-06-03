@@ -82,7 +82,7 @@ npm run prisma:migrate:deploy
 - `JWT_SECRET` — JWT signing secret (**≥32 chars**, enforced at boot in prod)
 - `PUBLIC_ORG_SLUG` — organisation slug served on public pages
 - `FRONTEND_URL` / `CORS_ALLOWED_ORIGINS` — CORS origin allow-list
-- `PORT` — API port (default 4000; Render/host injects this in prod)
+- `PORT` — API port (default 4000; set by the container in prod)
 
 **Frontend** (`frontend/.env.local`) — only optional Sentry vars; the app calls the
 API with **relative `/api/*` paths** and connects sockets to the **same origin**, so
@@ -108,12 +108,11 @@ Builds backend first (Prisma generate + Nest), then frontend.
 Production runs as a **single combined Node process** (`server.js`): Next.js serves
 the frontend and mounts the NestJS API under `/api` on one port.
 
-- **Current target: Render.** One-click via the `render.yaml` Blueprint.
-- **Full runbook:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — env vars, health
-  checks, seeding, backups/rollback, and known scaling limits.
-- **Future self-hosting:** inert Hetzner (Docker + nginx) artifacts live under
-  [`deploy/hetzner/`](deploy/hetzner/), clearly marked `[FUTURE HETZNER MIGRATION]`
-  and not used by the Render deploy.
+- **Target: self-hosted Hetzner VPS** via Docker Compose
+  ([`deploy/hetzner/docker-compose.prod.yml`](deploy/hetzner/docker-compose.prod.yml)) —
+  nginx + app + Postgres 16 + one-shot migrations.
+- **Full runbook:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — provisioning, TLS,
+  env vars, health checks, seeding, backups/rollback, and scaling limits.
 
 ## Code quality
 

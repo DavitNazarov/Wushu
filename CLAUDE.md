@@ -11,14 +11,13 @@ Tournament management system for the Georgian Wushu Federation. Handles athlete 
 ├── frontend/          Next.js 16 app          (port 3000)
 ├── backend/           NestJS + Prisma API      (port 4000)
 ├── package.json       npm workspaces root
-├── docker-compose.yml PostgreSQL container
-├── render.yaml        Render Blueprint (current prod target)
-├── deploy/hetzner/    [FUTURE HETZNER MIGRATION] — inert Docker/nginx artifacts
+├── docker-compose.yml PostgreSQL container (local dev)
+├── deploy/hetzner/    Production Docker/compose/nginx stack (deploy target)
 ├── docs/DEPLOYMENT.md Full deployment runbook
 └── server.js          Production entry point
 ```
 
-**Production deployment:** `server.js` runs a **single combined Node/Express process** — Next.js serves everything, and `/api/*` is mounted into the NestJS app via `ExpressAdapter` (`globalPrefix: false`, Nest's `createApp` from `backend/dist/src/main`). Frontend + backend ship as **one server on one port** (default 4000). **Current prod target is Render** (`render.yaml` Blueprint; build `npm ci && npm run build`, pre-deploy `npm run db:deploy`, start `npm start`, health check `/api/health`). Prod DB is Postgres 16 (Render-managed or Neon). **Node 22 LTS** (`.nvmrc`). Full runbook in `docs/DEPLOYMENT.md`. A future self-hosted Hetzner stack (Docker + nginx) lives **inert** under `deploy/hetzner/`, marked `[FUTURE HETZNER MIGRATION]` — do not treat it as active. **Single instance only** — schedulers, socket.io rooms, the rate limiter, and exports are all in-process (scaling out needs a Redis adapter + distributed cron locks first).
+**Production deployment:** `server.js` runs a **single combined Node/Express process** — Next.js serves everything, and `/api/*` is mounted into the NestJS app via `ExpressAdapter` (`globalPrefix: false`, Nest's `createApp` from `backend/dist/src/main`). Frontend + backend ship as **one server on one port** (default 4000). **Prod target is a self-hosted Hetzner VPS** running `deploy/hetzner/docker-compose.prod.yml`: `nginx` (TLS + reverse proxy) → `app` (combined process) → `postgres 16`, plus a one-shot `migrate` job (`npm run db:deploy` = repair-schema + lock-free migrate-deploy). **Node 22 LTS** (`.nvmrc`, baked into the Dockerfile). Health check `/api/health`. Full runbook in `docs/DEPLOYMENT.md`. **Single instance only** — schedulers, socket.io rooms, the rate limiter, and exports are all in-process (scaling out needs a Redis adapter + distributed cron locks first).
 
 **External services:** PostgreSQL is the only **required** external dependency. The frontend also has **optional Sentry** error/performance monitoring (`frontend/src/instrumentation*.ts` + `sentry.*.config.ts`, wired through `next.config.ts`); it is gated on `NEXT_PUBLIC_SENTRY_DSN` and is a complete no-op when that var is unset, so it stays out of the way in dev/self-host. Beyond that there is **no** email provider, payment processor, cloud storage, or Redis/queue — contact forms write to the `ContactSubmission` table, and exports write JSON to local `/tmp/wushu-exports`. Background work is three in-process schedulers (`@nestjs/schedule`): hourly event stage auto-advance, daily refresh-token cleanup (03:00), and a 1s fight-timer automation interval.
 

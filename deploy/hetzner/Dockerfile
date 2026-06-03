@@ -1,11 +1,8 @@
 # syntax=docker/dockerfile:1
 # ─────────────────────────────────────────────────────────────────────────────
-# [FUTURE HETZNER MIGRATION] — NOT USED BY THE CURRENT RENDER DEPLOYMENT.
-#
-# This Dockerfile builds the COMBINED single-process server (server.js) for a
-# future self-hosted Hetzner deployment. It is intentionally kept under
-# deploy/hetzner/ (NOT at the repo root) so Render's native Node runtime does
-# not auto-detect it. To use it later:  see deploy/hetzner/README.md.
+# Production image for the COMBINED single-process server (server.js).
+# CURRENT deployment target: self-hosted Hetzner VPS via docker-compose.prod.yml.
+# Full guide: docs/DEPLOYMENT.md.
 #
 #   Build from the REPO ROOT:
 #     docker build -f deploy/hetzner/Dockerfile -t geo-wushu:latest .
