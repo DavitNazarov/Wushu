@@ -14,6 +14,10 @@ import {
   isRegistrationMutableLifecycle,
 } from '../events/lifecycle-rules';
 
+// State-machine table for the Registration.status enum. Any transition NOT
+// listed here requires admin override (with a reason) — direct transitions
+// fall through to a normal write, indirect ones force OVERRIDE_REASON_REQUIRED.
+// WITHDRAWN is terminal: there's no way out except via override.
 export const ALLOWED_STATUS_TRANSITIONS: Record<
   RegistrationStatus,
   RegistrationStatus[]
@@ -25,6 +29,9 @@ export const ALLOWED_STATUS_TRANSITIONS: Record<
   WITHDRAWN: [],
 };
 
+// Registration aggregate logic — creation, status changes, category moves.
+// Bulk operations live in RegistrationBulkStatusService to keep this class
+// focused on per-row logic.
 @Injectable()
 export class RegistrationsService {
   constructor(
@@ -32,6 +39,10 @@ export class RegistrationsService {
     private readonly audit: AuditService,
   ) {}
 
+  // Shared write-guard for any mutation tied to an event. Coaches MUST be
+  // inside the registration window (lifecycle=REG_OPEN AND the date range
+  // is currently open). Admins can mutate at almost any lifecycle but need
+  // `override=true` + `reason` once the event leaves the mutable phases.
   private assertEventAllowsRegistrationChanges(
     event: Event,
     input: {
@@ -63,6 +74,9 @@ export class RegistrationsService {
     }
   }
 
+  // Age as of `onDate`. All in UTC so we don't get off-by-one near midnight
+  // in the event timezone. Standard "have they had their birthday this year"
+  // logic (subtract 1 if month/day hasn't reached the DOB yet).
   private computeAgeOnDate(dateOfBirth: Date, onDate: Date): number {
     let age = onDate.getUTCFullYear() - dateOfBirth.getUTCFullYear();
     const monthDiff = onDate.getUTCMonth() - dateOfBirth.getUTCMonth();
@@ -73,6 +87,11 @@ export class RegistrationsService {
     return age;
   }
 
+  // Eligibility gate for "is this athlete allowed in this category?"
+  // Combines an age window (with the federation's youth→adult exception:
+  // 15–17 year olds may compete in 18+ groups) and a sex match. Throws
+  // ATHLETE_OUT_OF_AGE_GROUP or ATHLETE_SEX_MISMATCH_FOR_CATEGORY; the
+  // controller maps both to 400.
   private assertAthleteEligibleForCategory(
     athlete: Athlete,
     event: Event,
@@ -96,7 +115,11 @@ export class RegistrationsService {
     const isYouthToAdultException =
       athleteAge >= 15 && athleteAge <= 17 && ageGroup.minAge === 18;
 
-    if (ageGroup.minAge != null && athleteAge < ageGroup.minAge && !isYouthToAdultException) {
+    if (
+      ageGroup.minAge != null &&
+      athleteAge < ageGroup.minAge &&
+      !isYouthToAdultException
+    ) {
       throw new Error('ATHLETE_OUT_OF_AGE_GROUP');
     }
     if (ageGroup.maxAge != null && athleteAge > ageGroup.maxAge) {
@@ -108,6 +131,14 @@ export class RegistrationsService {
     }
   }
 
+  // Resolve and validate the event-scoped weight category for a registration.
+  // Order of failures (each throws a distinct code):
+  //   EVENT_CATEGORIES_NOT_CONFIGURED — admin hasn't picked categories yet
+  //   EVENT_WEIGHT_CATEGORY_REQUIRED  — caller didn't provide an id
+  //   INVALID_CATEGORY_FOR_EVENT      — id doesn't belong to this event
+  //   ATHLETE_OUT_OF_AGE_GROUP / _SEX_MISMATCH_FOR_CATEGORY (via eligibility)
+  // skipEligibilityCheck is true on admin overrides where the rule is being
+  // intentionally bypassed (must already be authorized by the caller).
   private async resolveEventCategoryForRegistration(input: {
     organisationId: string;
     eventId: string;
@@ -116,11 +147,13 @@ export class RegistrationsService {
     event: Event;
     skipEligibilityCheck?: boolean;
   }): Promise<{ eventWeightCategoryId: string | null; categoryCode: string }> {
-    const hasConfiguredCategories = await this.prisma.eventWeightCategory.count({
-      where: {
-        eventAgeGroup: { eventId: input.eventId },
+    const hasConfiguredCategories = await this.prisma.eventWeightCategory.count(
+      {
+        where: {
+          eventAgeGroup: { eventId: input.eventId },
+        },
       },
-    });
+    );
 
     if (hasConfiguredCategories === 0) {
       throw new Error('EVENT_CATEGORIES_NOT_CONFIGURED');
@@ -143,7 +176,11 @@ export class RegistrationsService {
       if (!category) throw new Error('INVALID_CATEGORY_FOR_EVENT');
 
       if (!input.skipEligibilityCheck) {
-        this.assertAthleteEligibleForCategory(input.athlete, input.event, category);
+        this.assertAthleteEligibleForCategory(
+          input.athlete,
+          input.event,
+          category,
+        );
       }
       return {
         eventWeightCategoryId: category.id,
@@ -154,6 +191,12 @@ export class RegistrationsService {
     throw new Error('EVENT_WEIGHT_CATEGORY_REQUIRED');
   }
 
+  // Filtered registration list. `actorClubId` (set when the caller is a
+  // coach) takes precedence over the requested clubId — coaches see only
+  // their own club's data, even if they manually URL-edit the filter.
+  // `q` matches firstName OR lastName case-insensitively. Joins athlete +
+  // club + both eventWeightCategory relations so the UI can show full
+  // category names plus "initial weight class" badges in one fetch.
   async list(params: {
     organisationId: string;
     eventId?: string;
@@ -202,12 +245,22 @@ export class RegistrationsService {
         eventWeightCategory: {
           include: {
             categoryTemplateWeight: {
-              select: { name: true, minWeightKgExcl: true, maxWeightKgIncl: true },
+              select: {
+                name: true,
+                minWeightKgExcl: true,
+                maxWeightKgIncl: true,
+              },
             },
             eventAgeGroup: {
               include: {
                 categoryTemplateAgeGroup: {
-                  select: { id: true, name: true, minAge: true, maxAge: true, sex: true },
+                  select: {
+                    id: true,
+                    name: true,
+                    minAge: true,
+                    maxAge: true,
+                    sex: true,
+                  },
                 },
               },
             },
@@ -216,7 +269,11 @@ export class RegistrationsService {
         registeredEventWeightCategory: {
           include: {
             categoryTemplateWeight: {
-              select: { name: true, minWeightKgExcl: true, maxWeightKgIncl: true },
+              select: {
+                name: true,
+                minWeightKgExcl: true,
+                maxWeightKgIncl: true,
+              },
             },
           },
         },
@@ -225,6 +282,15 @@ export class RegistrationsService {
     });
   }
 
+  // Register an athlete in an event. The pipeline:
+  //   1. Athlete must exist in this org; coaches' athletes must belong to
+  //      their club (ATHLETE_NOT_IN_COACH_CLUB).
+  //   2. Event must exist + allow registration changes for this actor.
+  //   3. No prior (athlete, event) pair (REGISTRATION_ALREADY_EXISTS).
+  //   4. Category must be valid for this event AND athlete-eligible.
+  // On create we mirror eventWeightCategoryId into
+  // registeredEventWeightCategoryId — the "initial" pick stays put even if
+  // an admin later moves the registration up a class at weigh-in.
   async create(input: {
     organisationId: string;
     actorUserId: string;
@@ -272,20 +338,38 @@ export class RegistrationsService {
       event,
     });
 
-    const registration = await this.prisma.registration.create({
-      data: {
-        organisationId: input.organisationId,
-        eventId: input.eventId,
-        athleteId: input.athleteId,
-        clubId: athlete.clubId,
-        categoryCode: resolvedCategory.categoryCode,
-        eventWeightCategoryId: resolvedCategory.eventWeightCategoryId,
-        registeredEventWeightCategoryId: resolvedCategory.eventWeightCategoryId,
-        notes: input.notes ?? null,
-        status: 'PENDING',
-        weighInStatus: 'NOT_WEIGHED',
-      },
-    });
+    let registration;
+    try {
+      registration = await this.prisma.registration.create({
+        data: {
+          organisationId: input.organisationId,
+          eventId: input.eventId,
+          athleteId: input.athleteId,
+          clubId: athlete.clubId,
+          categoryCode: resolvedCategory.categoryCode,
+          eventWeightCategoryId: resolvedCategory.eventWeightCategoryId,
+          registeredEventWeightCategoryId:
+            resolvedCategory.eventWeightCategoryId,
+          notes: input.notes ?? null,
+          status: 'PENDING',
+          weighInStatus: 'NOT_WEIGHED',
+        },
+      });
+    } catch (e) {
+      // BF-8: the pre-check above can pass for two concurrent requests; the DB
+      // @@unique([eventId, athleteId]) then rejects the second insert with P2002.
+      // Surface it as the same domain error (→ 409) instead of an unmapped 500.
+      // (Duck-typed on .code — Prisma is a type-only import in this module.)
+      if (
+        e &&
+        typeof e === 'object' &&
+        'code' in e &&
+        (e as { code?: unknown }).code === 'P2002'
+      ) {
+        throw new Error('REGISTRATION_ALREADY_EXISTS');
+      }
+      throw e;
+    }
 
     await this.audit.write({
       organisationId: input.organisationId,
@@ -303,6 +387,15 @@ export class RegistrationsService {
     return registration;
   }
 
+  // Change a registration's status with a multi-layer guard chain:
+  //   - REGISTRATION_NOT_IN_COACH_CLUB if coach reaches outside their club
+  //   - Coaches can only set SUBMITTED or WITHDRAWN (everything else is
+  //     COACH_CANNOT_SET_STATUS)
+  //   - Once the event is no longer in a mutable lifecycle, coaches can't
+  //     touch it at all (REGISTRATION_LOCKED) and admins need override+reason
+  //   - INVALID_STATUS_TRANSITION when target isn't reachable per the table
+  //     above (admin override+reason bypasses, but coaches can never override)
+  // Always writes an audit row with override=true if it bypassed any guard.
   async setStatus(input: {
     organisationId: string;
     registrationId: string;
@@ -332,20 +425,29 @@ export class RegistrationsService {
       throw new Error('COACH_CANNOT_SET_STATUS');
     }
 
-    if (input.actorClubId && !isRegistrationMutableLifecycle(existing.event.lifecycle)) {
+    if (
+      input.actorClubId &&
+      !isRegistrationMutableLifecycle(existing.event.lifecycle)
+    ) {
       throw new Error('REGISTRATION_LOCKED');
     }
     if (isEventReadOnly(existing.event.lifecycle) && !input.override) {
       throw new Error('EVENT_READ_ONLY');
     }
-    if (!isRegistrationMutableLifecycle(existing.event.lifecycle) && !input.override) {
+    if (
+      !isRegistrationMutableLifecycle(existing.event.lifecycle) &&
+      !input.override
+    ) {
       throw new Error('REGISTRATION_LOCKED');
     }
 
     const allowed = ALLOWED_STATUS_TRANSITIONS[existing.status] ?? [];
     const isDirect = allowed.includes(input.newStatus);
 
-    if (!isRegistrationMutableLifecycle(existing.event.lifecycle) && input.actorClubId) {
+    if (
+      !isRegistrationMutableLifecycle(existing.event.lifecycle) &&
+      input.actorClubId
+    ) {
       throw new Error('COACH_CANNOT_OVERRIDE');
     }
 
@@ -388,6 +490,16 @@ export class RegistrationsService {
     return updated;
   }
 
+  // Move a registration to a different weight class. Admin-only — coaches
+  // hit COACH_CANNOT_SET_CATEGORY even within the registration window
+  // (category changes are an officiating decision, not a coach prerogative).
+  // Special behavior:
+  //   - registeredEventWeightCategoryId is PRESERVED when the move is an
+  //     override (post-weigh-in adjustment): keeps the "initial pick" intact
+  //     so the UI can show "moved up at weigh-in".
+  //   - weighInStatus is reset to NOT_WEIGHED only while the lifecycle is
+  //     still mutable; after weigh-in starts we don't want to silently wipe
+  //     a final-status row.
   async setCategory(input: {
     organisationId: string;
     registrationId: string;
@@ -419,7 +531,8 @@ export class RegistrationsService {
     const lifecycleMutable = isRegistrationMutableLifecycle(
       existing.event.lifecycle,
     );
-    const requiresOverride = !lifecycleMutable || isEventReadOnly(existing.event.lifecycle);
+    const requiresOverride =
+      !lifecycleMutable || isEventReadOnly(existing.event.lifecycle);
     if (requiresOverride && !input.override) {
       throw new Error(
         isEventReadOnly(existing.event.lifecycle)
@@ -446,9 +559,12 @@ export class RegistrationsService {
         categoryCode: resolvedCategory.categoryCode,
         eventWeightCategoryId: resolvedCategory.eventWeightCategoryId,
         registeredEventWeightCategoryId: requiresOverride
-          ? existing.registeredEventWeightCategoryId ?? existing.eventWeightCategoryId
+          ? (existing.registeredEventWeightCategoryId ??
+            existing.eventWeightCategoryId)
           : resolvedCategory.eventWeightCategoryId,
-        weighInStatus: lifecycleMutable ? 'NOT_WEIGHED' : existing.weighInStatus,
+        weighInStatus: lifecycleMutable
+          ? 'NOT_WEIGHED'
+          : existing.weighInStatus,
       },
     });
 

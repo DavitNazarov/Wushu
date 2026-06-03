@@ -4,6 +4,9 @@ import type { Athlete, AthleteSex, Club } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 
+// Filter shape for AthletesService.list(). All fields are optional and
+// combined with AND (the search field itself widens to lastName/firstName/
+// documentId via an inner OR — see list() below).
 export type AthleteFilters = {
   search?: string;
   clubId?: string;
@@ -11,11 +14,16 @@ export type AthleteFilters = {
   documentId?: string;
 };
 
+// Row shape returned to the admin/coach UI. `duplicateCount` is computed at
+// query time so the UI can show a "looks like a duplicate" pill without a
+// second roundtrip.
 export type AthleteWithDuplicates = Athlete & {
   duplicateCount: number;
   club: Pick<Club, 'id' | 'name' | 'city' | 'country'> | null;
 };
 
+// Admin + coach writes for the Athlete table. The athlete profile page (read)
+// lives in AthleteProfileService — this service is intentionally mutation-only.
 @Injectable()
 export class AthletesService {
   constructor(
@@ -23,6 +31,11 @@ export class AthletesService {
     private readonly audit: AuditService,
   ) {}
 
+  // Indexed athlete list for the admin/coach athletes page. After the DB
+  // query we walk the result once to compute duplicateCount per row using
+  // the same key shape as the @@unique-ish duplicate signature
+  // (org + dateOfBirth + documentId, case-insensitive on docId).
+  // search matches lastName OR firstName OR documentId, case-insensitive.
   async list(
     organisationId: string,
     filters: AthleteFilters = {},
@@ -75,6 +88,16 @@ export class AthletesService {
     }));
   }
 
+  // Upsert (id present → update, missing → create) with these checks, in order:
+  //   1. If clubId provided, it must exist in this org (else INVALID_CLUB 400).
+  //   2. For coaches (actorClubId set), the existing row's club must match
+  //      their clubId — otherwise ATHLETE_NOT_IN_COACH_CLUB.
+  //   3. documentId must be unique in the org (excluding self on update).
+  //      We do both a pre-check (DOCUMENT_ID_ALREADY_EXISTS) and rely on
+  //      the @@unique([organisationId, documentId]) Prisma index as a safety
+  //      net for the small race window between check and write.
+  // After the write, compute possibleDuplicates so the UI can offer a "merge?"
+  // prompt for newly-created or recently-edited athletes.
   async createOrUpdate(input: {
     organisationId: string;
     actorUserId: string;
@@ -190,6 +213,12 @@ export class AthletesService {
     return { athlete, possibleDuplicates };
   }
 
+  // Merge two athlete records into one. primaryId is kept, secondaryId is
+  // deleted. All FK references (registrations, fights as red/blue/winner/loser)
+  // are redirected to primaryId via updateMany, then the secondary is removed.
+  // The merged primary row is "filled in" from the secondary for any null
+  // fields (e.g. picks up secondary.clubId if primary had none).
+  // Also writes an AthleteMerge row + audit log for traceability.
   async merge(input: {
     organisationId: string;
     actorUserId: string;
@@ -284,10 +313,18 @@ export class AthletesService {
     });
   }
 
+  // Stable signature for "looks like the same person": org + DOB + lowercase
+  // documentId. Used by list() to count duplicates per row. Lowercasing the
+  // documentId keeps passport-case noise from breaking the grouping.
   private getDuplicateKey(athlete: Athlete): string {
     return `${athlete.organisationId}:${athlete.dateOfBirth.toISOString()}:${athlete.documentId.toLowerCase()}`;
   }
 
+  // Surfaces "candidate duplicates" for the create/update UI. Matches on
+  //   - same DOB AND (firstName+lastName case-insensitive match), OR
+  //   - same DOB AND documentId case-insensitive match
+  // The DOB filter is intentional — without it we'd surface every "John Smith"
+  // in the system, which is noise.
   private async findPossibleDuplicates(input: {
     organisationId: string;
     firstName: string;

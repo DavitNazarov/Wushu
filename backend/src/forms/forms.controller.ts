@@ -35,9 +35,7 @@ export class FormsController {
   @Post('contact')
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  async contact(
-    @Body() body: unknown,
-  ) {
+  async contact(@Body() body: unknown) {
     const parsed = contactSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException({

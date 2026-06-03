@@ -3,6 +3,10 @@ import {
   computePolicyWeighInOutcome,
 } from './weighin.logic';
 
+// Unit tests for the policy engine. Because weighin.logic is pure (no DB),
+// these tests exercise the real branches directly with hand-crafted fixtures
+// and an injected `now` Date. The category set below covers the standard
+// three-class ladder (≤52, 52-56, 56-60) used by most divisions in the seed.
 const categories = [
   {
     id: 'c1',

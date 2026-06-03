@@ -19,6 +19,9 @@ import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
 import type { RegistrationStatus } from '@prisma/client';
 
+// Allow-list mirror of the Prisma enum — used to validate ?status= query
+// values without importing zod into every list call. Kept manually in sync
+// with the schema; a stray value here would be a real bug.
 const REGISTRATION_STATUSES: RegistrationStatus[] = [
   'PENDING',
   'SUBMITTED',
@@ -27,6 +30,11 @@ const REGISTRATION_STATUSES: RegistrationStatus[] = [
   'WITHDRAWN',
 ];
 
+// POST /api/registrations body. notes/reason are capped at 10K/2K chars to
+// keep them survivable in DB columns and to prevent unbounded inputs.
+// `override` + `reason` allow admins to bypass certain registration guards
+// (closed window, age-group mismatch, etc.) — the reason field is required
+// in the service when override=true.
 const createRegistrationSchema = z.object({
   eventId: z.string().cuid(),
   athleteId: z.string().cuid(),
@@ -36,24 +44,37 @@ const createRegistrationSchema = z.object({
   reason: z.string().trim().max(2_000).nullable().optional(),
 });
 
+// POST /api/registrations/:id/status body. status is loosely typed (string)
+// at this layer; the service validates it against the RegistrationStatus enum
+// and rejects invalid transitions with INVALID_STATUS_TRANSITION.
 const setStatusSchema = z.object({
   status: z.string().min(1),
   override: z.boolean().optional(),
   reason: z.string().trim().max(2_000).nullable().optional(),
 });
 
+// POST /api/registrations/:id/category body. Used when admins move an athlete
+// to a different weight class (typically after weigh-in shows the athlete
+// is too heavy for their initial pick).
 const setCategorySchema = z.object({
   eventWeightCategoryId: z.string().cuid(),
   override: z.boolean().optional(),
   reason: z.string().trim().max(2_000).nullable().optional(),
 });
 
+// Admin + coach single-registration routes mounted at `/api/registrations`.
+// All endpoints require ATHLETES_MANAGE (granted to admins AND coaches);
+// coach-only restrictions (e.g. "can't change status") live in the service.
 @Controller('registrations')
 @UseGuards(AuthGuard, CapabilityGuard)
 @RequireCapability(CAPABILITIES.ATHLETES_MANAGE)
 export class RegistrationsController {
   constructor(private readonly registrations: RegistrationsService) {}
 
+  // GET /api/registrations?eventId&clubId&status&q&categoryCode
+  // Filters compose with AND. Coach tenancy: a coach's clubId is forced
+  // server-side so they only see their own club's registrations regardless
+  // of any clubId in the querystring.
   @Get()
   async list(
     @Req() req: AuthenticatedRequest,
@@ -84,6 +105,18 @@ export class RegistrationsController {
       );
     }
 
+    // A coach with no club must NOT fall through to an unfiltered (all-org)
+    // registrations query — reject like the POST paths do (BF-1 data-leak fix).
+    if (auth.role === 'coach' && !auth.clubId) {
+      throw new HttpException(
+        {
+          code: 'COACH_NO_CLUB',
+          message: 'Coach must be assigned to a club to manage registrations',
+        },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     // Coach: ignore client clubId, use auth.clubId only
     const actorClubId = auth.role === 'coach' ? (auth.clubId ?? null) : null;
     const effectiveClubId =
@@ -100,11 +133,20 @@ export class RegistrationsController {
     });
   }
 
+  // POST /api/registrations — create a new registration. Coaches must have a
+  // clubId on their account (COACH_NO_CLUB otherwise) and can only register
+  // athletes in their own club. Maps service errors to HTTP statuses:
+  //   ATHLETE_NOT_FOUND | EVENT_NOT_FOUND                     → 404
+  //   ATHLETE_NOT_IN_COACH_CLUB | REGISTRATION_CLOSED         → 403
+  //   INVALID_CATEGORY_FOR_EVENT,
+  //   EVENT_CATEGORIES_NOT_CONFIGURED,
+  //   EVENT_WEIGHT_CATEGORY_REQUIRED,
+  //   ATHLETE_OUT_OF_AGE_GROUP,
+  //   ATHLETE_SEX_MISMATCH_FOR_CATEGORY,
+  //   REGISTRATION_ALREADY_EXISTS, REGISTRATION_LOCKED,
+  //   OVERRIDE_REASON_REQUIRED, EVENT_READ_ONLY               → 400
   @Post()
-  async create(
-    @Req() req: AuthenticatedRequest,
-    @Body() body: unknown,
-  ) {
+  async create(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
     const auth = req.auth!;
     const actorClubId = auth.role === 'coach' ? (auth.clubId ?? null) : null;
 
@@ -159,13 +201,24 @@ export class RegistrationsController {
           HttpStatus.FORBIDDEN,
         );
       }
+      // BF-8: duplicate registration is a conflict, not a bad request — and the
+      // concurrent-race P2002 (now mapped to this code in the service) must not
+      // fall through to a 500.
+      if (msg === 'REGISTRATION_ALREADY_EXISTS') {
+        throw new HttpException(
+          {
+            code: 'REGISTRATION_ALREADY_EXISTS',
+            message: 'This athlete is already registered for this event.',
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
       if (
         msg === 'INVALID_CATEGORY_FOR_EVENT' ||
         msg === 'EVENT_CATEGORIES_NOT_CONFIGURED' ||
         msg === 'EVENT_WEIGHT_CATEGORY_REQUIRED' ||
         msg === 'ATHLETE_OUT_OF_AGE_GROUP' ||
         msg === 'ATHLETE_SEX_MISMATCH_FOR_CATEGORY' ||
-        msg === 'REGISTRATION_ALREADY_EXISTS' ||
         msg === 'REGISTRATION_LOCKED' ||
         msg === 'OVERRIDE_REASON_REQUIRED' ||
         msg === 'EVENT_READ_ONLY'
@@ -179,6 +232,11 @@ export class RegistrationsController {
     }
   }
 
+  // POST /api/registrations/:id/status — admin status changes (approve, reject,
+  // withdraw, etc.). Coaches are blocked at the service layer:
+  //   COACH_CANNOT_SET_STATUS    — coaches can withdraw, not approve/reject
+  //   COACH_CANNOT_OVERRIDE      — only admins can bypass guards
+  // Override moves still need a reason (OVERRIDE_REASON_REQUIRED).
   @Post(':id/status')
   async setStatus(
     @Param('id') id: string,
@@ -187,6 +245,18 @@ export class RegistrationsController {
   ) {
     const auth = req.auth!;
     const actorClubId = auth.role === 'coach' ? (auth.clubId ?? null) : null;
+
+    // A coach with no club would pass actorClubId=null and thereby skip every
+    // coach restriction in the service (privilege escalation) — reject (BF-1).
+    if (auth.role === 'coach' && !actorClubId) {
+      throw new HttpException(
+        {
+          code: 'COACH_NO_CLUB',
+          message: 'Coach must be assigned to a club to manage registrations',
+        },
+        HttpStatus.FORBIDDEN,
+      );
+    }
 
     const parsed = setStatusSchema.safeParse(body);
     if (!parsed.success) {
@@ -235,6 +305,11 @@ export class RegistrationsController {
     }
   }
 
+  // POST /api/registrations/:id/category — move a registration into a
+  // different weight class. Common after weigh-in shows the athlete is
+  // too heavy for their initial pick — admins flip them to the higher class
+  // (registeredEventWeightCategory stays unchanged so "moved up" can render).
+  // Coaches cannot call this once registration is locked (COACH_CANNOT_SET_CATEGORY).
   @Post(':id/category')
   async setCategory(
     @Param('id') id: string,
@@ -243,6 +318,18 @@ export class RegistrationsController {
   ) {
     const auth = req.auth!;
     const actorClubId = auth.role === 'coach' ? (auth.clubId ?? null) : null;
+
+    // A coach with no club would pass actorClubId=null and skip coach guards
+    // in the service — reject (BF-1).
+    if (auth.role === 'coach' && !actorClubId) {
+      throw new HttpException(
+        {
+          code: 'COACH_NO_CLUB',
+          message: 'Coach must be assigned to a club to manage registrations',
+        },
+        HttpStatus.FORBIDDEN,
+      );
+    }
 
     const parsed = setCategorySchema.safeParse(body);
     if (!parsed.success) {

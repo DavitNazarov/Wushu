@@ -1,6 +1,12 @@
 import { computeDrawReadiness } from './draw.readiness.compute';
 import type { DrawReadinessContext } from './draw.readiness.queries';
 
+// Unit tests for the readiness compute step. Since computeDrawReadiness is
+// pure, tests build a DrawReadinessContext by hand and assert on the
+// resulting overview / category map.
+
+// Baseline fixture: LOCKED event, one weight category, IMMEDIATE_AFTER_DRAW
+// policy. Individual tests spread + override fields to exercise edge cases.
 function makeBaseContext(): DrawReadinessContext {
   return {
     event: {
@@ -101,7 +107,11 @@ describe('draw readiness compute', () => {
     const result = computeDrawReadiness(context);
 
     expect(result.overview.summary.blockedCategoriesCount).toBe(1);
-    expect(result.overview.validation.critical.some((i) => i.code === 'BLOCKED_CATEGORIES_PRESENT')).toBe(true);
+    expect(
+      result.overview.validation.critical.some(
+        (i) => i.code === 'BLOCKED_CATEGORIES_PRESENT',
+      ),
+    ).toBe(true);
     expect(result.overview.actions.canGenerate).toBe(false);
   });
 

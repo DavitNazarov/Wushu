@@ -4,6 +4,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { resolvePublicOrg } from '../common/public-org';
 
+// Club CRUD + public-facing club page assembly. The "public" methods
+// (listPublic, getPublicDetails) intentionally don't take an organisationId —
+// they resolve "the" public org via resolvePublicOrg(), used by the
+// unauthenticated public site which has no tenant context.
 @Injectable()
 export class ClubsService {
   constructor(
@@ -11,6 +15,7 @@ export class ClubsService {
     private readonly audit: AuditService,
   ) {}
 
+  // Admin/coach club list, alphabetical by EN name.
   async list(organisationId: string): Promise<Club[]> {
     return this.prisma.club.findMany({
       where: { organisationId },
@@ -18,6 +23,10 @@ export class ClubsService {
     });
   }
 
+  // Create-or-update a club. If input.id matches a club in this org, updates
+  // it; otherwise creates a new row. Trims all string inputs and treats empty
+  // strings as null for the optional fields (nameKa/city/country). Wrapped
+  // in a transaction with the CLUB_CREATED / CLUB_UPDATED audit log row.
   async upsert(input: {
     organisationId: string;
     actorUserId: string;
@@ -65,6 +74,9 @@ export class ClubsService {
     });
   }
 
+  // Public site clubs listing. Resolves the canonical public org first; if
+  // none exists yet, returns an empty array rather than throwing — that way
+  // the public homepage gracefully shows "no clubs" instead of a 500.
   async listPublic(): Promise<Club[]> {
     const org = await resolvePublicOrg(this.prisma);
     if (!org) return [];
@@ -75,6 +87,15 @@ export class ClubsService {
     });
   }
 
+  // Build the unauthenticated /clubs/:id detail payload: club header + coach
+  // list + athlete roster (with the latest registration's category as a
+  // human-readable string). For each athlete we only pull their most-recent
+  // registration (take: 1) — enough to display a category tag without
+  // exposing their full event history.
+  //
+  // Per-athlete `name`/`nameKa` are pre-joined into a single string for
+  // the UI's bilingual selector. `category` collapses "AgeGroup · WeightClass"
+  // into one display label.
   async getPublicDetails(clubId: string) {
     const org = await resolvePublicOrg(this.prisma);
     if (!org) return null;
@@ -85,13 +106,13 @@ export class ClubsService {
     if (!club) return null;
 
     const coaches = await this.prisma.user.findMany({
-      where: { clubId: club.id, role: 'coach' },
+      where: { organisationId: org.id, clubId: club.id, role: 'coach' },
       select: { id: true, displayName: true },
       orderBy: { displayName: 'asc' },
     });
 
     const athletes = await this.prisma.athlete.findMany({
-      where: { clubId: club.id },
+      where: { organisationId: org.id, clubId: club.id },
       select: {
         id: true,
         firstName: true,
@@ -133,9 +154,13 @@ export class ClubsService {
       })),
       athletes: athletes.map((a) => {
         const reg = a.registrations[0];
-        const weightName = reg?.eventWeightCategory?.categoryTemplateWeight?.name ?? null;
-        const ageName = reg?.eventWeightCategory?.eventAgeGroup?.categoryTemplateAgeGroup?.name ?? null;
-        const category = [ageName, weightName].filter(Boolean).join(' · ') || null;
+        const weightName =
+          reg?.eventWeightCategory?.categoryTemplateWeight?.name ?? null;
+        const ageName =
+          reg?.eventWeightCategory?.eventAgeGroup?.categoryTemplateAgeGroup
+            ?.name ?? null;
+        const category =
+          [ageName, weightName].filter(Boolean).join(' · ') || null;
         const hasKaFullName = Boolean(a.firstNameKa && a.lastNameKa);
         return {
           id: a.id,

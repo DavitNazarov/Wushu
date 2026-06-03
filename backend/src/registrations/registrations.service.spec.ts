@@ -1,5 +1,8 @@
 import { RegistrationsService } from './registrations.service';
 
+// Minimal sanity test for the tenant-scoping invariant. The risk this guards:
+// if someone refactors list() and accidentally drops the organisationId
+// from the WHERE clause, all org data leaks across tenants. Cheap to keep.
 const createPrismaMock = () => {
   const prisma: any = {
     registration: {
@@ -14,6 +17,8 @@ const createAuditMock = () => ({
 });
 
 describe('RegistrationsService org scoping', () => {
+  // Pin the invariant: any list() call MUST land an organisationId in the
+  // WHERE clause. Asserts on the call shape rather than the resolved data.
   it('always scopes list queries by organisationId', async () => {
     const prisma = createPrismaMock();
     const audit = createAuditMock();

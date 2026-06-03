@@ -44,9 +44,7 @@ export type E2eTestContext = {
   userId: string;
   trackEvent: (eventId: string) => void;
   createClub: (name?: string) => Promise<{ id: string; name: string }>;
-  createCategoryTemplate: (
-    input: CategoryTemplateSeed,
-  ) => Promise<{
+  createCategoryTemplate: (input: CategoryTemplateSeed) => Promise<{
     categoryTemplateId: string;
     categoryTemplateAgeGroupId: string;
     categoryTemplateWeightIds: string[];
@@ -77,7 +75,9 @@ export function isoOffset(input: {
   ).toISOString();
 }
 
-export async function expectOk<T extends request.Response>(promise: Promise<T>) {
+export async function expectOk<T extends request.Response>(
+  promise: Promise<T>,
+) {
   const response = await promise;
   expect([200, 201]).toContain(response.status);
   return response;
@@ -166,7 +166,8 @@ export async function createE2eTestContext(): Promise<E2eTestContext> {
         data: {
           organisationId: authState.organisationId,
           name:
-            input.name ?? `Category Template ${uniqueSuffix('category-template')}`,
+            input.name ??
+            `Category Template ${uniqueSuffix('category-template')}`,
           version: 1,
           status: 'ACTIVE',
           definition: {
@@ -284,7 +285,9 @@ export async function createE2eTestContext(): Promise<E2eTestContext> {
       if (trackedCategoryTemplateIds.length > 0) {
         await prisma.categoryTemplateWeight.deleteMany({
           where: {
-            ageGroup: { categoryTemplateId: { in: trackedCategoryTemplateIds } },
+            ageGroup: {
+              categoryTemplateId: { in: trackedCategoryTemplateIds },
+            },
           },
         });
         await prisma.categoryTemplateAgeGroup.deleteMany({

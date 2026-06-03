@@ -24,22 +24,29 @@ import { ExportsModule } from './exports/exports.module';
 import { RequestLoggerMiddleware } from './common/request-logger.middleware';
 import { EventPoliciesModule } from './event-policies/event-policies.module';
 import { HealthController } from './health.controller';
+import { THROTTLE } from './config/throttle-config';
 
+// Root Nest module. Composes every feature module and wires global cross-cutting
+// concerns: rate-limiting (ThrottlerModule), the cron runner used by event-policies
+// (NestScheduleModule), and the per-request logger middleware. Order of `imports`
+// doesn't matter functionally — Nest builds the dependency graph from providers.
 @Module({
   imports: [
     NestScheduleModule.forRoot(),
     // Two buckets: a permissive global one and a strict "short" one for auth endpoints.
     // Controllers/methods that need different limits use @Throttle({ ... }) to override.
+    // Defaults (120 req/min + 10 req/10s per IP) are unchanged in prod; the
+    // values come from THROTTLE so load tests can raise them via env.
     ThrottlerModule.forRoot([
       {
         name: 'default',
-        ttl: 60_000,  // 1 minute
-        limit: 120,   // 120 req/min per IP — reasonable for normal browsing
+        ttl: THROTTLE.defaultTtl,
+        limit: THROTTLE.defaultLimit,
       },
       {
         name: 'short',
-        ttl: 10_000,  // 10 seconds
-        limit: 10,    // 10 req/10s burst guard
+        ttl: THROTTLE.shortTtl,
+        limit: THROTTLE.shortLimit,
       },
     ]),
     PrismaModule,
@@ -74,6 +81,9 @@ import { HealthController } from './health.controller';
   ],
 })
 export class AppModule implements NestModule {
+  // configure() is called once at startup by Nest. We attach the request logger
+  // middleware to every route ('*') so every inbound HTTP request gets a structured
+  // pino log line with method, path, status, and duration.
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(RequestLoggerMiddleware).forRoutes('*');
   }

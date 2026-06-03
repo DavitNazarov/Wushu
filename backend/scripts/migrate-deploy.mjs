@@ -66,24 +66,39 @@ try {
       const checksum = createHash('sha256').update(sql).digest('hex');
       const id = randomUUID();
 
-      await client.query(
-        `INSERT INTO "_prisma_migrations" (id, checksum, migration_name, started_at, applied_steps_count)
-         VALUES ($1, $2, $3, now(), 0)`,
-        [id, checksum, name],
-      );
-
+      // PROD-3: apply the migration DDL *and* its bookkeeping row inside ONE
+      // transaction. Previously the SQL ran as a bare client.query(sql) with no
+      // BEGIN/COMMIT, so a multi-statement migration that failed midway left
+      // partially-applied DDL (marked rolled_back, but the executed statements
+      // persisted) — the exact drift the runtime repairSchema() hack exists to
+      // patch. Wrapping it means a failure leaves the DB unchanged.
       try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO "_prisma_migrations" (id, checksum, migration_name, started_at, applied_steps_count)
+           VALUES ($1, $2, $3, now(), 0)`,
+          [id, checksum, name],
+        );
         await client.query(sql);
         await client.query(
           `UPDATE "_prisma_migrations" SET finished_at = now(), applied_steps_count = 1 WHERE id = $1`,
           [id],
         );
+        await client.query('COMMIT');
         console.log(`migrate-deploy: ✓ ${name}`);
       } catch (err) {
-        await client.query(
-          `UPDATE "_prisma_migrations" SET logs = $1, rolled_back_at = now() WHERE id = $2`,
-          [err.message, id],
-        );
+        await client.query('ROLLBACK');
+        // Record the failed attempt OUTSIDE the rolled-back tx so the log
+        // survives (the in-tx insert above was rolled back). Best-effort.
+        try {
+          await client.query(
+            `INSERT INTO "_prisma_migrations" (id, checksum, migration_name, started_at, logs, rolled_back_at)
+             VALUES ($1, $2, $3, now(), $4, now())`,
+            [randomUUID(), checksum, name, String(err.message ?? err)],
+          );
+        } catch {
+          // ignore — the throw below is what matters
+        }
         throw err;
       }
     }

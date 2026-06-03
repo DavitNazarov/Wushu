@@ -1,7 +1,15 @@
 import { buildValidationAndSummary } from './draw.readiness.validation';
 import type { DrawCategoryComputedRow } from './draw.readiness.types';
 
-function makeCategory(overrides: Partial<DrawCategoryComputedRow> = {}): DrawCategoryComputedRow {
+// Unit tests for the issue-tally / action-availability step. Pin the exact
+// CRITICAL / WARNING code emission so changing the list in
+// draw.readiness.validation.ts requires a deliberate test update.
+
+// Builds a synthetic computed-category row for tests. Defaults to a "happy
+// path" READY category; overrides flip individual fields to trigger issues.
+function makeCategory(
+  overrides: Partial<DrawCategoryComputedRow> = {},
+): DrawCategoryComputedRow {
   return {
     id: 'cat1',
     ageGroupCode: 'SR',
@@ -42,7 +50,11 @@ describe('draw readiness validation', () => {
       bracketCount: 0,
     });
 
-    expect(result.validation.critical.some((issue) => issue.code === 'EVENT_NOT_LOCKED')).toBe(true);
+    expect(
+      result.validation.critical.some(
+        (issue) => issue.code === 'EVENT_NOT_LOCKED',
+      ),
+    ).toBe(true);
   });
 
   it('blocks draw when registration is closed but weigh-in incomplete', () => {
@@ -90,7 +102,9 @@ describe('draw readiness validation', () => {
 
   it('prevents duplicate generation when draw already exists', () => {
     const result = buildValidationAndSummary({
-      categoriesComputed: [makeCategory({ readinessStatus: 'READY', bracketStatus: 'NOT_DRAWN' })],
+      categoriesComputed: [
+        makeCategory({ readinessStatus: 'READY', bracketStatus: 'NOT_DRAWN' }),
+      ],
       drawStatus: 'GENERATED',
       eventId: 'ev1',
       eventLifecycle: 'DRAWN',
@@ -105,6 +119,8 @@ describe('draw readiness validation', () => {
     });
 
     expect(result.actions.canGenerate).toBe(false);
-    expect(result.actions.generateBlockedReasonCode).toBe('DRAW_ALREADY_EXISTS');
+    expect(result.actions.generateBlockedReasonCode).toBe(
+      'DRAW_ALREADY_EXISTS',
+    );
   });
 });

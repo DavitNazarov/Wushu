@@ -19,9 +19,7 @@ export function canDiscoverEventPublicly(
   }
 
   const registrationStatus = getRegistrationStatus(event, now);
-  return (
-    registrationStatus === 'OPEN' || registrationStatus === 'UPCOMING'
-  );
+  return registrationStatus === 'OPEN' || registrationStatus === 'UPCOMING';
 }
 
 export function canViewCompetitionDataPublicly(

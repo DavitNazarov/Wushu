@@ -4,6 +4,11 @@ import {
   type ScheduleSourceFight,
 } from './schedule-order.logic';
 
+// Tests for the schedule-row builder + thin auto-schedule wrapper. Pins the
+// display-string output ("Winner of N", "TBD") and sort order so accidental
+// edits to compareFightCandidate or displayName are caught.
+
+// Factory: minimal fight with defaults for everything unrelated to the test.
 function createFight(
   input: Partial<ScheduleSourceFight> & {
     id: string;
@@ -33,7 +38,8 @@ function createFight(
     eventWeightCategory: {
       categoryTemplateWeight: {
         name: input.categoryCode,
-        sortOrder: input.eventWeightCategory?.categoryTemplateWeight?.sortOrder ?? 1,
+        sortOrder:
+          input.eventWeightCategory?.categoryTemplateWeight?.sortOrder ?? 1,
       },
       eventAgeGroup: {
         categoryTemplateAgeGroup: {
@@ -114,7 +120,11 @@ describe('schedule-order.logic', () => {
     ]).map((fight) => fight.id);
 
     expect(orderedIds[0]).toBe('qf-1');
-    expect(orderedIds.indexOf('sf-1')).toBeGreaterThan(orderedIds.indexOf('qf-4'));
-    expect(orderedIds.indexOf('final')).toBeGreaterThan(orderedIds.indexOf('sf-2'));
+    expect(orderedIds.indexOf('sf-1')).toBeGreaterThan(
+      orderedIds.indexOf('qf-4'),
+    );
+    expect(orderedIds.indexOf('final')).toBeGreaterThan(
+      orderedIds.indexOf('sf-2'),
+    );
   });
 });

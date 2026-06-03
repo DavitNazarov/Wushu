@@ -419,6 +419,12 @@ model AuditLog {
   organisation Organisation @relation(fields: [organisationId], references: [id])
   event        Event?       @relation("AuditEvent", fields: [eventId], references: [id])
   actor        User?        @relation("AuditActor", fields: [actorUserId], references: [id])
+
+  // DB-1: AuditLog grows one row per mutation and was completely unindexed —
+  // every tenant-filtered audit read table-scanned.
+  @@index([organisationId, createdAt])
+  @@index([eventId, createdAt])
+  @@index([entityType, entityId])
 }
 
 model NewsPost {
@@ -450,6 +456,9 @@ model DocumentLink {
   updatedAt      DateTime  @updatedAt
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  // DB-1: Postgres does not auto-index FK columns.
+  @@index([organisationId])
 }
 
 model Club {
@@ -466,6 +475,9 @@ model Club {
   coaches       User[]
   athletes      Athlete[]
   registrations Registration[]
+
+  // DB-1: FK column was unindexed.
+  @@index([organisationId])
 }
 
 model ContactSubmission {
@@ -481,6 +493,9 @@ model ContactSubmission {
   handledAt      DateTime?
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  // DB-1: FK column was unindexed.
+  @@index([organisationId])
 }
 
 model Athlete {
@@ -524,6 +539,9 @@ model AthleteMerge {
   organisation     Organisation @relation(fields: [organisationId], references: [id])
   primaryAthlete   Athlete      @relation("MergePrimary", fields: [primaryAthleteId], references: [id])
   secondaryAthlete Athlete      @relation("MergeSecondary", fields: [secondaryAthleteId], references: [id])
+
+  // DB-1: FK column was unindexed.
+  @@index([organisationId])
 }
 
 model Registration {
@@ -579,6 +597,7 @@ model WeighInAttempt {
   registration Registration @relation(fields: [registrationId], references: [id])
   operator     User?        @relation("WeighInOperator", fields: [operatorUserId], references: [id])
 
+  @@unique([registrationId, attemptNo])
   @@index([organisationId, eventId])
   @@index([registrationId])
   @@index([policyCode])
@@ -710,4 +729,10 @@ model TimerState {
   fight       Fight  @relation(fields: [fightId], references: [id])
   organisation Organisation @relation(fields: [organisationId], references: [id])
   updatedBy   User?  @relation("TimerUpdatedBy", fields: [updatedByUserId], references: [id])
+
+  // DB-1 / DB-11: FK column unindexed, and the 1s timer-automation cron scans
+  // for RUNNING timers every tick — index `state` (scoped by org) so it doesn't
+  // sequential-scan a table that grows with every historical fight.
+  @@index([organisationId])
+  @@index([organisationId, state])
 }

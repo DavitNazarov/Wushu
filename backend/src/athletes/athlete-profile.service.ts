@@ -8,10 +8,17 @@ import type {
   AthleteProfileResponse,
 } from './athlete-profile.types';
 
+// Read-only assembler for the athlete profile pages — both the admin/coach
+// "private" detail view (sees DQ status, weigh-in notes, draft events) and
+// the unauthenticated "public" view (sees only published events, no personal
+// status). Used by both /api/athletes/:id (admin) and /api/public/...
 @Injectable()
 export class AthleteProfileService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Private view used by admins and (scoped) coaches. Coaches see only their
+  // own club's athletes — the actorClubId check returns null instead of
+  // throwing so the controller turns it into a generic 404 (no enumeration).
   async getPrivateProfile(input: {
     organisationId: string;
     athleteId: string;
@@ -59,11 +66,23 @@ export class AthleteProfileService {
     });
   }
 
+  // Public view used by the unauthenticated /athletes/:id pages. Two
+  // differences from getPrivateProfile:
+  //   1. dateOfBirth is intentionally omitted from the identity payload
+  //      (PII — public callers don't need it).
+  //   2. If after filtering to only-published events the athlete has no
+  //      visible registrations OR fights, we 404. We don't want to expose
+  //      "this athlete exists but you can't see anything" — that leaks the
+  //      org's roster.
   async getPublicProfile(
     athleteId: string,
+    organisationId?: string,
   ): Promise<AthleteProfileResponse | null> {
-    const athlete = await this.prisma.athlete.findUnique({
-      where: { id: athleteId },
+    const athlete = await this.prisma.athlete.findFirst({
+      where: {
+        id: athleteId,
+        ...(organisationId ? { organisationId } : {}),
+      },
       include: {
         club: {
           include: {
@@ -107,6 +126,19 @@ export class AthleteProfileService {
     return profile;
   }
 
+  // Shared implementation that gathers registrations + fights for the
+  // athlete in parallel and shapes them into the response.
+  // Visibility rules:
+  //   - public: drops registrations/fights tied to unpublished events,
+  //     and omits private-only fields (weighInStatus, registrationStatus,
+  //     latest weigh-in decision).
+  //   - private: shows everything.
+  // Computed extras:
+  //   - movedUp: true when initial vs final weight category differ — used
+  //     by the UI to render a "moved up a class at weigh-in" badge.
+  //   - score: extracted from fight.notes via extractScoreToken (the score
+  //     is encoded inside notes for legacy reasons).
+  //   - athleteCorner / opponent: derived from which side this athlete sat on.
   private async buildProfile(input: {
     organisationId: string;
     athleteId: string;

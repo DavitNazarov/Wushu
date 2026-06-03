@@ -3,13 +3,15 @@ import {
   canViewCompetitionDataPublicly,
 } from './public-event-access';
 
-function makeEvent(overrides: Partial<{
-  published: boolean;
-  registrationOpensAt: Date | null;
-  registrationClosesAt: Date | null;
-  lifecycle: string;
-  timezone: string;
-}> = {}) {
+function makeEvent(
+  overrides: Partial<{
+    published: boolean;
+    registrationOpensAt: Date | null;
+    registrationClosesAt: Date | null;
+    lifecycle: string;
+    timezone: string;
+  }> = {},
+) {
   return {
     published: false,
     registrationOpensAt: null,
@@ -86,9 +88,9 @@ describe('public-event-access', () => {
   });
 
   it('exposes competition data only after publish', () => {
-    expect(
-      canViewCompetitionDataPublicly(makeEvent({ published: true })),
-    ).toBe(true);
+    expect(canViewCompetitionDataPublicly(makeEvent({ published: true }))).toBe(
+      true,
+    );
     expect(
       canViewCompetitionDataPublicly(makeEvent({ published: false })),
     ).toBe(false);

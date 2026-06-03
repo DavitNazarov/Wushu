@@ -27,7 +27,9 @@ function validateWeightCategories(group: CategoryTemplateGroupInput): void {
     if (index === 0) continue;
 
     const previous = sorted[index - 1];
-    if (upperBound(item.maxWeightKgIncl) <= upperBound(previous.maxWeightKgIncl)) {
+    if (
+      upperBound(item.maxWeightKgIncl) <= upperBound(previous.maxWeightKgIncl)
+    ) {
       throw new Error('WEIGHT_CATEGORIES_NOT_STRICTLY_ASCENDING');
     }
   }

@@ -94,8 +94,8 @@ describeIfDb('BYE progression (e2e)', () => {
         ],
       }),
     );
-    const eventWeightCategoryId = categories.body.ageGroups[0].weightCategories[0]
-      .id as string;
+    const eventWeightCategoryId = categories.body.ageGroups[0]
+      .weightCategories[0].id as string;
 
     for (let index = 0; index < 7; index += 1) {
       const athlete = await ctx.createAthlete({
@@ -115,7 +115,8 @@ describeIfDb('BYE progression (e2e)', () => {
           registrationId,
           weightKg: 64,
           override: true,
-          reason: 'Allow weigh-in before lifecycle transition for BYE e2e setup',
+          reason:
+            'Allow weigh-in before lifecycle transition for BYE e2e setup',
           decision: 'PASS',
         }),
       );

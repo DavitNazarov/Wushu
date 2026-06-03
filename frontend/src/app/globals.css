@@ -39,6 +39,9 @@
   --color-success-subtle: rgba(16, 185, 129, 0.12);
   --color-info: #3b82f6;
   --color-info-subtle: rgba(59, 130, 246, 0.12);
+  --color-accent-violet: #8b5cf6;
+  --color-accent-pink: #ec4899;
+  --color-accent-cyan: #06b6d4;
   --color-inverse-surface: #020817;
   --color-inverse-surface-2: #0f1929;
 }
@@ -61,6 +64,9 @@
   --color-success-subtle: rgba(5, 150, 105, 0.08);
   --color-info: #2563eb;
   --color-info-subtle: rgba(37, 99, 235, 0.08);
+  --color-accent-violet: #7c3aed;
+  --color-accent-pink: #db2777;
+  --color-accent-cyan: #0891b2;
   --color-inverse-surface: #0f172a;
   --color-inverse-surface-2: #1e293b;
 }

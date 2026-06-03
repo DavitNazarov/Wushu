@@ -1,5 +1,12 @@
 import { UsersService } from './users.service';
 
+// Unit tests for UsersService. Uses hand-rolled mocks for prisma/audit/authUser
+// (rather than Nest's TestingModule) so each test wires only the calls it
+// actually exercises and the test file stays cheap to run.
+
+// Returns a minimal prisma mock — adds methods as needed. `$transaction` is
+// stubbed to execute the callback synchronously with `prisma` as `tx`,
+// so transaction-internal writes appear on the same mock the test inspects.
 function createPrismaMock() {
   const prisma: any = {
     club: {
@@ -21,18 +28,23 @@ function createPrismaMock() {
   return prisma;
 }
 
+// Audit mock — only the write() method gets exercised by these tests.
 function createAuditMock() {
   return {
     write: jest.fn(),
   };
 }
 
+// AuthUserService mock — only the registerUser() path matters for UsersService.
 function createAuthUserMock() {
   return {
     registerUser: jest.fn(),
   };
 }
 
+// Fixture row that satisfies the userSelect shape. Individual tests spread +
+// override the fields they care about. `as const` keeps the literal types so
+// tests can assert on specific values without TS widening.
 const baseUser = {
   id: 'user_1',
   organisationId: 'org_1',
@@ -52,6 +64,9 @@ const baseUser = {
 } as const;
 
 describe('UsersService', () => {
+  // Regression for the role+club invariant — promoting admin→coach without
+  // providing a clubId must surface COACH_CLUB_REQUIRED (it would leave the
+  // user in an inconsistent state otherwise).
   it('requires a club when promoting admin to coach without clubId', async () => {
     const prisma = createPrismaMock();
     prisma.user.findFirst.mockResolvedValueOnce({
@@ -77,6 +92,8 @@ describe('UsersService', () => {
     ).rejects.toThrow('COACH_CLUB_REQUIRED');
   });
 
+  // SELF_DQ_FORBIDDEN guard — actor and target are the same id, so the
+  // service must reject before even hitting the DB.
   it('rejects suspending self', async () => {
     const service = new UsersService(
       createPrismaMock(),
@@ -96,6 +113,8 @@ describe('UsersService', () => {
     ).rejects.toThrow('SELF_DQ_FORBIDDEN');
   });
 
+  // archive() must (a) write deletedAt + isActive=false (soft delete) AND
+  // (b) revoke refresh tokens so the archived user is forcibly logged out.
   it('archives users by soft delete and revokes refresh tokens', async () => {
     const prisma = createPrismaMock();
     prisma.user.findFirst.mockResolvedValueOnce(baseUser);
@@ -121,6 +140,9 @@ describe('UsersService', () => {
     expect(prisma.refreshToken.updateMany).toHaveBeenCalled();
   });
 
+  // removeSuspension() must explicitly null all four dq* columns. We assert
+  // on the exact data shape so a future refactor that "forgets" dqNote
+  // is caught immediately.
   it('removes suspension fields when requested', async () => {
     const prisma = createPrismaMock();
     prisma.user.findFirst.mockResolvedValueOnce({

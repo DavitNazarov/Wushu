@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Header,
   Param,
   HttpException,
   HttpStatus,
@@ -13,11 +14,20 @@ import { getRegistrationStatus } from '../events/event-dates.helper';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolvePublicOrg } from '../common/public-org';
 import { AthleteProfileService } from '../athletes/athlete-profile.service';
+import { SkipThrottle } from '@nestjs/throttler';
+import { CACHE_LONG } from './public-cache';
 
 function withRegistrationStatus(event: Event) {
   return { ...event, registrationStatus: getRegistrationStatus(event) };
 }
 
+// Public, anonymous, read-only content (clubs/events/news/athletes). Exempt
+// from the strict 'short' bucket (10 req/10s) — that bucket exists to slow
+// auth-credential bursts, but it wrongly catches normal spectator traffic
+// (e.g. a page refresh fans out to several public GETs, and many viewers share
+// a NAT/CDN IP). The 'default' bucket (120/min) still applies as basic origin
+// protection; in production these sit behind the CDN cache anyway.
+@SkipThrottle({ short: true })
 @Controller('public')
 export class PublicController {
   constructor(
@@ -29,27 +39,40 @@ export class PublicController {
   ) {}
 
   @Get('events')
+  @Header('Cache-Control', CACHE_LONG)
   async listPublishedEvents() {
-    const events = await this.events.listPublicAndRegistrable();
+    const org = await resolvePublicOrg(this.prisma);
+    if (!org) return [];
+
+    const events = await this.events.listPublicAndRegistrable(org.id);
     return events.map(withRegistrationStatus);
   }
 
   @Get('events/:slug')
+  @Header('Cache-Control', CACHE_LONG)
   async getPublishedEvent(@Param('slug') slug: string) {
-    const event = await this.events.getPublicOrRegistrableBySlug(slug);
+    const org = await resolvePublicOrg(this.prisma);
+    if (!org) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+
+    const event = await this.events.getPublicOrRegistrableBySlug(slug, org.id);
     if (!event) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     return withRegistrationStatus(event);
   }
 
   /** Public: event categories — no auth required, used by coach registration UI */
   @Get('events/:slug/categories')
+  @Header('Cache-Control', CACHE_LONG)
   async getPublishedEventCategories(@Param('slug') slug: string) {
-    const event = await this.events.getPublicOrRegistrableBySlug(slug);
+    const org = await resolvePublicOrg(this.prisma);
+    if (!org) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+
+    const event = await this.events.getPublicOrRegistrableBySlug(slug, org.id);
     if (!event) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     return this.eventCategories.getCategories(event.id, event.organisationId);
   }
 
   @Get('news')
+  @Header('Cache-Control', CACHE_LONG)
   async listPublishedNews() {
     const org = await resolvePublicOrg(this.prisma);
     if (!org) return [];
@@ -70,9 +93,13 @@ export class PublicController {
   }
 
   @Get('news/:slug')
+  @Header('Cache-Control', CACHE_LONG)
   async getNewsPost(@Param('slug') slug: string) {
+    const org = await resolvePublicOrg(this.prisma);
+    if (!org) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+
     const post = await this.prisma.newsPost.findFirst({
-      where: { slug, published: true },
+      where: { organisationId: org.id, slug, published: true },
       orderBy: { publishedAt: 'desc' },
       include: {
         event: { select: { id: true, name: true, slug: true, location: true } },
@@ -83,6 +110,7 @@ export class PublicController {
   }
 
   @Get('clubs')
+  @Header('Cache-Control', CACHE_LONG)
   async listPublicClubs() {
     return this.clubs.listPublic();
   }
@@ -93,9 +121,14 @@ export class PublicController {
    * recently created clubs so the section is never empty.
    */
   @Get('clubs/top')
+  @Header('Cache-Control', CACHE_LONG)
   async listTopClubs() {
+    const org = await resolvePublicOrg(this.prisma);
+    if (!org) return [];
+
     const wonFights = await this.prisma.fight.findMany({
       where: {
+        organisationId: org.id,
         winnerAthleteId: { not: null },
         status: { in: ['COMPLETE', 'CONFIRMED'] },
       },
@@ -103,6 +136,7 @@ export class PublicController {
     });
     const lostFights = await this.prisma.fight.findMany({
       where: {
+        organisationId: org.id,
         loserAthleteId: { not: null },
         status: { in: ['COMPLETE', 'CONFIRMED'] },
       },
@@ -126,7 +160,7 @@ export class PublicController {
 
     if (ranked.length > 0) {
       const clubs = await this.prisma.club.findMany({
-        where: { id: { in: ranked.map(([id]) => id) } },
+        where: { organisationId: org.id, id: { in: ranked.map(([id]) => id) } },
         select: {
           id: true,
           name: true,
@@ -158,6 +192,7 @@ export class PublicController {
     }
 
     const fallback = await this.prisma.club.findMany({
+      where: { organisationId: org.id },
       orderBy: { createdAt: 'desc' },
       take: 5,
       select: {
@@ -189,7 +224,11 @@ export class PublicController {
    * no fights have completed yet, so the section is never empty.
    */
   @Get('athletes/top')
+  @Header('Cache-Control', CACHE_LONG)
   async listTopAthletes() {
+    const org = await resolvePublicOrg(this.prisma);
+    if (!org) return [];
+
     const athleteSelect = {
       id: true,
       firstName: true,
@@ -205,6 +244,7 @@ export class PublicController {
     const grouped = await this.prisma.fight.groupBy({
       by: ['winnerAthleteId'],
       where: {
+        organisationId: org.id,
         winnerAthleteId: { not: null },
         status: { in: ['COMPLETE', 'CONFIRMED'] },
       },
@@ -220,12 +260,13 @@ export class PublicController {
 
       const [athletes, lossCounts] = await Promise.all([
         this.prisma.athlete.findMany({
-          where: { id: { in: ids } },
+          where: { organisationId: org.id, id: { in: ids } },
           select: athleteSelect,
         }),
         this.prisma.fight.groupBy({
           by: ['loserAthleteId'],
           where: {
+            organisationId: org.id,
             loserAthleteId: { in: ids },
             status: { in: ['COMPLETE', 'CONFIRMED'] },
           },
@@ -264,6 +305,7 @@ export class PublicController {
     // Fallback: no finished fights yet — surface the most recent athletes
     // so the leaderboard renders something meaningful from the start.
     const fallback = await this.prisma.athlete.findMany({
+      where: { organisationId: org.id },
       orderBy: { createdAt: 'desc' },
       take: 5,
       select: athleteSelect,
@@ -284,6 +326,7 @@ export class PublicController {
   }
 
   @Get('clubs/:id')
+  @Header('Cache-Control', CACHE_LONG)
   async getPublicClub(@Param('id') id: string) {
     const details = await this.clubs.getPublicDetails(id);
     if (!details) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
@@ -291,8 +334,12 @@ export class PublicController {
   }
 
   @Get('athletes/:id')
+  @Header('Cache-Control', CACHE_LONG)
   async getPublicAthlete(@Param('id') id: string) {
-    const profile = await this.athleteProfiles.getPublicProfile(id);
+    const org = await resolvePublicOrg(this.prisma);
+    if (!org) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+
+    const profile = await this.athleteProfiles.getPublicProfile(id, org.id);
     if (!profile) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     return profile;
   }

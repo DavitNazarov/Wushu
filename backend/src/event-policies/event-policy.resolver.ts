@@ -14,14 +14,23 @@ export function resolveEventPolicies(
     ...(input ?? {}),
   };
 
-  if (!Number.isInteger(resolved.minRestMinutes) || resolved.minRestMinutes <= 0) {
+  if (
+    !Number.isInteger(resolved.minRestMinutes) ||
+    resolved.minRestMinutes <= 0
+  ) {
     throw new Error('INVALID_MIN_REST_MINUTES');
   }
-  if (!Number.isInteger(resolved.reweighWindowMinutes) || resolved.reweighWindowMinutes <= 0) {
+  if (
+    !Number.isInteger(resolved.reweighWindowMinutes) ||
+    resolved.reweighWindowMinutes <= 0
+  ) {
     throw new Error('INVALID_REWEIGH_WINDOW_MINUTES');
   }
 
-  if (resolved.restPolicyCode === 'MIN_15_MINUTES' && resolved.minRestMinutes < 15) {
+  if (
+    resolved.restPolicyCode === 'MIN_15_MINUTES' &&
+    resolved.minRestMinutes < 15
+  ) {
     throw new Error('MIN_REST_POLICY_REQUIRES_15_MINUTES');
   }
 
@@ -35,14 +44,17 @@ export function resolveEventPolicies(
   return resolved;
 }
 
-export function readEventPolicies(event: Pick<Event,
-  | 'weighInPolicyCode'
-  | 'bronzePolicyCode'
-  | 'restPolicyCode'
-  | 'minRestMinutes'
-  | 'publishTimingPolicyCode'
-  | 'reweighWindowMinutes'
->): ResolvedEventPolicies {
+export function readEventPolicies(
+  event: Pick<
+    Event,
+    | 'weighInPolicyCode'
+    | 'bronzePolicyCode'
+    | 'restPolicyCode'
+    | 'minRestMinutes'
+    | 'publishTimingPolicyCode'
+    | 'reweighWindowMinutes'
+  >,
+): ResolvedEventPolicies {
   return resolveEventPolicies({
     weighInPolicyCode: event.weighInPolicyCode,
     bronzePolicyCode: event.bronzePolicyCode,
@@ -68,8 +80,7 @@ export function buildEventPolicyOptions(): EventPolicyOptions {
           {
             code: 'MOVE_UP_AFTER_FAILED_REWEIGH',
             labelKey: 'eventPolicy.weighin.moveUpAfterFailed.label',
-            descriptionKey:
-              'eventPolicy.weighin.moveUpAfterFailed.description',
+            descriptionKey: 'eventPolicy.weighin.moveUpAfterFailed.description',
           },
           {
             code: 'DIRECT_MOVE_UP',

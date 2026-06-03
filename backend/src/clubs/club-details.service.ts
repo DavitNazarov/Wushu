@@ -12,10 +12,25 @@ import {
   toLatestRegistration,
 } from './club-details.mappers';
 
+// Heavy read service that assembles the admin club-detail page: club header,
+// coach roster, athlete roster, recent registrations, and pre-computed
+// overview stats. Pulled out of ClubsService so the heavy joins live next
+// to their dedicated mappers/types.
 @Injectable()
 export class ClubDetailsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Build the full ClubDetailsResponse for one club. Strategy:
+  //   1. Read the club row.
+  //   2. In parallel: pull all users-with-this-clubId AND all athletes-with-this-clubId.
+  //   3. If there are athletes, pull every registration for them in one IN-query
+  //      and bucket them per athlete in JS (cheaper than N per-athlete queries).
+  //   4. Split users into coaches (rendered as the staff roster) and
+  //      relatedAccounts (judges/admins also tied to this club, shown elsewhere).
+  //   5. For each athlete, compute registrationCount, activeRegistrationCount,
+  //      unique categoryCodes, and a latestRegistration summary (via
+  //      toLatestRegistration mapper) for the UI's "Recent activity" column.
+  //   6. Aggregate top-level overview stats (gender breakdown, active counts).
   async getById(input: {
     organisationId: string;
     clubId: string;
@@ -168,8 +183,7 @@ export class ClubDetailsService {
     }
 
     const athleteRows: ClubDetailsAthleteRow[] = athletes.map((athlete) => {
-      const athleteRegistrations =
-        registrationsByAthlete.get(athlete.id) ?? [];
+      const athleteRegistrations = registrationsByAthlete.get(athlete.id) ?? [];
       const latestRegistration = toLatestRegistration(athleteRegistrations[0]);
       const activeRegistrationCount = athleteRegistrations.filter((row) =>
         ACTIVE_REGISTRATION_STATUSES.has(row.status),
@@ -207,11 +221,7 @@ export class ClubDetailsService {
     ).sort((left, right) => left.localeCompare(right));
 
     const contactEmails = Array.from(
-      new Set(
-        coaches
-          .map((coach) => coach.email.trim())
-          .filter(Boolean),
-      ),
+      new Set(coaches.map((coach) => coach.email.trim()).filter(Boolean)),
     ).sort((left, right) => left.localeCompare(right));
 
     return {

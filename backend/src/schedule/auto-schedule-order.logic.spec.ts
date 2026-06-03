@@ -4,6 +4,11 @@ import {
 } from './auto-schedule-order.logic';
 import type { ScheduleSourceFight } from './schedule-order.types';
 
+// Tests for the greedy auto-scheduler. Pure function, so we hand-build
+// ScheduleSourceFight arrays and assert on the resulting order + diagnostics.
+
+// Factory that fills in sensible defaults for every Prisma field we don't
+// care about in a given test (status=QUEUED, no winner, etc.).
 function createFight(
   input: Partial<ScheduleSourceFight> & {
     id: string;
@@ -33,7 +38,8 @@ function createFight(
     eventWeightCategory: {
       categoryTemplateWeight: {
         name: input.categoryCode,
-        sortOrder: input.eventWeightCategory?.categoryTemplateWeight?.sortOrder ?? 1,
+        sortOrder:
+          input.eventWeightCategory?.categoryTemplateWeight?.sortOrder ?? 1,
       },
       eventAgeGroup: {
         categoryTemplateAgeGroup: {
@@ -76,11 +82,13 @@ describe('auto-schedule-order.logic', () => {
       ),
     ];
 
-    const plannedIds = planAutoScheduleOrder(fights).fights.map((fight) => fight.id);
-
-    expect(plannedIds.indexOf('repeat-2') - plannedIds.indexOf('repeat-1') - 1).toBe(
-      MIN_AUTO_SCHEDULE_FIGHT_GAP,
+    const plannedIds = planAutoScheduleOrder(fights).fights.map(
+      (fight) => fight.id,
     );
+
+    expect(
+      plannedIds.indexOf('repeat-2') - plannedIds.indexOf('repeat-1') - 1,
+    ).toBe(MIN_AUTO_SCHEDULE_FIGHT_GAP);
   });
 
   it('uses unrelated fights to space round-robin athletes when possible', () => {
@@ -125,14 +133,16 @@ describe('auto-schedule-order.logic', () => {
       ),
     ];
 
-    const plannedIds = planAutoScheduleOrder(fights).fights.map((fight) => fight.id);
+    const plannedIds = planAutoScheduleOrder(fights).fights.map(
+      (fight) => fight.id,
+    );
     const firstRoundRobinIndex = plannedIds.indexOf('rr-1');
     const secondRoundRobinIndex = plannedIds.indexOf('rr-2');
 
     expect(firstRoundRobinIndex).toBe(0);
-    expect(secondRoundRobinIndex - firstRoundRobinIndex - 1).toBeGreaterThanOrEqual(
-      MIN_AUTO_SCHEDULE_FIGHT_GAP,
-    );
+    expect(
+      secondRoundRobinIndex - firstRoundRobinIndex - 1,
+    ).toBeGreaterThanOrEqual(MIN_AUTO_SCHEDULE_FIGHT_GAP);
   });
 
   it('records diagnostics when the full ten-fight gap is impossible', () => {
@@ -215,6 +225,8 @@ describe('auto-schedule-order.logic', () => {
 
     const orderedIds = result.fights.map((fight) => fight.id);
 
-    expect(orderedIds.indexOf('final')).toBeGreaterThan(orderedIds.indexOf('semi-2'));
+    expect(orderedIds.indexOf('final')).toBeGreaterThan(
+      orderedIds.indexOf('semi-2'),
+    );
   });
 });

@@ -4,8 +4,17 @@ import type {
   WeighInPolicyCode,
   WeighInStatus,
 } from '@prisma/client';
-import { isWithinCategoryBounds, type WeightCategoryBounds } from './weighin.logic';
+import {
+  isWithinCategoryBounds,
+  type WeightCategoryBounds,
+} from './weighin.logic';
 
+// Pure helpers + shared types used by WeighinPreviewService. Kept stateless
+// (no Prisma) so they're trivial to unit-test via the preview.mapper spec.
+
+// Set of weigh-in statuses where the registration is "done" and the operator
+// shouldn't be able to keep recording attempts. The preview service uses this
+// to drop into "already recorded" mode and suppress new policy outputs.
 export const FINAL_WEIGHIN_STATUSES = new Set<WeighInStatus>([
   'PASSED',
   'MOVED_UP',
@@ -14,6 +23,8 @@ export const FINAL_WEIGHIN_STATUSES = new Set<WeighInStatus>([
   'OVERRIDE_APPROVED',
 ]);
 
+// Shape returned by the preview's Prisma include block. Carries everything
+// the preview functions need WITHOUT pulling Prisma types directly.
 export type RegistrationPreviewContext = {
   id: string;
   eventId: string;
@@ -72,6 +83,9 @@ export type RegistrationPreviewContext = {
   };
 };
 
+// Project the registration's joined eventWeightCategory into the
+// WeightCategoryBounds list that weighin.logic accepts. Returns [] when no
+// category is attached (registration not category-mapped yet).
 export function toBounds(
   category: RegistrationPreviewContext['eventWeightCategory'],
 ): WeightCategoryBounds[] {
@@ -85,6 +99,9 @@ export function toBounds(
   }));
 }
 
+// Trivial id→category lookup with a null-safe input. Used to resolve the
+// policy's moveToCategoryId into a full bounds row so the UI can render the
+// target category's name and weight range.
 export function findCategoryById(
   categories: WeightCategoryBounds[],
   categoryId: string | null | undefined,
@@ -93,13 +110,21 @@ export function findCategoryById(
   return categories.find((item) => item.id === categoryId) ?? null;
 }
 
+// Local copy of findNextHigherMatchingCategory from weighin.logic with the
+// slightly different param naming the preview prefers. Used as a fallback
+// when the policy didn't produce a moveToCategoryId so the UI can still
+// suggest the obvious target.
 export function findNextHigherMatchingCategory(input: {
   weightKg: number;
   currentCategory: WeightCategoryBounds;
   categories: WeightCategoryBounds[];
 }): WeightCategoryBounds | null {
-  const sorted = [...input.categories].sort((a, b) => a.sortOrder - b.sortOrder);
-  const currentIdx = sorted.findIndex((item) => item.id === input.currentCategory.id);
+  const sorted = [...input.categories].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  );
+  const currentIdx = sorted.findIndex(
+    (item) => item.id === input.currentCategory.id,
+  );
   if (currentIdx < 0) return null;
 
   for (const candidate of sorted.slice(currentIdx + 1)) {
@@ -108,6 +133,10 @@ export function findNextHigherMatchingCategory(input: {
   return null;
 }
 
+// Find the most-recent unresolved ONE_HOUR attempt and return a UI-friendly
+// snapshot: attempt id, deadline, and a precomputed isExpired flag (so the
+// frontend doesn't have to re-do the time-comparison itself). Returns null
+// when there's no open window.
 export function extractOpenOneHourWindow(
   context: RegistrationPreviewContext,
   now: Date,
@@ -124,6 +153,12 @@ export function extractOpenOneHourWindow(
   };
 }
 
+// Compute the operator-friendly "how far over/under" hint.
+//   - over the upper bound:  overLimitKg = +Δ, deltaToLimitKg = +Δ
+//   - under the lower bound: underLimitKg = +Δ, deltaToLimitKg = -Δ
+//   - within bounds:         all zero/null
+// Rounded to 2 decimals to match scale-display precision; the sign of
+// deltaToLimitKg is what the UI uses to color the indicator.
 export function metricFromCategory(
   weightKg: number,
   category: WeightCategoryBounds,
@@ -140,7 +175,10 @@ export function metricFromCategory(
       deltaToLimitKg: delta,
     };
   }
-  if (category.minWeightKgExcl != null && weightKg <= category.minWeightKgExcl) {
+  if (
+    category.minWeightKgExcl != null &&
+    weightKg <= category.minWeightKgExcl
+  ) {
     const delta = Number((category.minWeightKgExcl - weightKg).toFixed(2));
     return {
       overLimitKg: null,

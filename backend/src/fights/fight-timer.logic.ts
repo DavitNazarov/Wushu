@@ -41,16 +41,28 @@ export function getFightRoundDurationSeconds(input: {
   );
 }
 
-export function getElapsedMs(timer: FightTimerSnapshot, now = new Date()): number {
+export function getElapsedMs(
+  timer: FightTimerSnapshot,
+  now = new Date(),
+): number {
   if (timer.state === 'RUNNING' && timer.startedAt) {
-    return Math.max(0, now.getTime() - timer.startedAt.getTime() + timer.pausedMs);
+    return Math.max(
+      0,
+      now.getTime() - timer.startedAt.getTime() + timer.pausedMs,
+    );
   }
 
   return Math.max(0, timer.pausedMs);
 }
 
-export function getRemainingMs(timer: FightTimerSnapshot, now = new Date()): number {
-  return Math.max(0, timer.phaseDurationSeconds * 1000 - getElapsedMs(timer, now));
+export function getRemainingMs(
+  timer: FightTimerSnapshot,
+  now = new Date(),
+): number {
+  return Math.max(
+    0,
+    timer.phaseDurationSeconds * 1000 - getElapsedMs(timer, now),
+  );
 }
 
 export function isPhaseExpired(
@@ -74,16 +86,17 @@ export function isAwaitingRoundResult(
   );
 }
 
-export function getRoundWinnerField(round: number):
-  | 'round1Winner'
-  | 'round2Winner'
-  | 'round3Winner' {
+export function getRoundWinnerField(
+  round: number,
+): 'round1Winner' | 'round2Winner' | 'round3Winner' {
   if (round <= 1) return 'round1Winner';
   if (round === 2) return 'round2Winner';
   return 'round3Winner';
 }
 
-export function getRoundWinners(timer: FightTimerSnapshot): Array<FightSlot | null> {
+export function getRoundWinners(
+  timer: FightTimerSnapshot,
+): Array<FightSlot | null> {
   return [timer.round1Winner, timer.round2Winner, timer.round3Winner];
 }
 

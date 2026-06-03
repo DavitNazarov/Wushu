@@ -37,10 +37,32 @@ export class PublicResultsService {
       },
       include: {
         mat: { select: { name: true } },
-        redAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
-        blueAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
+        redAthlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
+        blueAthlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
         winnerAthlete: {
-          select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
         },
         eventWeightCategory: {
           select: {
@@ -61,7 +83,7 @@ export class PublicResultsService {
     });
 
     const registrations = await this.prisma.registration.findMany({
-      where: { eventId: input.eventId },
+      where: { organisationId: input.organisationId, eventId: input.eventId },
       select: {
         athleteId: true,
         clubId: true,
@@ -72,14 +94,26 @@ export class PublicResultsService {
     const athleteClubById = new Map(
       registrations.map((row) => [
         row.athleteId,
-        { clubId: row.clubId, clubName: row.club?.name ?? null, clubNameKa: row.club?.nameKa ?? null },
+        {
+          clubId: row.clubId,
+          clubName: row.club?.name ?? null,
+          clubNameKa: row.club?.nameKa ?? null,
+        },
       ]),
     );
 
     const athleteNameKaById = new Map<string, string | null>();
     for (const fight of fights) {
-      if (fight.redAthlete) athleteNameKaById.set(fight.redAthlete.id, fullNameKa(fight.redAthlete));
-      if (fight.blueAthlete) athleteNameKaById.set(fight.blueAthlete.id, fullNameKa(fight.blueAthlete));
+      if (fight.redAthlete)
+        athleteNameKaById.set(
+          fight.redAthlete.id,
+          fullNameKa(fight.redAthlete),
+        );
+      if (fight.blueAthlete)
+        athleteNameKaById.set(
+          fight.blueAthlete.id,
+          fullNameKa(fight.blueAthlete),
+        );
     }
 
     const placements = buildPlacementsFromConfirmedFights(
@@ -173,7 +207,9 @@ export class PublicResultsService {
 
       for (const fight of bucket) {
         if (
-          (fight.status !== 'COMPLETE' && fight.status !== 'CONFIRMED') ||
+          // BF-11: public standings/medals count CONFIRMED results only — a
+          // COMPLETE-but-unconfirmed (provisional) outcome must not show.
+          fight.status !== 'CONFIRMED' ||
           !fight.winnerAthleteId ||
           !fight.redAthleteId ||
           !fight.blueAthleteId ||
@@ -302,9 +338,8 @@ export class PublicResultsService {
       eventId: input.eventId,
       categories,
       clubs,
-      fights: fights.filter(
-        (fight) => fight.status === 'COMPLETE' || fight.status === 'CONFIRMED',
-      ),
+      // BF-11: only CONFIRMED fights are public; COMPLETE is still provisional.
+      fights: fights.filter((fight) => fight.status === 'CONFIRMED'),
       placements,
       medalTable,
     };

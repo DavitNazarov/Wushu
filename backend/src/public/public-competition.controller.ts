@@ -1,13 +1,17 @@
 import {
   Controller,
   Get,
+  Header,
   HttpException,
   HttpStatus,
   Query,
 } from '@nestjs/common';
 import type { Event } from '@prisma/client';
 import { BracketsService } from '../draw/brackets.service';
-import type { BracketParticipantView, BracketRoundColumn } from '../draw/brackets.types';
+import type {
+  BracketParticipantView,
+  BracketRoundColumn,
+} from '../draw/brackets.types';
 import { EventsService } from '../events/events.service';
 import { canViewCompetitionDataPublicly } from '../events/public-event-access';
 import { FightsService } from '../fights/fights.service';
@@ -15,7 +19,15 @@ import { deriveLiveQueueBoard } from '../fights/live-queue.logic';
 import { PrismaService } from '../prisma/prisma.service';
 import { PublicResultsService } from './public-results.service';
 import { ScheduleService } from '../schedule/schedule.service';
+import { resolvePublicOrg } from '../common/public-org';
+import { SkipThrottle } from '@nestjs/throttler';
+import { CACHE_LONG, CACHE_NONE, CACHE_SHORT } from './public-cache';
 
+// Public spectator endpoints (brackets/schedule/live/results). Same reasoning
+// as PublicController: exempt from the strict 'short' bucket so normal viewing
+// — including live pages that poll — doesn't 429. 'default' (120/min) still
+// applies. See PublicController for the full rationale.
+@SkipThrottle({ short: true })
 @Controller('public')
 export class PublicCompetitionController {
   constructor(
@@ -32,7 +44,15 @@ export class PublicCompetitionController {
       throw new HttpException('eventSlug_REQUIRED', HttpStatus.BAD_REQUEST);
     }
 
-    const event = await this.events.getPublicOrRegistrableBySlug(eventSlug);
+    const org = await resolvePublicOrg(this.prisma);
+    if (!org) {
+      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    }
+
+    const event = await this.events.getPublicOrRegistrableBySlug(
+      eventSlug,
+      org.id,
+    );
     if (!event) {
       throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     }
@@ -50,6 +70,7 @@ export class PublicCompetitionController {
   }
 
   @Get('brackets/overview')
+  @Header('Cache-Control', CACHE_LONG)
   async getPublicBracketsOverview(@Query('eventSlug') eventSlug: string) {
     const event = await this.getAccessibleCompetitionEvent(eventSlug);
     const overview = await this.brackets.getOverview({
@@ -81,6 +102,7 @@ export class PublicCompetitionController {
   }
 
   @Get('brackets/category')
+  @Header('Cache-Control', CACHE_LONG)
   async getPublicBracketCategory(
     @Query('eventSlug') eventSlug: string,
     @Query('eventWeightCategoryId') eventWeightCategoryId: string,
@@ -135,22 +157,41 @@ export class PublicCompetitionController {
   }
 
   @Get('brackets')
+  @Header('Cache-Control', CACHE_LONG)
   async getPublicBrackets(@Query('eventSlug') eventSlug: string) {
     const event = await this.getAccessibleCompetitionEvent(eventSlug);
 
     return this.prisma.bracket.findMany({
-      where: { eventId: event.id },
+      where: { organisationId: event.organisationId, eventId: event.id },
       include: {
         fights: {
           include: {
             redAthlete: {
-              select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                firstNameKa: true,
+                lastNameKa: true,
+              },
             },
             blueAthlete: {
-              select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                firstNameKa: true,
+                lastNameKa: true,
+              },
             },
             winnerAthlete: {
-              select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                firstNameKa: true,
+                lastNameKa: true,
+              },
             },
           },
           orderBy: [{ round: 'asc' }, { boutNo: 'asc' }],
@@ -161,6 +202,7 @@ export class PublicCompetitionController {
   }
 
   @Get('schedule')
+  @Header('Cache-Control', CACHE_SHORT)
   async getPublicSchedule(@Query('eventSlug') eventSlug: string) {
     const event = await this.getAccessibleCompetitionEvent(eventSlug);
 
@@ -171,6 +213,7 @@ export class PublicCompetitionController {
   }
 
   @Get('schedule-sessions')
+  @Header('Cache-Control', CACHE_SHORT)
   async getPublicScheduleSessions(@Query('eventSlug') eventSlug: string) {
     const event = await this.getAccessibleCompetitionEvent(eventSlug);
 
@@ -178,6 +221,7 @@ export class PublicCompetitionController {
   }
 
   @Get('event-schedule')
+  @Header('Cache-Control', CACHE_SHORT)
   async getPublicEventSchedule(@Query('eventSlug') eventSlug: string) {
     const event = await this.getAccessibleCompetitionEvent(eventSlug);
     return this.schedule.getEventSchedule({
@@ -187,6 +231,7 @@ export class PublicCompetitionController {
   }
 
   @Get('live')
+  @Header('Cache-Control', CACHE_NONE)
   async getPublicLive(@Query('eventSlug') eventSlug: string) {
     const event = await this.getAccessibleCompetitionEvent(eventSlug);
     const board = await this.fights.getLiveQueueBoard({
@@ -205,6 +250,7 @@ export class PublicCompetitionController {
   }
 
   @Get('results')
+  @Header('Cache-Control', CACHE_LONG)
   async getPublicResults(@Query('eventSlug') eventSlug: string) {
     const event = await this.getAccessibleCompetitionEvent(eventSlug);
 
@@ -216,6 +262,7 @@ export class PublicCompetitionController {
   }
 
   @Get('mat')
+  @Header('Cache-Control', CACHE_NONE)
   async getMatFeed(
     @Query('eventSlug') eventSlug: string,
     @Query('mat') matName: string,
@@ -230,6 +277,7 @@ export class PublicCompetitionController {
     const event = await this.getAccessibleCompetitionEvent(eventSlug);
     const mat = await this.prisma.mat.findFirst({
       where: {
+        organisationId: event.organisationId,
         eventId: event.id,
         name: { equals: matName, mode: 'insensitive' },
       },
@@ -292,7 +340,9 @@ export class PublicCompetitionController {
    * athlete's UUID before returning bracket data to unauthenticated callers.
    * Admin/coach routes use getCategoryDetails directly and retain the full value.
    */
-  private redactParticipantDocumentIds(rounds: BracketRoundColumn[]): BracketRoundColumn[] {
+  private redactParticipantDocumentIds(
+    rounds: BracketRoundColumn[],
+  ): BracketRoundColumn[] {
     const redact = (p: BracketParticipantView | null) =>
       p ? { ...p, athleteCode: p.athleteId } : null;
 
@@ -305,8 +355,14 @@ export class PublicCompetitionController {
           blue: redact(matchup.participants.blue),
         },
         slots: {
-          red: { ...matchup.slots.red, athlete: redact(matchup.slots.red.athlete) },
-          blue: { ...matchup.slots.blue, athlete: redact(matchup.slots.blue.athlete) },
+          red: {
+            ...matchup.slots.red,
+            athlete: redact(matchup.slots.red.athlete),
+          },
+          blue: {
+            ...matchup.slots.blue,
+            athlete: redact(matchup.slots.blue.athlete),
+          },
         },
       })),
     }));

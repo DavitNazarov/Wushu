@@ -217,7 +217,12 @@ describe('EventOpsService – setPublished', () => {
     mockPrisma.event.findFirst.mockResolvedValue(existing);
     mockPrisma.event.update.mockResolvedValue(updated);
 
-    const result = await service.setPublished('evt-1', 'org-1', false, 'user-1');
+    const result = await service.setPublished(
+      'evt-1',
+      'org-1',
+      false,
+      'user-1',
+    );
     expect(result?.published).toBe(false);
     expect(result?.lifecycle).toBe('DRAWN');
     expect(mockPrisma.event.update).toHaveBeenCalledWith(

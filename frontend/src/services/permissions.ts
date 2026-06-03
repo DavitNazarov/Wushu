@@ -126,7 +126,14 @@ export function getAuthRedirectUrl(
   if ('blocked' in auth && auth.blocked) {
     return `/${locale}/no-access`;
   }
-  return `/${locale}/login?next=${encodeURIComponent(nextPath)}`;
+  // We only reach this branch from a *protected* server page, which means the
+  // middleware already saw a `gw_auth` cookie and let the request through — yet
+  // /me reported the user as unauthenticated (transient/network failure, or the
+  // 429 fallback). Without `force=1`, the middleware's "login + cookie present →
+  // dashboard" rule bounces straight back here, producing an infinite
+  // login⇄dashboard redirect loop (ERR_TOO_MANY_REDIRECTS). `force=1` suppresses
+  // that bounce so the user lands on (and stays on) the login page.
+  return `/${locale}/login?force=1&next=${encodeURIComponent(nextPath)}`;
 }
 
 export function canAccessAdmin(role: UserRole | null, capabilities: string[]): boolean {

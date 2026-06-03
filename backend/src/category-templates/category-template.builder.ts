@@ -1,4 +1,8 @@
-import type { AthleteSex, CategoryOption, CategoryOptionGroup } from '@prisma/client';
+import type {
+  AthleteSex,
+  CategoryOption,
+  CategoryOptionGroup,
+} from '@prisma/client';
 
 export type CategoryTemplateWeightInput = {
   code: string;

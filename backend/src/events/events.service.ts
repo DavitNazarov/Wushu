@@ -19,16 +19,26 @@ import {
 } from './event.types';
 import { canDiscoverEventPublicly } from './public-event-access';
 
+// Helper: add `days` (can be negative) to an ISO date string (YYYY-MM-DD)
+// using UTC arithmetic so DST has no effect on the day count. Returns a new
+// YYYY-MM-DD string. Used to derive default registration-close from
+// competition-start (close = startDate - 1 day) and similar offsets.
 function addDays(date: string, days: number): string {
   const next = new Date(`${date}T00:00:00.000Z`);
   next.setUTCDate(next.getUTCDate() + days);
   return next.toISOString().slice(0, 10);
 }
 
+// The Event row plus the snapshotted categoryTemplateId joined from the
+// EventCategoryTemplateSnapshot table — flattened so callers see a single
+// `categoryTemplateId` field instead of having to drill into the relation.
 type EventWithCategoryTemplateId = Event & {
   categoryTemplateId: string | null;
 };
 
+// Service responsible for the Event aggregate: reads, list filters for various
+// audiences (admin/public/published), create, and update. Lifecycle transitions
+// and deletions live in EventOpsService; this service is intentionally CRUD-shaped.
 @Injectable()
 export class EventsService {
   private readonly logger = new Logger(EventsService.name);
@@ -40,6 +50,10 @@ export class EventsService {
     private readonly automation: EventStageAutomationService,
   ) {}
 
+  // Fetch a single event by id, scoped to the caller's organisation.
+  // Side effect: piggy-backs an auto-advance check (REG_OPEN→LOCKED etc.)
+  // so reading an event also keeps its lifecycle current — failures here
+  // are logged but never block the read.
   async getById(
     eventId: string,
     organisationId: string,
@@ -60,6 +74,8 @@ export class EventsService {
     return event ? this.attachCategoryTemplateId(event) : null;
   }
 
+  // Admin listing — all events in the org regardless of publish flag,
+  // ordered by competitionStartDate descending so the newest event sits on top.
   async list(organisationId: string): Promise<EventWithCategoryTemplateId[]> {
     const events = await this.prisma.event.findMany({
       where: { organisationId },
@@ -71,9 +87,14 @@ export class EventsService {
     return events.map((event) => this.attachCategoryTemplateId(event));
   }
 
-  async listPublished(): Promise<EventWithCategoryTemplateId[]> {
+  // Public listing — only events with the `published` flag on.
+  // organisationId is optional because the cross-tenant public site can
+  // call this without an org filter (e.g. multi-tenant aggregations).
+  async listPublished(
+    organisationId?: string,
+  ): Promise<EventWithCategoryTemplateId[]> {
     const events = await this.prisma.event.findMany({
-      where: { published: true },
+      where: { published: true, ...(organisationId ? { organisationId } : {}) },
       orderBy: { competitionStartDate: 'desc' },
       include: {
         categoryTemplateSnapshot: { select: { categoryTemplateId: true } },
@@ -82,8 +103,15 @@ export class EventsService {
     return events.map((event) => this.attachCategoryTemplateId(event));
   }
 
-  async listPublicAndRegistrable(): Promise<EventWithCategoryTemplateId[]> {
+  // Public-or-registrable listing — wider than listPublished(): includes
+  // events that aren't published yet but are currently in the registration
+  // window, so coaches can find and enter athletes. Discoverability rule
+  // lives in canDiscoverEventPublicly().
+  async listPublicAndRegistrable(
+    organisationId?: string,
+  ): Promise<EventWithCategoryTemplateId[]> {
     const events = await this.prisma.event.findMany({
+      where: organisationId ? { organisationId } : undefined,
       orderBy: { competitionStartDate: 'desc' },
       include: {
         categoryTemplateSnapshot: { select: { categoryTemplateId: true } },
@@ -95,11 +123,18 @@ export class EventsService {
       .filter((event) => canDiscoverEventPublicly(event));
   }
 
+  // Public detail by URL slug — only returns events with `published=true`.
+  // Used by the public event pages (/events/[slug]) for read-only viewing.
   async getPublishedBySlug(
     slug: string,
+    organisationId?: string,
   ): Promise<EventWithCategoryTemplateId | null> {
     const event = await this.prisma.event.findFirst({
-      where: { slug, published: true },
+      where: {
+        slug,
+        published: true,
+        ...(organisationId ? { organisationId } : {}),
+      },
       include: {
         categoryTemplateSnapshot: { select: { categoryTemplateId: true } },
       },
@@ -107,11 +142,17 @@ export class EventsService {
     return event ? this.attachCategoryTemplateId(event) : null;
   }
 
+  // Public detail by slug for both published events AND events that aren't
+  // published yet but ARE in their registration window. Auto-advances the
+  // event's lifecycle on each call EXCEPT when it's LIVE (perf: the live
+  // page polls aggressively and the only LIVE→? transition is the end-of-day
+  // COMPLETED move, which the hourly cron handles anyway).
   async getPublicOrRegistrableBySlug(
     slug: string,
+    organisationId?: string,
   ): Promise<EventWithCategoryTemplateId | null> {
     const event = await this.prisma.event.findFirst({
-      where: { slug },
+      where: { slug, ...(organisationId ? { organisationId } : {}) },
       include: {
         categoryTemplateSnapshot: { select: { categoryTemplateId: true } },
       },
@@ -136,12 +177,30 @@ export class EventsService {
     return canDiscoverEventPublicly(mapped) ? mapped : null;
   }
 
+  // Create a new event in a transaction. Steps:
+  //   1. Normalize dates from either the legacy or canonical input shape.
+  //   2. Resolve event policies (weigh-in / bronze / rest / publish-timing)
+  //      from the partial input + defaults.
+  //   3. Pick a CategoryTemplate (explicit id OR the org's currently-active one).
+  //      Throws CATEGORY_TEMPLATE_NOT_FOUND / _SELECTION_REQUIRED when neither
+  //      exists.
+  //   4. Insert Event + EventCategoryTemplateSnapshot (the snapshot freezes the
+  //      template definition so later template edits don't mutate this event).
+  //   5. Write an EVENT_CREATED audit log row inside the same tx.
   async create(
     organisationId: string,
     actorUserId: string,
     dto: CreateEventDto,
   ): Promise<EventWithCategoryTemplateId> {
-    const { name, nameKa, slug, location, timezone, autoAdvanceStage, policies } = dto;
+    const {
+      name,
+      nameKa,
+      slug,
+      location,
+      timezone,
+      autoAdvanceStage,
+      policies,
+    } = dto;
     const normalized = this.normalizeDates(dto, timezone);
     const resolvedPolicies = resolveEventPolicies(policies);
     const requestedCategoryTemplateId = dto.categoryTemplateId ?? dto.rulesetId;
@@ -192,7 +251,8 @@ export class EventsService {
           eventId: event.id,
           categoryTemplateId: selectedCategoryTemplate.id,
           version: selectedCategoryTemplate.version,
-          snapshot: selectedCategoryTemplate.definition as Prisma.InputJsonValue,
+          snapshot:
+            selectedCategoryTemplate.definition as Prisma.InputJsonValue,
         },
       });
 
@@ -219,6 +279,11 @@ export class EventsService {
     });
   }
 
+  // Patch an existing event. Merges the incoming partial policies with the
+  // event's current policies (read via readEventPolicies) before re-resolving,
+  // so callers can update just one policy without re-sending the others.
+  // Writes an EVENT_UPDATED audit row with both before and after snapshots.
+  // Throws EVENT_NOT_FOUND if the id doesn't exist or is in another org.
   async update(
     eventId: string,
     organisationId: string,
@@ -228,7 +293,15 @@ export class EventsService {
     const existing = await this.getById(eventId, organisationId);
     if (!existing) throw new Error('EVENT_NOT_FOUND');
 
-    const { name, nameKa, slug, location, timezone, autoAdvanceStage, policies } = dto;
+    const {
+      name,
+      nameKa,
+      slug,
+      location,
+      timezone,
+      autoAdvanceStage,
+      policies,
+    } = dto;
     const normalized = this.normalizeDates(dto, timezone);
     const resolvedPolicies = resolveEventPolicies({
       ...readEventPolicies(existing),
@@ -286,6 +359,9 @@ export class EventsService {
     });
   }
 
+  // Flatten the snapshot relation into a top-level `categoryTemplateId`
+  // field so callers don't have to know about the snapshot table.
+  // Returns null categoryTemplateId when no snapshot exists (legacy events).
   private attachCategoryTemplateId(
     event: Event & {
       categoryTemplateSnapshot?: { categoryTemplateId: string } | null;
@@ -298,6 +374,10 @@ export class EventsService {
     };
   }
 
+  // Branching dispatcher: the API accepts two shapes for `dates` — a legacy
+  // shape ({ range, registrationDays, fightDays }) used by old clients, and
+  // a canonical shape (explicit start/end Dates). isLegacyDatesInput() decides.
+  // Both branches output the same normalized record below.
   private normalizeDates(dto: CreateEventDto, timezone: string) {
     if (isLegacyDatesInput(dto.dates)) {
       return this.normalizeLegacyDates(
@@ -314,6 +394,12 @@ export class EventsService {
     );
   }
 
+  // Legacy date shape → normalized record. Inputs are day-strings (YYYY-MM-DD)
+  // in the event's timezone; outputs are absolute UTC Date instances at
+  // start-of-day / end-of-day boundaries, plus a JSON blob preserving the
+  // original day arrays for the frontend day-tabs UI.
+  // Defaults: registrationOpens = competitionStart − 30 days,
+  //           registrationCloses = competitionStart − 1 day.
   private normalizeLegacyDates(
     dates: LegacyDatesDto,
     timezone: string,
@@ -360,12 +446,18 @@ export class EventsService {
         fightDays: dates.fightDays,
         registrationWindow: {
           opensAt: registrationWindow?.opensAt ?? competitionStart,
-          closesAt: registrationWindow?.closesAt ?? addDays(competitionStart, -1),
+          closesAt:
+            registrationWindow?.closesAt ?? addDays(competitionStart, -1),
         },
       } as Prisma.InputJsonValue,
     };
   }
 
+  // Canonical date shape → normalized record. Inputs are already absolute
+  // UTC ISO strings; we re-format them through the event's timezone to derive
+  // the day-arrays (registrationDays/fightDays) the UI uses for tabs.
+  // weighInStartDay/EndDay drive registrationDays when provided, otherwise
+  // we fall back to the registrationStart/End range.
   private normalizeCanonicalDates(
     dates: CanonicalDatesDto,
     timezone: string,

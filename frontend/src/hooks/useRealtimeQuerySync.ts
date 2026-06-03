@@ -34,11 +34,29 @@ export function useRealtimeQuerySync(input: UseRealtimeQuerySyncInput) {
           path: SOCKET_IO_PATH,
           transports: ['polling', 'websocket'],
           withCredentials: true,
+          // C1: cap reconnection backoff. An anonymous public viewer has no
+          // LIVE_RUN token, so the gateway rejects the handshake and socket.io
+          // retries forever. Capping the delay to 30s (default 5s) means a
+          // rejected client retries at most once per 30s, bounding handshake
+          // load on the single-process gateway ~6x. Connected behaviour is
+          // unchanged; authed operators still reconnect (just with a higher
+          // backoff ceiling). Full fix = anonymous read-only namespace (see
+          // docs/DEPLOYMENT.md "Known scaling limits").
+          reconnectionDelayMax: 30_000,
         })
       : io({
           path: SOCKET_IO_PATH,
           transports: ['polling', 'websocket'],
           withCredentials: true,
+          // C1: cap reconnection backoff. An anonymous public viewer has no
+          // LIVE_RUN token, so the gateway rejects the handshake and socket.io
+          // retries forever. Capping the delay to 30s (default 5s) means a
+          // rejected client retries at most once per 30s, bounding handshake
+          // load on the single-process gateway ~6x. Connected behaviour is
+          // unchanged; authed operators still reconnect (just with a higher
+          // backoff ceiling). Full fix = anonymous read-only namespace (see
+          // docs/DEPLOYMENT.md "Known scaling limits").
+          reconnectionDelayMax: 30_000,
         });
     const connectionTarget = socketServerUrl ?? 'same-origin';
 
@@ -77,6 +95,17 @@ export function useRealtimeQuerySync(input: UseRealtimeQuerySyncInput) {
       });
     };
 
+    // join-event/join-mat rejections arrive here as a WsException. Without this
+    // listener a failed room join is silent — the socket looks "connected" but
+    // never receives updates.
+    const onException = (payload: unknown) => {
+      logRealtime(input.scope, 'exception', {
+        eventId: input.eventId,
+        matId: input.matId ?? null,
+        payload,
+      });
+    };
+
     const onUpdate = (eventName: string) => {
       setLastSyncAt(new Date().toISOString());
       logRealtime(input.scope, 'receive', {
@@ -93,6 +122,7 @@ export function useRealtimeQuerySync(input: UseRealtimeQuerySyncInput) {
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('connect_error', onConnectError);
+    socket.on('exception', onException);
     socket.on('fight:update', () => onUpdate('fight:update'));
     socket.on('schedule:update', () => onUpdate('schedule:update'));
     socket.on('timer:update', () => onUpdate('timer:update'));
@@ -101,6 +131,7 @@ export function useRealtimeQuerySync(input: UseRealtimeQuerySyncInput) {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('connect_error', onConnectError);
+      socket.off('exception', onException);
       socket.off('fight:update');
       socket.off('schedule:update');
       socket.off('timer:update');

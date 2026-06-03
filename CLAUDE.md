@@ -12,8 +12,15 @@ Tournament management system for the Georgian Wushu Federation. Handles athlete 
 ├── backend/           NestJS + Prisma API      (port 4000)
 ├── package.json       npm workspaces root
 ├── docker-compose.yml PostgreSQL container
+├── render.yaml        Render Blueprint (current prod target)
+├── deploy/hetzner/    [FUTURE HETZNER MIGRATION] — inert Docker/nginx artifacts
+├── docs/DEPLOYMENT.md Full deployment runbook
 └── server.js          Production entry point
 ```
+
+**Production deployment:** `server.js` runs a **single combined Node/Express process** — Next.js serves everything, and `/api/*` is mounted into the NestJS app via `ExpressAdapter` (`globalPrefix: false`, Nest's `createApp` from `backend/dist/src/main`). Frontend + backend ship as **one server on one port** (default 4000). **Current prod target is Render** (`render.yaml` Blueprint; build `npm ci && npm run build`, pre-deploy `npm run db:deploy`, start `npm start`, health check `/api/health`). Prod DB is Postgres 16 (Render-managed or Neon). **Node 22 LTS** (`.nvmrc`). Full runbook in `docs/DEPLOYMENT.md`. A future self-hosted Hetzner stack (Docker + nginx) lives **inert** under `deploy/hetzner/`, marked `[FUTURE HETZNER MIGRATION]` — do not treat it as active. **Single instance only** — schedulers, socket.io rooms, the rate limiter, and exports are all in-process (scaling out needs a Redis adapter + distributed cron locks first).
+
+**External services:** PostgreSQL is the only **required** external dependency. The frontend also has **optional Sentry** error/performance monitoring (`frontend/src/instrumentation*.ts` + `sentry.*.config.ts`, wired through `next.config.ts`); it is gated on `NEXT_PUBLIC_SENTRY_DSN` and is a complete no-op when that var is unset, so it stays out of the way in dev/self-host. Beyond that there is **no** email provider, payment processor, cloud storage, or Redis/queue — contact forms write to the `ContactSubmission` table, and exports write JSON to local `/tmp/wushu-exports`. Background work is three in-process schedulers (`@nestjs/schedule`): hourly event stage auto-advance, daily refresh-token cleanup (03:00), and a 1s fight-timer automation interval.
 
 ---
 
@@ -27,6 +34,9 @@ npm run dev          # Start backend + frontend + Prisma Studio concurrently
 npm run dev:backend  # NestJS only
 npm run dev:frontend # Next.js only
 npm run build        # backend (prisma generate + nest build) then frontend
+npm run lint         # frontend lint; `npm run lint:backend` for backend
+npm test             # backend unit tests (jest)
+npm run knip         # dead-code / unused-export / unused-dependency report (config: knip.json)
 ```
 
 **Never start the preview/dev server yourself** — the user runs it manually.  
@@ -111,9 +121,12 @@ Key modules:
 
 ### Auth Pattern
 
-All endpoints require `@AuthGuard` (JWT from httpOnly cookie) + `@Capabilities(...)` decorator.  
-`POST /api/auth/bootstrap-admin` — creates first admin (protected by `BOOTSTRAP_SECRET`).  
-Refresh token rotation: `POST /api/auth/refresh`.
+Protected endpoints use `@UseGuards(AuthGuard, CapabilityGuard)` + the `@RequireCapability('CODE')` decorator (defined in `auth/capability.decorator.ts`). `AuthGuard` reads the JWT from the `gw_auth` httpOnly cookie (or `Authorization: Bearer`) and **re-validates the user against the DB on every request** (rejects archived/disabled/DQ-suspended users) — it does not blindly trust the JWT.  
+Cookies: `gw_auth` (access, 15 min) + `gw_refresh` (refresh, 7 days), both httpOnly. Refresh tokens are DB-backed (SHA-256 hashed in `RefreshToken`) with **rotation + reuse/theft detection** (reusing a revoked token revokes all of that user's sessions).  
+`POST /api/auth/bootstrap-admin` — creates first admin (protected by `BOOTSTRAP_SECRET`; disabled in production when the secret is unset).  
+Refresh token rotation: `POST /api/auth/refresh`. `GET /api/auth/me` is soft-auth (returns null fields instead of throwing).
+
+Capability codes (`auth/capabilities.ts`): `EVENTS_MANAGE`, `RULESETS_MANAGE`, `ATHLETES_MANAGE`, `WEIGHIN_RUN`, `DRAW_RUN`, `SCHEDULE_MANAGE`, `LIVE_RUN`, `RESULTS_MANAGE`, `EXPORTS_MANAGE`, `CONTENT_MANAGE` (defined but unused). Role→capability defaults: admin = all; coach = `ATHLETES_MANAGE`; judge/timekeeper = `LIVE_RUN`; athlete = none. Effective capabilities = role defaults ∪ any `UserCapability` DB rows (note: no admin API currently writes `UserCapability` rows).
 
 ### API Conventions
 
@@ -244,7 +257,7 @@ Messages live in `frontend/src/messages/en.json` and `ka.json`.
 REG_OPEN → LOCKED → WEIGHIN → WEIGH_IN_COMPLETED → DRAWN → PUBLISHED → LIVE → COMPLETED
 ```
 
-The lifecycle controls what actions are allowed. Guards enforce this server-side via `EventPhaseGate`.
+The lifecycle controls what actions are allowed. There is **no backend `EventPhaseGate` guard** — enforcement is via pure helper functions in `backend/src/events/lifecycle-rules.ts` (`isRegistrationMutableLifecycle`, `canRunDraw`, `canManageSchedule`, `canRunLiveCompetition`, `isWeighInStage`, `isEventReadOnly`) plus per-service assertion methods (`assertScheduleMutable`, `assertLiveStage`, `assertEventAllowsRegistrationChanges`, …). Manual transitions go through `EventOpsService.transitionLifecycle()` (forward/backward along the ordered chain; skips/reverts need `allowOverride` + `reason`). An hourly cron (`EventStageAutomationService`, `0 5 * * * *`) plus opportunistic checks on event reads auto-advance stages when date/weigh-in conditions are met. (`EventPhaseGate` does exist as a **frontend** component at `frontend/src/components/admin/EventPhaseGate.tsx`.)
 
 ### Key Entities
 

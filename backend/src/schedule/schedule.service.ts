@@ -7,11 +7,18 @@ import {
   computeLiveStatuses,
   type LiveFightStatus,
 } from '../fights/live-queue.logic';
-import {
-  buildScheduleRows,
-} from './schedule-order.logic';
+import { buildScheduleRows } from './schedule-order.logic';
 import { planAutoScheduleOrder } from './auto-schedule-order.logic';
 
+// Schedule service: mats, sessions, fight ordering, and the auto-scheduler.
+// Big surface area because the running order is the day-of operational core.
+// Methods loosely group as:
+//   guards + utilities (top)
+//   CRUD: mats, sessions
+//   reads: getSchedule, getEventSchedule
+//   writes: autoSchedule, moveFight, generateSchedule, moveFightToSession,
+//           reorderSessions, updateFightOrder
+//   internal: rest-window violation checks at the bottom
 @Injectable()
 export class ScheduleService {
   constructor(
@@ -19,6 +26,10 @@ export class ScheduleService {
     private readonly audit: AuditService,
   ) {}
 
+  // Shared write-guard: refuse to mutate the schedule unless the event is
+  // in a lifecycle that allows it AND, if the override flag is set, a reason
+  // is supplied. EVENT_READ_ONLY beats EVENT_NOT_READY_FOR_SCHEDULE in the
+  // check order so admins get the more-specific error first.
   private assertScheduleMutable(input: {
     event: Event;
     override?: boolean;
@@ -37,8 +48,19 @@ export class ScheduleService {
     }
   }
 
+  // Build the display string for a participant in the schedule view:
+  //   - real athlete                          → "FirstName LastName"
+  //   - placeholder (winner of an upstream)   → "Winner of N" using order
+  //   - everything else                       → "TBD"
+  // The KA-localized variant is exposed via a parallel redDisplayNameKa field
+  // computed in getSchedule below.
   private displayName(input: {
-    athlete: { firstName: string; lastName: string; firstNameKa?: string | null; lastNameKa?: string | null } | null;
+    athlete: {
+      firstName: string;
+      lastName: string;
+      firstNameKa?: string | null;
+      lastNameKa?: string | null;
+    } | null;
     sourceScheduleOrder: number | null;
   }): string {
     if (input.athlete) {
@@ -50,6 +72,9 @@ export class ScheduleService {
     return 'TBD';
   }
 
+  // Convert a numeric round into the human round label shown in schedule
+  // tooltips / detail panels. Final / Semifinal / Quarterfinal / Round of 16
+  // are the standard names; anything earlier falls back to "Round N".
   private bracketRoundLabel(round: number, maxRound: number): string {
     const distanceToFinal = maxRound - round;
     if (distanceToFinal <= 0) return 'Final';
@@ -59,6 +84,10 @@ export class ScheduleService {
     return `Round ${round}`;
   }
 
+  // "Could this fight actually be run right now?"
+  // Both sides must be filled with distinct athletes (BYEs/duplicates can't),
+  // it must not already have a winner attached, and it must be in a
+  // pre/in-progress state. Used by auto-scheduler + per-mat queue computation.
   private isFightPlayable(fight: {
     redAthleteId: string | null;
     blueAthleteId: string | null;
@@ -82,6 +111,13 @@ export class ScheduleService {
     );
   }
 
+  // Decide whether a fight should show up in the schedule view at all.
+  // Hidden:
+  //   - "Dead nodes": neither athlete AND no upstream dependency
+  //     (structural placeholders that exist only to make tree math work).
+  //   - First-round BYEs (one side filled, one empty in the opening round).
+  // Everything else is visible — even "Winner of N" cells with no real
+  // athletes yet, because admins want to see where the bout will land.
   private isScheduleVisibleFight(input: {
     fight: {
       redAthleteId: string | null;
@@ -105,6 +141,8 @@ export class ScheduleService {
     return true;
   }
 
+  // List all mats in an event sorted by their display `order`. Drives the
+  // mat tabs UI; index 0 is the leftmost tab.
   async listMats(organisationId: string, eventId: string) {
     return this.prisma.mat.findMany({
       where: { organisationId, eventId },
@@ -112,6 +150,8 @@ export class ScheduleService {
     });
   }
 
+  // List time-slot sessions (Morning / Afternoon / etc.) sorted by `order`.
+  // Sessions are admin-defined buckets, distinct from physical mats.
   async listSessions(organisationId: string, eventId: string) {
     return this.prisma.scheduleSession.findMany({
       where: { organisationId, eventId },
@@ -119,6 +159,10 @@ export class ScheduleService {
     });
   }
 
+  // Create-or-update a scheduling session. Validates that startTime/endTime
+  // parse to real dates (INVALID_SESSION_TIMES) and end > start
+  // (SESSION_END_BEFORE_START). If input.id is set we update by id (after
+  // verifying tenancy); otherwise create a new row.
   async upsertSession(input: {
     organisationId: string;
     eventId: string;
@@ -129,6 +173,14 @@ export class ScheduleService {
     endTime: string;
     order: number;
   }) {
+    // BF-16: session CRUD must respect the lifecycle like every other schedule
+    // mutation — reject on read-only (COMPLETED) / not-yet-schedulable events.
+    const event = await this.prisma.event.findFirst({
+      where: { id: input.eventId, organisationId: input.organisationId },
+    });
+    if (!event) throw new Error('EVENT_NOT_FOUND');
+    this.assertScheduleMutable({ event });
+
     const startTime = new Date(input.startTime);
     const endTime = new Date(input.endTime);
     if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
@@ -138,7 +190,11 @@ export class ScheduleService {
 
     if (input.id) {
       const existing = await this.prisma.scheduleSession.findFirst({
-        where: { id: input.id, organisationId: input.organisationId, eventId: input.eventId },
+        where: {
+          id: input.id,
+          organisationId: input.organisationId,
+          eventId: input.eventId,
+        },
       });
       if (!existing) throw new Error('SESSION_NOT_FOUND');
       return this.prisma.scheduleSession.update({
@@ -158,25 +214,45 @@ export class ScheduleService {
     });
   }
 
+  // Delete a session, detaching any fights pinned to it first
+  // (sessionId/orderInSession nulled). Throws SESSION_NOT_FOUND when missing.
   async deleteSession(input: {
     organisationId: string;
     eventId: string;
     sessionId: string;
   }) {
     const existing = await this.prisma.scheduleSession.findFirst({
-      where: { id: input.sessionId, organisationId: input.organisationId, eventId: input.eventId },
+      where: {
+        id: input.sessionId,
+        organisationId: input.organisationId,
+        eventId: input.eventId,
+      },
     });
     if (!existing) throw new Error('SESSION_NOT_FOUND');
 
+    // BF-16: don't allow deleting sessions on a read-only/non-schedulable event.
+    const event = await this.prisma.event.findFirst({
+      where: { id: input.eventId, organisationId: input.organisationId },
+    });
+    if (!event) throw new Error('EVENT_NOT_FOUND');
+    this.assertScheduleMutable({ event });
+
     // Unlink fights from this session before deleting
     await this.prisma.fight.updateMany({
-      where: { sessionId: input.sessionId },
+      where: {
+        sessionId: input.sessionId,
+        organisationId: input.organisationId,
+      },
       data: { sessionId: null, orderInSession: null },
     });
 
-    return this.prisma.scheduleSession.delete({ where: { id: input.sessionId } });
+    return this.prisma.scheduleSession.delete({
+      where: { id: input.sessionId },
+    });
   }
 
+  // Create-or-update a mat row. id present → update with tenant check
+  // (MAT_NOT_FOUND on miss); absent → create.
   async upsertMat(input: {
     organisationId: string;
     eventId: string;
@@ -185,6 +261,15 @@ export class ScheduleService {
     name: string;
     order: number;
   }) {
+    // BF-16: mat CRUD is a schedule mutation like sessions — reject on a
+    // read-only (COMPLETED) or not-yet-schedulable event so the running order
+    // can't be edited out of its lifecycle window.
+    const event = await this.prisma.event.findFirst({
+      where: { id: input.eventId, organisationId: input.organisationId },
+    });
+    if (!event) throw new Error('EVENT_NOT_FOUND');
+    this.assertScheduleMutable({ event });
+
     if (input.id) {
       const existing = await this.prisma.mat.findFirst({
         where: {
@@ -209,6 +294,11 @@ export class ScheduleService {
     });
   }
 
+  // Build the schedule view: every fight with mat/athlete/category joins,
+  // shaped through buildScheduleRows. Used by the admin schedule UI, the
+  // public schedule page, and the mat displays (filtered to one mat via matId).
+  // Pre-computes redDisplayName/blueDisplayName (+ KA variants) so callers
+  // don't have to handle "Winner of X" / "TBD" cases inline.
   async getSchedule(params: {
     organisationId: string;
     eventId: string;
@@ -222,10 +312,32 @@ export class ScheduleService {
         },
         include: {
           mat: true,
-          redAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
-          blueAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
+          redAthlete: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              firstNameKa: true,
+              lastNameKa: true,
+            },
+          },
+          blueAthlete: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              firstNameKa: true,
+              lastNameKa: true,
+            },
+          },
           winnerAthlete: {
-            select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              firstNameKa: true,
+              lastNameKa: true,
+            },
           },
           eventWeightCategory: {
             select: {
@@ -271,7 +383,9 @@ export class ScheduleService {
         id: row.id,
         matId: row.matId,
         orderInMat: row.orderInMat,
-        sessionOrder: row.sessionId ? (sessionOrderById.get(row.sessionId) ?? null) : null,
+        sessionOrder: row.sessionId
+          ? (sessionOrderById.get(row.sessionId) ?? null)
+          : null,
         orderInSession: row.orderInSession,
         scheduleOrder: row.scheduleOrder,
         status: row.status,
@@ -290,6 +404,30 @@ export class ScheduleService {
     return scheduleRows;
   }
 
+  // Time-aware automatic scheduler. Distributes playable fights across mats
+  // while respecting per-athlete rest windows and (optionally) session-window
+  // boundaries.
+  //
+  // Inputs:
+  //   - startTimeIso : ISO datetime — the wall-clock origin for the schedule.
+  //   - avgBoutSeconds + bufferSeconds : per-mat per-bout cost.
+  //   - restMinutes  : minimum gap between two fights for the same athlete.
+  //                    Falls back to event.minRestMinutes; values below the
+  //                    event policy require override OR they error
+  //                    REST_CONSTRAINT_VIOLATION.
+  //   - seed         : reserved for deterministic tie-breaks (currently unused).
+  //   - useSessions  : if true, fights snap to defined session windows;
+  //                    when a fight would land in a gap, all mat clocks jump
+  //                    forward to the next session's start.
+  //
+  // Algorithm per fight (greedy):
+  //   1. earliestStart = max(matReady[m], athleteReady[a]+rest) per mat;
+  //      pick the mat that minimizes earliestStart.
+  //   2. If sessions are enabled, advance mat clocks past any current
+  //      session's end into the next session's start, then re-pick.
+  //   3. Push fight at (bestMat, nextOrderInMat, earliestStart), update both
+  //      mat-clock + per-athlete clock.
+  // Finally writes all schedule changes in one transaction.
   async autoSchedule(input: {
     organisationId: string;
     eventId: string;
@@ -341,7 +479,8 @@ export class ScheduleService {
     });
 
     if (mats.length === 0) throw new Error('NO_MATS');
-    const { fights: schedulableFights, diagnostics } = planAutoScheduleOrder(fights);
+    const { fights: schedulableFights, diagnostics } =
+      planAutoScheduleOrder(fights);
     if (schedulableFights.length === 0) {
       throw new Error('NO_SCHEDULABLE_FIGHTS');
     }
@@ -363,7 +502,10 @@ export class ScheduleService {
     // Load sessions if requested
     const sessions = input.useSessions
       ? await this.prisma.scheduleSession.findMany({
-          where: { organisationId: input.organisationId, eventId: input.eventId },
+          where: {
+            organisationId: input.organisationId,
+            eventId: input.eventId,
+          },
           orderBy: { order: 'asc' },
         })
       : [];
@@ -393,7 +535,9 @@ export class ScheduleService {
       for (const mat of mats) {
         const matReady = matNextTime.get(mat.id) ?? baseTime;
         const athleteReady = Math.max(
-          ...athleteIds.map((id) => (athleteLastFightEndTime.get(id) ?? 0) + restMs),
+          ...athleteIds.map(
+            (id) => (athleteLastFightEndTime.get(id) ?? 0) + restMs,
+          ),
           matReady,
         );
 
@@ -433,7 +577,9 @@ export class ScheduleService {
                 for (const mat of mats) {
                   const matReady = matNextTime.get(mat.id) ?? baseTime;
                   const athleteReady = Math.max(
-                    ...athleteIds.map((id) => (athleteLastFightEndTime.get(id) ?? 0) + restMs),
+                    ...athleteIds.map(
+                      (id) => (athleteLastFightEndTime.get(id) ?? 0) + restMs,
+                    ),
                     matReady,
                   );
                   if (athleteReady < earliestStart) {
@@ -462,7 +608,8 @@ export class ScheduleService {
 
       const fightEndTime = earliestStart + boutMs;
       matNextTime.set(bestMatId, fightEndTime);
-      for (const id of athleteIds) athleteLastFightEndTime.set(id, fightEndTime);
+      for (const id of athleteIds)
+        athleteLastFightEndTime.set(id, fightEndTime);
 
       updates.push({
         id: fight.id,
@@ -518,6 +665,15 @@ export class ScheduleService {
     };
   }
 
+  // Manually relocate a fight to a new (mat, orderInMat) slot. Guards:
+  //   FIGHT_NOT_FOUND       — fight missing or wrong org.
+  //   FIGHT_NOT_SCHEDULABLE — fight isn't playable (BYE / already won / etc.).
+  //   EVENT_NOT_READY_FOR_SCHEDULE / EVENT_READ_ONLY / OVERRIDE_REASON_REQUIRED.
+  //   MAT_NOT_FOUND        — target mat missing or wrong event.
+  //   REST_CONSTRAINT_VIOLATION — moving here would put two of the same
+  //     athlete's fights within minRestMinutes (unless override).
+  // Inside the transaction: re-pack orderInMat for both target and source
+  // mats so there are no holes, then write an audit row.
   async moveFight(input: {
     organisationId: string;
     fightId: string;
@@ -539,6 +695,15 @@ export class ScheduleService {
         winnerAthleteId: fight.winnerAthleteId,
         status: fight.status,
       })
+    ) {
+      throw new Error('FIGHT_NOT_SCHEDULABLE');
+    }
+    // BF-17: isFightPlayable still treats IN_PROGRESS/PAUSED as playable, but a
+    // bout that's actively being contested must not be relocated unless an admin
+    // explicitly overrides.
+    if (
+      (fight.status === 'IN_PROGRESS' || fight.status === 'PAUSED') &&
+      !input.override
     ) {
       throw new Error('FIGHT_NOT_SCHEDULABLE');
     }
@@ -594,7 +759,10 @@ export class ScheduleService {
             })
           : [];
 
-      const insertAt = Math.max(0, Math.min(targetFights.length, input.toOrder - 1));
+      const insertAt = Math.max(
+        0,
+        Math.min(targetFights.length, input.toOrder - 1),
+      );
       const targetIds = targetFights.map((item) => item.id);
       targetIds.splice(insertAt, 0, fight.id);
 
@@ -657,6 +825,14 @@ export class ScheduleService {
    * Distributes fights into existing sessions by capacity.
    * Creates additional sessions automatically on overflow.
    */
+  // Quick non-time-aware variant: takes all schedulable fights and packs them
+  // into sessions by capacity ((sessionDurationSeconds) / (avgBout+buffer)),
+  // assigning orderInSession but NOT scheduledStartTime. Useful for the
+  // initial "split the day into chunks" step before running autoSchedule.
+  // Errors:
+  //   NO_SESSIONS / NO_SCHEDULABLE_FIGHTS                                → 400
+  //   EVENT_NOT_FOUND                                                    → 404
+  //   EVENT_NOT_READY_FOR_SCHEDULE / EVENT_READ_ONLY / OVERRIDE_REASON_REQUIRED
   async generateSchedule(input: {
     organisationId: string;
     eventId: string;
@@ -670,7 +846,11 @@ export class ScheduleService {
       where: { id: input.eventId, organisationId: input.organisationId },
     });
     if (!event) throw new Error('EVENT_NOT_FOUND');
-    this.assertScheduleMutable({ event, override: input.override, reason: input.reason ?? null });
+    this.assertScheduleMutable({
+      event,
+      override: input.override,
+      reason: input.reason ?? null,
+    });
 
     const sessions = await this.prisma.scheduleSession.findMany({
       where: { organisationId: input.organisationId, eventId: input.eventId },
@@ -685,14 +865,19 @@ export class ScheduleService {
           select: {
             categoryTemplateWeight: { select: { name: true, sortOrder: true } },
             eventAgeGroup: {
-              select: { categoryTemplateAgeGroup: { select: { name: true, sortOrder: true } } },
+              select: {
+                categoryTemplateAgeGroup: {
+                  select: { name: true, sortOrder: true },
+                },
+              },
             },
           },
         },
       },
     });
 
-    const { fights: orderedFights, diagnostics } = planAutoScheduleOrder(fights);
+    const { fights: orderedFights, diagnostics } =
+      planAutoScheduleOrder(fights);
     if (orderedFights.length === 0) throw new Error('NO_SCHEDULABLE_FIGHTS');
 
     const boutMs = (input.avgBoutSeconds + input.bufferSeconds) * 1000;
@@ -710,7 +895,10 @@ export class ScheduleService {
       sessionId: string;
       fights: string[]; // fight IDs in order
     };
-    const assignments: SessionAssignment[] = sessionList.map((s) => ({ sessionId: s.id, fights: [] }));
+    const assignments: SessionAssignment[] = sessionList.map((s) => ({
+      sessionId: s.id,
+      fights: [],
+    }));
 
     let sessionIdx = 0;
     for (const fight of orderedFights) {
@@ -748,43 +936,60 @@ export class ScheduleService {
       assignments[sessionIdx].fights.push(fight.id);
     }
 
-    // Clear all session assignments, then apply new ones in a single batch transaction
+    // Clear session assignments for reschedulable fights only, then apply new
+    // ones in a single batch transaction. BF-4: a blanket clear would orphan
+    // IN_PROGRESS/PAUSED/COMPLETE/CONFIRMED fights from their session mid-event,
+    // so we only touch not-yet-started fights with no result (the same set the
+    // planner reassigns).
     const writes: Prisma.PrismaPromise<unknown>[] = [
       this.prisma.fight.updateMany({
-        where: { organisationId: input.organisationId, eventId: input.eventId },
+        where: {
+          organisationId: input.organisationId,
+          eventId: input.eventId,
+          status: { in: ['QUEUED', 'ON_DECK'] },
+          winnerAthleteId: null,
+        },
         data: { sessionId: null, orderInSession: null },
       }),
     ];
     for (const assignment of assignments) {
       for (let i = 0; i < assignment.fights.length; i++) {
-        writes.push(this.prisma.fight.update({
-          where: { id: assignment.fights[i] },
-          data: { sessionId: assignment.sessionId, orderInSession: i + 1 },
-        }));
+        writes.push(
+          this.prisma.fight.update({
+            where: { id: assignment.fights[i] },
+            data: { sessionId: assignment.sessionId, orderInSession: i + 1 },
+          }),
+        );
       }
     }
-    writes.push(this.prisma.auditLog.create({
-      data: {
-        organisationId: input.organisationId,
-        eventId: input.eventId,
-        actorUserId: input.actorUserId,
-        action: 'SCHEDULE_AUTO_GENERATED',
-        entityType: 'event',
-        entityId: input.eventId,
-        after: {
-          sessionCount: assignments.length,
-          fightCount: orderedFights.length,
-          avgBoutSeconds: input.avgBoutSeconds,
-          bufferSeconds: input.bufferSeconds,
-          restGapDiagnostics: diagnostics,
-        } as Prisma.InputJsonValue,
-        override: input.override ?? false,
-        reason: input.reason ?? null,
-      },
-    }));
+    writes.push(
+      this.prisma.auditLog.create({
+        data: {
+          organisationId: input.organisationId,
+          eventId: input.eventId,
+          actorUserId: input.actorUserId,
+          action: 'SCHEDULE_AUTO_GENERATED',
+          entityType: 'event',
+          entityId: input.eventId,
+          after: {
+            sessionCount: assignments.length,
+            fightCount: orderedFights.length,
+            avgBoutSeconds: input.avgBoutSeconds,
+            bufferSeconds: input.bufferSeconds,
+            restGapDiagnostics: diagnostics,
+          } as Prisma.InputJsonValue,
+          override: input.override ?? false,
+          reason: input.reason ?? null,
+        },
+      }),
+    );
     await this.prisma.$transaction(writes);
 
-    return { sessionCount: assignments.length, fightCount: orderedFights.length, diagnostics };
+    return {
+      sessionCount: assignments.length,
+      fightCount: orderedFights.length,
+      diagnostics,
+    };
   }
 
   /**
@@ -792,6 +997,11 @@ export class ScheduleService {
    * insertAfterOrder: 0 = prepend, N = insert after Nth fight.
    * Returns gap violations (fightIds of athletes with < 10-fight gap).
    */
+  // Same overall shape as moveFight but for the session axis instead of the
+  // mat axis: changes (sessionId, orderInSession). Passing toSessionId=null
+  // detaches the fight from any session. Source + target sessions get re-packed
+  // so there are no holes. After committing, computes a gapViolations array
+  // (athletes whose two fights ended up too close together) for UI banners.
   async moveFightToSession(input: {
     organisationId: string;
     fightId: string;
@@ -806,27 +1016,78 @@ export class ScheduleService {
       include: { event: true },
     });
     if (!fight) throw new Error('FIGHT_NOT_FOUND');
-    this.assertScheduleMutable({ event: fight.event, override: input.override, reason: input.reason ?? null });
+    this.assertScheduleMutable({
+      event: fight.event,
+      override: input.override,
+      reason: input.reason ?? null,
+    });
+
+    // BF-17: a contested or finished fight must not be moved between sessions
+    // (corrupts the live running order / re-shuffles a decided bout).
+    if (
+      ['IN_PROGRESS', 'PAUSED', 'COMPLETE', 'CONFIRMED'].includes(
+        fight.status,
+      ) &&
+      !input.override
+    ) {
+      throw new Error('FIGHT_NOT_SCHEDULABLE');
+    }
+
+    // SEC-2 (IDOR): the destination session must belong to the SAME org+event as
+    // the fight. Without this, a fight could be attached to a foreign org/event
+    // session and that session's fight order repacked.
+    if (input.toSessionId) {
+      const targetSession = await this.prisma.scheduleSession.findFirst({
+        where: {
+          id: input.toSessionId,
+          organisationId: input.organisationId,
+          eventId: fight.eventId,
+        },
+        select: { id: true },
+      });
+      if (!targetSession) throw new Error('SESSION_NOT_FOUND');
+    }
 
     const fromSessionId = fight.sessionId;
 
-    // Fetch source, target, and all-event fights in parallel
+    // Fetch source, target, and all-event fights in parallel. All fight reads
+    // are tenant+event scoped so a session-id collision can't pull foreign rows.
     const [sourceFights, targetFights, allSessionFights] = await Promise.all([
       fromSessionId
         ? this.prisma.fight.findMany({
-            where: { sessionId: fromSessionId, id: { not: input.fightId } },
+            where: {
+              sessionId: fromSessionId,
+              organisationId: input.organisationId,
+              eventId: fight.eventId,
+              id: { not: input.fightId },
+            },
             orderBy: { orderInSession: 'asc' },
-            select: { id: true, orderInSession: true, redAthleteId: true, blueAthleteId: true },
+            select: {
+              id: true,
+              orderInSession: true,
+              redAthleteId: true,
+              blueAthleteId: true,
+            },
           })
         : Promise.resolve([]),
       input.toSessionId
         ? this.prisma.fight.findMany({
             where: {
               sessionId: input.toSessionId,
-              id: fromSessionId === input.toSessionId ? { not: input.fightId } : undefined,
+              organisationId: input.organisationId,
+              eventId: fight.eventId,
+              id:
+                fromSessionId === input.toSessionId
+                  ? { not: input.fightId }
+                  : undefined,
             },
             orderBy: { orderInSession: 'asc' },
-            select: { id: true, orderInSession: true, redAthleteId: true, blueAthleteId: true },
+            select: {
+              id: true,
+              orderInSession: true,
+              redAthleteId: true,
+              blueAthleteId: true,
+            },
           })
         : Promise.resolve([]),
       this.prisma.fight.findMany({
@@ -837,7 +1098,10 @@ export class ScheduleService {
           orderInSession: { not: null },
         },
         include: { scheduleSession: { select: { order: true } } },
-        orderBy: [{ scheduleSession: { order: 'asc' } }, { orderInSession: 'asc' }],
+        orderBy: [
+          { scheduleSession: { order: 'asc' } },
+          { orderInSession: 'asc' },
+        ],
       }),
     ]);
 
@@ -848,44 +1112,64 @@ export class ScheduleService {
     for (let i = 0; i < sourceFights.length; i++) {
       const newOrder = i + 1;
       if (sourceFights[i].orderInSession !== newOrder) {
-        writes.push(this.prisma.fight.update({ where: { id: sourceFights[i].id }, data: { orderInSession: newOrder } }));
+        writes.push(
+          this.prisma.fight.update({
+            where: { id: sourceFights[i].id },
+            data: { orderInSession: newOrder },
+          }),
+        );
       }
     }
 
     if (input.toSessionId === null) {
       // Unassign
-      writes.push(this.prisma.fight.update({
-        where: { id: input.fightId },
-        data: { sessionId: null, orderInSession: null },
-      }));
+      writes.push(
+        this.prisma.fight.update({
+          where: { id: input.fightId },
+          data: { sessionId: null, orderInSession: null },
+        }),
+      );
     } else {
       // Insert into target session
-      const insertAt = Math.max(0, Math.min(targetFights.length, input.insertAfterOrder));
+      const insertAt = Math.max(
+        0,
+        Math.min(targetFights.length, input.insertAfterOrder),
+      );
       const ids = targetFights.map((f) => f.id);
       ids.splice(insertAt, 0, input.fightId);
       for (let i = 0; i < ids.length; i++) {
-        writes.push(this.prisma.fight.update({
-          where: { id: ids[i] },
-          data: { sessionId: input.toSessionId, orderInSession: i + 1 },
-        }));
+        writes.push(
+          this.prisma.fight.update({
+            where: { id: ids[i] },
+            data: { sessionId: input.toSessionId, orderInSession: i + 1 },
+          }),
+        );
       }
     }
 
     // Audit write
-    writes.push(this.prisma.auditLog.create({
-      data: {
-        organisationId: input.organisationId,
-        eventId: fight.eventId,
-        actorUserId: input.actorUserId,
-        action: 'FIGHT_MOVED',
-        entityType: 'fight',
-        entityId: input.fightId,
-        before: { sessionId: fromSessionId, orderInSession: fight.orderInSession } as Prisma.InputJsonValue,
-        after: { sessionId: input.toSessionId, insertAfterOrder: input.insertAfterOrder } as Prisma.InputJsonValue,
-        override: input.override ?? false,
-        reason: input.reason ?? null,
-      },
-    }));
+    writes.push(
+      this.prisma.auditLog.create({
+        data: {
+          organisationId: input.organisationId,
+          eventId: fight.eventId,
+          actorUserId: input.actorUserId,
+          action: 'FIGHT_MOVED',
+          entityType: 'fight',
+          entityId: input.fightId,
+          before: {
+            sessionId: fromSessionId,
+            orderInSession: fight.orderInSession,
+          } as Prisma.InputJsonValue,
+          after: {
+            sessionId: input.toSessionId,
+            insertAfterOrder: input.insertAfterOrder,
+          } as Prisma.InputJsonValue,
+          override: input.override ?? false,
+          reason: input.reason ?? null,
+        },
+      }),
+    );
 
     await this.prisma.$transaction(writes);
 
@@ -896,16 +1180,48 @@ export class ScheduleService {
   /**
    * Bulk-reorder sessions by providing session IDs in new order.
    */
+  // Re-numbers `order` on every session in input.sessionIds so the first
+  // entry becomes order=1, second becomes 2, etc.
   async reorderSessions(input: {
     organisationId: string;
     eventId: string;
     actorUserId: string;
     sessionIds: string[];
   }) {
+    // BF-16: reordering is a schedule mutation — reject on read-only events.
+    const event = await this.prisma.event.findFirst({
+      where: { id: input.eventId, organisationId: input.organisationId },
+    });
+    if (!event) throw new Error('EVENT_NOT_FOUND');
+    this.assertScheduleMutable({ event });
+
+    // SEC-1: every session id MUST belong to this org+event before we touch it.
+    // The controller does NOT pre-validate the id set, so without this guard a
+    // SCHEDULE_MANAGE admin could rewrite another org's session ordering with
+    // guessed/leaked CUIDs (cross-tenant IDOR). Reject the whole batch if any
+    // id is foreign, then write with a tenant-scoped updateMany.
+    const uniqueIds = [...new Set(input.sessionIds)];
+    if (uniqueIds.length > 0) {
+      const owned = await this.prisma.scheduleSession.findMany({
+        where: {
+          id: { in: uniqueIds },
+          organisationId: input.organisationId,
+          eventId: input.eventId,
+        },
+        select: { id: true },
+      });
+      if (owned.length !== uniqueIds.length) {
+        throw new Error('SESSION_NOT_FOUND');
+      }
+    }
     await this.prisma.$transaction(
       input.sessionIds.map((id, idx) =>
-        this.prisma.scheduleSession.update({
-          where: { id },
+        this.prisma.scheduleSession.updateMany({
+          where: {
+            id,
+            organisationId: input.organisationId,
+            eventId: input.eventId,
+          },
           data: { order: idx + 1 },
         }),
       ),
@@ -917,7 +1233,9 @@ export class ScheduleService {
       action: 'SCHEDULE_AUTO_GENERATED',
       entityType: 'event',
       entityId: input.eventId,
-      after: { reorderedSessions: input.sessionIds } as unknown as Prisma.JsonValue,
+      after: {
+        reorderedSessions: input.sessionIds,
+      } as unknown as Prisma.JsonValue,
       override: false,
       reason: null,
     });
@@ -928,6 +1246,9 @@ export class ScheduleService {
    * orderedFightIds must contain all fight IDs currently in the session.
    * Recalculates orderInSession as sequential 1,2,3...
    */
+  // Strict input contract: orderedFightIds must equal the session's current
+  // fight set (no adds, no drops). Otherwise → FIGHT_IDS_MISMATCH.
+  // SESSION_NOT_FOUND / EVENT_NOT_FOUND surface as 404s in the controller.
   async updateFightOrder(input: {
     organisationId: string;
     sessionId: string;
@@ -953,26 +1274,37 @@ export class ScheduleService {
     const inputIds = new Set(input.orderedFightIds);
 
     // Validate: input must contain exactly the same fight IDs as the session
-    if (currentIds.size !== inputIds.size || ![...currentIds].every((id) => inputIds.has(id))) {
+    if (
+      currentIds.size !== inputIds.size ||
+      ![...currentIds].every((id) => inputIds.has(id))
+    ) {
       throw new Error('FIGHT_IDS_MISMATCH');
     }
 
     const writes: Prisma.PrismaPromise<unknown>[] = input.orderedFightIds.map(
-      (id, i) => this.prisma.fight.update({ where: { id }, data: { orderInSession: i + 1 } }),
+      (id, i) =>
+        this.prisma.fight.update({
+          where: { id },
+          data: { orderInSession: i + 1 },
+        }),
     );
-    writes.push(this.prisma.auditLog.create({
-      data: {
-        organisationId: input.organisationId,
-        eventId: session.eventId,
-        actorUserId: input.actorUserId,
-        action: 'FIGHT_ORDER_UPDATED',
-        entityType: 'scheduleSession',
-        entityId: input.sessionId,
-        after: { orderedFightIds: input.orderedFightIds } as Prisma.InputJsonValue,
-        override: false,
-        reason: null,
-      },
-    }));
+    writes.push(
+      this.prisma.auditLog.create({
+        data: {
+          organisationId: input.organisationId,
+          eventId: session.eventId,
+          actorUserId: input.actorUserId,
+          action: 'FIGHT_ORDER_UPDATED',
+          entityType: 'scheduleSession',
+          entityId: input.sessionId,
+          after: {
+            orderedFightIds: input.orderedFightIds,
+          } as Prisma.InputJsonValue,
+          override: false,
+          reason: null,
+        },
+      }),
+    );
     await this.prisma.$transaction(writes);
 
     return { ok: true, eventId: session.eventId };
@@ -982,13 +1314,16 @@ export class ScheduleService {
    * Returns sessions with their ordered fights for an event.
    * This is the authoritative schedule view.
    */
-  async getEventSchedule(params: {
-    organisationId: string;
-    eventId: string;
-  }) {
+  // Composite endpoint backing GET /api/schedule/event — returns the sessions
+  // array with each session's fights pre-grouped + sorted by orderInSession.
+  // Joins athlete + category metadata so the UI doesn't need a second pass.
+  async getEventSchedule(params: { organisationId: string; eventId: string }) {
     const [sessions, fights] = await Promise.all([
       this.prisma.scheduleSession.findMany({
-        where: { organisationId: params.organisationId, eventId: params.eventId },
+        where: {
+          organisationId: params.organisationId,
+          eventId: params.eventId,
+        },
         orderBy: { order: 'asc' },
       }),
       this.prisma.fight.findMany({
@@ -999,14 +1334,22 @@ export class ScheduleService {
         },
         include: {
           redAthlete: { select: { id: true, firstName: true, lastName: true } },
-          blueAthlete: { select: { id: true, firstName: true, lastName: true } },
-          winnerAthlete: { select: { id: true, firstName: true, lastName: true } },
+          blueAthlete: {
+            select: { id: true, firstName: true, lastName: true },
+          },
+          winnerAthlete: {
+            select: { id: true, firstName: true, lastName: true },
+          },
           eventWeightCategory: {
             select: {
-              categoryTemplateWeight: { select: { name: true, sortOrder: true } },
+              categoryTemplateWeight: {
+                select: { name: true, sortOrder: true },
+              },
               eventAgeGroup: {
                 select: {
-                  categoryTemplateAgeGroup: { select: { name: true, sortOrder: true } },
+                  categoryTemplateAgeGroup: {
+                    select: { name: true, sortOrder: true },
+                  },
                 },
               },
             },
@@ -1032,8 +1375,16 @@ export class ScheduleService {
     }));
   }
 
+  // Slot-distance gap check (no time math). For every fight in event order,
+  // if any of its athletes also appeared within the previous 10 fight slots,
+  // flag this fight as a violation. Used to enforce the "at least 10 fights
+  // between consecutive bouts for the same athlete" festival rule.
   private checkGapViolations(
-    fights: Array<{ id: string; redAthleteId: string | null; blueAthleteId: string | null }>,
+    fights: Array<{
+      id: string;
+      redAthleteId: string | null;
+      blueAthleteId: string | null;
+    }>,
   ): string[] {
     const lastIndexByAthlete = new Map<string, number>();
     const violatedFightIds = new Set<string>();
@@ -1051,6 +1402,12 @@ export class ScheduleService {
     return [...violatedFightIds];
   }
 
+  // Time-aware rest check for moveFight. Compares the candidate move's
+  // scheduledStartTime against the immediate neighbours on the target mat
+  // (orderInMat-1 and orderInMat). Returns true if any neighbour shares an
+  // athlete with the moving fight AND the gap is below minRestMinutes.
+  // Treats missing scheduledStartTime as worst-case (true) so we don't
+  // silently accept unschedulable inputs.
   private async hasImmediateRestViolation(input: {
     organisationId: string;
     eventId: string;
@@ -1092,11 +1449,13 @@ export class ScheduleService {
     });
 
     for (const neighbour of neighbours) {
-      const neighbourAthletes = [neighbour.redAthleteId, neighbour.blueAthleteId].filter(
-        Boolean,
-      ) as string[];
+      const neighbourAthletes = [
+        neighbour.redAthleteId,
+        neighbour.blueAthleteId,
+      ].filter(Boolean) as string[];
       if (neighbourAthletes.some((id) => movingAthletes.includes(id))) {
-        if (!neighbour.scheduledStartTime || !moving.scheduledStartTime) return true;
+        if (!neighbour.scheduledStartTime || !moving.scheduledStartTime)
+          return true;
         const diffMinutes =
           Math.abs(
             neighbour.scheduledStartTime.getTime() -

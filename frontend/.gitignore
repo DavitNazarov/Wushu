@@ -7,4 +7,5 @@ build/
 coverage/
 .env
 .env.*
+.env.sentry-build-plugin
 *.tsbuildinfo

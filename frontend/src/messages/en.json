@@ -2028,6 +2028,7 @@
     "setOnDeck": "Set on deck",
     "startFight": "Start fight",
     "resultSuccess": "Result saved",
+    "resultStale": "This fight was already scored by someone else. The view has been refreshed — please review before saving again.",
     "roundResultSaved": "Round result saved",
     "errorGeneric": "Action failed",
     "phaseRound": "Round {round}",

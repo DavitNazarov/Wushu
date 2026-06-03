@@ -4,7 +4,9 @@ import {
   LiveQueueRow,
 } from './live-queue.logic';
 
-function createRow(input: Partial<LiveQueueRow> & { id: string }): LiveQueueRow {
+function createRow(
+  input: Partial<LiveQueueRow> & { id: string },
+): LiveQueueRow {
   return {
     id: input.id,
     matId: input.matId ?? 'mat-1',
@@ -51,9 +53,26 @@ describe('live-queue.logic', () => {
 
   it('session-ordered fights sort before unassigned fights', () => {
     const board = deriveLiveQueueBoard([
-      createRow({ id: 'unassigned-1', matId: null, orderInMat: null, scheduleOrder: 1 }),
-      createRow({ id: 'session-2', matId: null, orderInMat: null, sessionOrder: 1, orderInSession: 2 }),
-      createRow({ id: 'session-1', matId: null, orderInMat: null, sessionOrder: 1, orderInSession: 1 }),
+      createRow({
+        id: 'unassigned-1',
+        matId: null,
+        orderInMat: null,
+        scheduleOrder: 1,
+      }),
+      createRow({
+        id: 'session-2',
+        matId: null,
+        orderInMat: null,
+        sessionOrder: 1,
+        orderInSession: 2,
+      }),
+      createRow({
+        id: 'session-1',
+        matId: null,
+        orderInMat: null,
+        sessionOrder: 1,
+        orderInSession: 1,
+      }),
     ]);
 
     // Session-assigned fights come first, ordered by session then position
@@ -64,9 +83,27 @@ describe('live-queue.logic', () => {
 
   it('orders fights across sessions: session 1 before session 2', () => {
     const board = deriveLiveQueueBoard([
-      createRow({ id: 's2-f1', matId: null, orderInMat: null, sessionOrder: 2, orderInSession: 1 }),
-      createRow({ id: 's1-f1', matId: null, orderInMat: null, sessionOrder: 1, orderInSession: 1 }),
-      createRow({ id: 's1-f2', matId: null, orderInMat: null, sessionOrder: 1, orderInSession: 2 }),
+      createRow({
+        id: 's2-f1',
+        matId: null,
+        orderInMat: null,
+        sessionOrder: 2,
+        orderInSession: 1,
+      }),
+      createRow({
+        id: 's1-f1',
+        matId: null,
+        orderInMat: null,
+        sessionOrder: 1,
+        orderInSession: 1,
+      }),
+      createRow({
+        id: 's1-f2',
+        matId: null,
+        orderInMat: null,
+        sessionOrder: 1,
+        orderInSession: 2,
+      }),
     ]);
 
     expect(board.current?.id).toBe('s1-f1');

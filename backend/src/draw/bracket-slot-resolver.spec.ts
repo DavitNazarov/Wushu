@@ -1,6 +1,10 @@
 import { resolveBracketParticipantSlot } from './bracket-slot-resolver';
 import type { BracketParticipantView } from './brackets.types';
 
+// Pin the four-way slot resolution decision tree (ATHLETE / WINNER_PLACEHOLDER /
+// BYE / TBD) since the bracket UI shape depends on it directly.
+
+// Tiny athlete-fixture builder — keeps the assertions readable.
 function athlete(name: string): BracketParticipantView {
   return {
     athleteId: name.toLowerCase().replace(/\s+/g, '_'),
@@ -67,7 +71,8 @@ describe('resolveBracketParticipantSlot', () => {
       participant: null,
       competitionFormat: 'SINGLE_ELIMINATION',
       openingRound: 1,
-      getSourceFight: (sourceBoutNo) => (sourceBoutNo === 1 ? { id: 'sf_1' } : null),
+      getSourceFight: (sourceBoutNo) =>
+        sourceBoutNo === 1 ? { id: 'sf_1' } : null,
     });
     const semifinalBlueSlot = resolveBracketParticipantSlot({
       side: 'blue',
@@ -80,7 +85,8 @@ describe('resolveBracketParticipantSlot', () => {
       participant: null,
       competitionFormat: 'SINGLE_ELIMINATION',
       openingRound: 1,
-      getSourceFight: (sourceBoutNo) => (sourceBoutNo === 2 ? { id: 'qf_2' } : null),
+      getSourceFight: (sourceBoutNo) =>
+        sourceBoutNo === 2 ? { id: 'qf_2' } : null,
     });
 
     expect(finalRedSlot.kind).toBe('WINNER_PLACEHOLDER');

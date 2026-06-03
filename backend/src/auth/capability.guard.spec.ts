@@ -29,9 +29,9 @@ function makeContext(input: {
   return {
     getClass: () => input.controller.constructor,
     getHandler: () =>
-      (
-        input.controller as Record<string, (...args: unknown[]) => unknown>
-      )[input.handlerName],
+      (input.controller as Record<string, (...args: unknown[]) => unknown>)[
+        input.handlerName
+      ],
     switchToHttp: () => ({
       getRequest: () => ({
         auth: input.capabilities

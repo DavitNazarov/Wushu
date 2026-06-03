@@ -4,9 +4,8 @@ import { ReactNode, useState, useCallback } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { usePathname } from 'next/navigation';
 import { Calendar, LayoutDashboard, UserCircle2, Users, Menu } from 'lucide-react';
-import { TopbarToggles } from './TopbarToggles';
 import { LogoutButton } from './LogoutButton';
-import { MobileNav } from './MobileNav';
+import { TopbarActions } from './TopbarActions';
 import { AppSidebar } from './AppSidebar';
 import type { SidebarNavSection } from './AppSidebar';
 
@@ -83,8 +82,7 @@ export function CoachShell({ children }: CoachShellProps) {
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <MobileNav variant="dashboard" />
-            <TopbarToggles />
+            <TopbarActions />
           </div>
         </header>
 

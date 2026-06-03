@@ -11,6 +11,10 @@ import { isEventReadOnly } from '../events/lifecycle-rules';
 import { DrawReadinessService } from './draw.readiness.service';
 import { resolveCompetitionFormat } from './competition-format';
 
+// Build a human-readable + globally-unique category code for a bracket.
+// Format: AGE_DIVISION_WEIGHT_<EWCID>. We tail the eventWeightCategory id so
+// brackets with identical age+sex+weight in different events don't collide.
+// Division: F (female) / M (male) / X (unspecified — open / mixed).
 function toBracketCategoryCode(input: {
   ageGroupCode: string;
   sex: 'MALE' | 'FEMALE' | null;
@@ -18,13 +22,18 @@ function toBracketCategoryCode(input: {
   eventWeightCategoryId: string;
 }): string {
   const age = input.ageGroupCode.trim().toUpperCase();
-  const division = input.sex === 'FEMALE' ? 'F' : input.sex === 'MALE' ? 'M' : 'X';
+  const division =
+    input.sex === 'FEMALE' ? 'F' : input.sex === 'MALE' ? 'M' : 'X';
   const weight = input.weightName.trim().replace(/\s+/g, '_').toUpperCase();
 
   // Keep code readable but guarantee uniqueness per event category.
   return `${age}_${division}_${weight}_${input.eventWeightCategoryId}`;
 }
 
+// Bracket generation service. Two main entry points:
+//   - executeDraw: produce brackets + fights for every eligible category
+//   - resetDraw  : tear them down so the admin can redraw
+// Plus list/getBracket reads consumed by the controller.
 @Injectable()
 export class DrawService {
   constructor(
@@ -33,6 +42,12 @@ export class DrawService {
     private readonly readiness: DrawReadinessService,
   ) {}
 
+  // Detect whether redoing the draw would clobber competition state already
+  // in flight. A "yes" answer comes from either:
+  //   - any fight with assigned athletes that has progressed past PENDING
+  //     OR has a winner/loser/method/confirmation recorded, OR
+  //   - any timer in RUNNING or PAUSED state on this event.
+  // Used by executeDraw to short-circuit redraws once results exist.
   private async hasUnsafeCompetitionProgress(input: {
     organisationId: string;
     eventId: string;
@@ -44,7 +59,11 @@ export class DrawService {
         redAthleteId: { not: null },
         blueAthleteId: { not: null },
         OR: [
-          { status: { in: ['ON_DECK', 'IN_PROGRESS', 'PAUSED', 'COMPLETE', 'CONFIRMED'] } },
+          {
+            status: {
+              in: ['ON_DECK', 'IN_PROGRESS', 'PAUSED', 'COMPLETE', 'CONFIRMED'],
+            },
+          },
           { winnerAthleteId: { not: null } },
           { loserAthleteId: { not: null } },
           { winMethod: { not: null } },
@@ -69,6 +88,22 @@ export class DrawService {
     return Boolean(activeTimer);
   }
 
+  // Run the draw. High-level pipeline:
+  //   1. Verify event exists, isn't read-only (unless override+reason).
+  //   2. If brackets already exist:
+  //        - No override → DRAW_ALREADY_EXISTS
+  //        - Override but unsafe progress / published / LIVE / COMPLETED →
+  //          DRAW_MUTATION_BLOCKED
+  //   3. Run DrawReadinessService.getOverview; bail unless override on any
+  //      critical validation failure.
+  //   4. For each eligible category:
+  //        - Decide format (single-elim vs round-robin) via resolveCompetitionFormat.
+  //        - seededShuffle the eligible registrations using the provided seed.
+  //        - Build the bracket + fight rows.
+  //        - Apply club-separation in round 1 if requested.
+  //   5. Wrap everything in one transaction so a mid-category failure
+  //      rolls back the whole draw.
+  // Detailed error mapping lives in the controller (see executeDraw above).
   async executeDraw(input: {
     organisationId: string;
     eventId: string;
@@ -187,8 +222,10 @@ export class DrawService {
         byCat.set(key, {
           eventWeightCategoryId: key,
           categoryCode: toBracketCategoryCode({
-            ageGroupCode: r.eventWeightCategory.eventAgeGroup.categoryTemplateAgeGroup.code,
-            sex: r.eventWeightCategory.eventAgeGroup.categoryTemplateAgeGroup.sex,
+            ageGroupCode:
+              r.eventWeightCategory.eventAgeGroup.categoryTemplateAgeGroup.code,
+            sex: r.eventWeightCategory.eventAgeGroup.categoryTemplateAgeGroup
+              .sex,
             weightName: r.eventWeightCategory.categoryTemplateWeight.name,
             eventWeightCategoryId: key,
           }),
@@ -207,153 +244,170 @@ export class DrawService {
 
     const seed = input.seed ?? Date.now() % 2147483647;
 
-    return this.prisma.$transaction(async (tx) => {
-      if (existingBracketCount > 0) {
-        await tx.timerState.deleteMany({
-          where: {
-            organisationId: input.organisationId,
-            fight: { eventId: input.eventId },
+    return this.prisma.$transaction(
+      async (tx) => {
+        if (existingBracketCount > 0) {
+          await tx.timerState.deleteMany({
+            where: {
+              organisationId: input.organisationId,
+              fight: { eventId: input.eventId },
+            },
+          });
+          await tx.fight.deleteMany({
+            where: {
+              organisationId: input.organisationId,
+              eventId: input.eventId,
+            },
+          });
+          await tx.bracket.deleteMany({
+            where: {
+              organisationId: input.organisationId,
+              eventId: input.eventId,
+            },
+          });
+        }
+
+        const brackets: Prisma.BracketGetPayload<{
+          include: { fights: true };
+        }>[] = [];
+
+        for (const catGroup of byCat.values()) {
+          const {
+            regs,
+            eventWeightCategoryId,
+            roundDurationSeconds,
+            categoryCode,
+          } = catGroup;
+          const uniqueAthleteIds = [...new Set(regs.map((r) => r.athlete.id))];
+
+          let athleteIds = seededShuffle(uniqueAthleteIds, seed);
+          if (input.sameClubSeparation) {
+            athleteIds = this.separateSameClub(
+              athleteIds,
+              regs.map((r) => ({ id: r.athlete.id, clubId: r.athlete.clubId })),
+            );
+          }
+
+          const bracket = await tx.bracket.create({
+            data: {
+              organisationId: input.organisationId,
+              eventId: input.eventId,
+              categoryCode,
+              seed,
+            },
+          });
+
+          const competitionFormat = resolveCompetitionFormat({
+            eligibleAthletesCount: athleteIds.length,
+          });
+
+          const bouts =
+            competitionFormat === 'ROUND_ROBIN'
+              ? buildRoundRobinBracket(athleteIds)
+              : buildSingleElimBracket(athleteIds);
+          await tx.fight.createMany({
+            data: bouts.map((bout) => ({
+              organisationId: input.organisationId,
+              eventId: input.eventId,
+              bracketId: bracket.id,
+              categoryCode,
+              eventWeightCategoryId,
+              roundDurationSeconds,
+              round: bout.round,
+              boutNo: bout.boutNo,
+              redAthleteId: bout.redId ?? null,
+              blueAthleteId: bout.blueId ?? null,
+              status: 'QUEUED',
+            })),
+          });
+
+          if (competitionFormat !== 'ROUND_ROBIN') {
+            await this.linkFightDependencies(tx, bracket.id);
+            await this.autoConfirmByes(tx, bracket.id);
+          }
+
+          const fullBracket = await tx.bracket.findUnique({
+            where: { id: bracket.id },
+            include: { fights: true },
+          });
+          if (fullBracket) brackets.push(fullBracket);
+        }
+
+        await tx.event.update({
+          where: { id: input.eventId },
+          data: {
+            lifecycle:
+              event.publishTimingPolicyCode === 'IMMEDIATE_AFTER_DRAW'
+                ? 'PUBLISHED'
+                : 'DRAWN',
+            published:
+              event.publishTimingPolicyCode === 'IMMEDIATE_AFTER_DRAW'
+                ? true
+                : undefined,
           },
         });
-        await tx.fight.deleteMany({
-          where: { organisationId: input.organisationId, eventId: input.eventId },
-        });
-        await tx.bracket.deleteMany({
-          where: { organisationId: input.organisationId, eventId: input.eventId },
-        });
-      }
 
-      const brackets: Prisma.BracketGetPayload<{
-        include: { fights: true };
-      }>[] = [];
-
-      for (const catGroup of byCat.values()) {
-        const { regs, eventWeightCategoryId, roundDurationSeconds, categoryCode } =
-          catGroup;
-        const uniqueAthleteIds = [...new Set(regs.map((r) => r.athlete.id))];
-
-        let athleteIds = seededShuffle(uniqueAthleteIds, seed);
-        if (input.sameClubSeparation) {
-          athleteIds = this.separateSameClub(
-            athleteIds,
-            regs.map((r) => ({ id: r.athlete.id, clubId: r.athlete.clubId })),
+        if (event.publishTimingPolicyCode === 'IMMEDIATE_AFTER_DRAW') {
+          await this.audit.write(
+            {
+              organisationId: input.organisationId,
+              eventId: input.eventId,
+              actorUserId: input.actorUserId,
+              action: 'BRACKETS_PUBLISHED',
+              entityType: 'event',
+              entityId: input.eventId,
+              after: {
+                policy: event.publishTimingPolicyCode,
+                mode: 'AUTO_IMMEDIATE_AFTER_DRAW',
+              } as unknown as Prisma.JsonValue,
+              reason: input.reason ?? null,
+              override: input.override ?? false,
+            },
+            tx,
           );
         }
 
-        const bracket = await tx.bracket.create({
-          data: {
-            organisationId: input.organisationId,
-            eventId: input.eventId,
-            categoryCode,
-            seed,
-          },
-        });
-
-        const competitionFormat = resolveCompetitionFormat({
-          eligibleAthletesCount: athleteIds.length,
-        });
-
-        const bouts =
-          competitionFormat === 'ROUND_ROBIN'
-            ? buildRoundRobinBracket(athleteIds)
-            : buildSingleElimBracket(athleteIds);
-        await tx.fight.createMany({
-          data: bouts.map((bout) => ({
-            organisationId: input.organisationId,
-            eventId: input.eventId,
-            bracketId: bracket.id,
-            categoryCode,
-            eventWeightCategoryId,
-            roundDurationSeconds,
-            round: bout.round,
-            boutNo: bout.boutNo,
-            redAthleteId: bout.redId ?? null,
-            blueAthleteId: bout.blueId ?? null,
-            status: 'QUEUED',
-          })),
-        });
-
-        if (competitionFormat !== 'ROUND_ROBIN') {
-          await this.linkFightDependencies(tx, bracket.id);
-          await this.autoConfirmByes(tx, bracket.id);
-        }
-
-        const fullBracket = await tx.bracket.findUnique({
-          where: { id: bracket.id },
-          include: { fights: true },
-        });
-        if (fullBracket) brackets.push(fullBracket);
-      }
-
-      await tx.event.update({
-        where: { id: input.eventId },
-        data: {
-          lifecycle:
-            event.publishTimingPolicyCode === 'IMMEDIATE_AFTER_DRAW'
-              ? 'PUBLISHED'
-              : 'DRAWN',
-          published:
-            event.publishTimingPolicyCode === 'IMMEDIATE_AFTER_DRAW'
-              ? true
-              : undefined,
-        },
-      });
-
-      if (event.publishTimingPolicyCode === 'IMMEDIATE_AFTER_DRAW') {
         await this.audit.write(
           {
             organisationId: input.organisationId,
             eventId: input.eventId,
             actorUserId: input.actorUserId,
-            action: 'BRACKETS_PUBLISHED',
+            action:
+              existingBracketCount > 0 ? 'DRAW_REGENERATED' : 'DRAW_EXECUTED',
             entityType: 'event',
             entityId: input.eventId,
+            before:
+              existingBracketCount > 0
+                ? ({
+                    existingBracketCount,
+                  } as unknown as Prisma.JsonValue)
+                : null,
             after: {
-              policy: event.publishTimingPolicyCode,
-              mode: 'AUTO_IMMEDIATE_AFTER_DRAW',
+              seed,
+              categories: Array.from(byCat.values()).map((group) => ({
+                eventWeightCategoryId: group.eventWeightCategoryId,
+                categoryCode: group.categoryCode,
+                athleteCount: group.regs.length,
+              })),
+              totalAthletes: registrations.length,
+              override: input.override ?? false,
             } as unknown as Prisma.JsonValue,
             reason: input.reason ?? null,
             override: input.override ?? false,
           },
           tx,
         );
-      }
 
-      await this.audit.write(
-        {
-          organisationId: input.organisationId,
-          eventId: input.eventId,
-          actorUserId: input.actorUserId,
-          action:
-            existingBracketCount > 0 ? 'DRAW_REGENERATED' : 'DRAW_EXECUTED',
-          entityType: 'event',
-          entityId: input.eventId,
-          before:
-            existingBracketCount > 0
-              ? ({
-                  existingBracketCount,
-                } as unknown as Prisma.JsonValue)
-              : null,
-          after: {
-            seed,
-            categories: Array.from(byCat.values()).map((group) => ({
-              eventWeightCategoryId: group.eventWeightCategoryId,
-              categoryCode: group.categoryCode,
-              athleteCount: group.regs.length,
-            })),
-            totalAthletes: registrations.length,
-            override: input.override ?? false,
-          } as unknown as Prisma.JsonValue,
-          reason: input.reason ?? null,
-          override: input.override ?? false,
-        },
-        tx,
-      );
-
-      return { brackets, seed };
-    }, { timeout: 30000 });
+        return { brackets, seed };
+      },
+      { timeout: 30000 },
+    );
   }
 
+  // Tear down all bracket+fight rows for an event and reset the lifecycle
+  // back to WEIGH_IN_COMPLETED so a fresh draw can run. Always requires
+  // override+reason — destructive. DRAW_MUTATION_BLOCKED if any fight has
+  // progressed, the event is published, or it's already LIVE/COMPLETED.
   async resetDraw(input: {
     organisationId: string;
     eventId: string;
@@ -382,43 +436,54 @@ export class DrawService {
       throw new Error('DRAW_MUTATION_BLOCKED');
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.timerState.deleteMany({
-        where: {
-          organisationId: input.organisationId,
-          fight: { eventId: input.eventId },
-        },
-      });
-      await tx.fight.deleteMany({
-        where: { organisationId: input.organisationId, eventId: input.eventId },
-      });
-      await tx.bracket.deleteMany({
-        where: { organisationId: input.organisationId, eventId: input.eventId },
-      });
+    await this.prisma.$transaction(
+      async (tx) => {
+        await tx.timerState.deleteMany({
+          where: {
+            organisationId: input.organisationId,
+            fight: { eventId: input.eventId },
+          },
+        });
+        await tx.fight.deleteMany({
+          where: {
+            organisationId: input.organisationId,
+            eventId: input.eventId,
+          },
+        });
+        await tx.bracket.deleteMany({
+          where: {
+            organisationId: input.organisationId,
+            eventId: input.eventId,
+          },
+        });
 
-      await tx.event.update({
-        where: { id: input.eventId },
-        data: { lifecycle: 'WEIGH_IN_COMPLETED' },
-      });
+        await tx.event.update({
+          where: { id: input.eventId },
+          data: { lifecycle: 'WEIGH_IN_COMPLETED' },
+        });
 
-      await this.audit.write(
-        {
-          organisationId: input.organisationId,
-          eventId: input.eventId,
-          actorUserId: input.actorUserId,
-          action: 'DRAW_RESET',
-          entityType: 'event',
-          entityId: input.eventId,
-          reason: input.reason,
-          override: true,
-        },
-        tx,
-      );
-    }, { timeout: 30000 });
+        await this.audit.write(
+          {
+            organisationId: input.organisationId,
+            eventId: input.eventId,
+            actorUserId: input.actorUserId,
+            action: 'DRAW_RESET',
+            entityType: 'event',
+            entityId: input.eventId,
+            reason: input.reason,
+            override: true,
+          },
+          tx,
+        );
+      },
+      { timeout: 30000 },
+    );
 
     return { ok: true };
   }
 
+  // List every bracket in an event with its fight tree inlined.
+  // Ordered by categoryCode so the UI gets a stable, grouped list.
   async listBrackets(organisationId: string, eventId: string) {
     return this.prisma.bracket.findMany({
       where: { organisationId, eventId },
@@ -442,6 +507,8 @@ export class DrawService {
     });
   }
 
+  // Single-bracket lookup with the full fight tree. Returns null when the
+  // bracket doesn't exist OR isn't in the caller's org.
   async getBracket(organisationId: string, bracketId: string) {
     return this.prisma.bracket.findFirst({
       where: { id: bracketId, organisationId },
@@ -464,6 +531,14 @@ export class DrawService {
     });
   }
 
+  // Walk the new bracket and auto-confirm BYE matchups: any fight in round 1
+  // (or any subsequent round, once propagation completes) with only one
+  // athlete assigned is converted to a CONFIRMED win-by-WO. The loop runs
+  // until no new auto-confirmations happen — propagating winners can create
+  // fresh BYE situations in the next round.
+  //
+  // Skipped when the empty slot is fed by an upstream fight (nextFightSlot
+  // pointing here) — that's an unresolved dependency, NOT a real BYE.
   private async autoConfirmByes(
     tx: Prisma.TransactionClient,
     bracketId: string,
@@ -520,6 +595,11 @@ export class DrawService {
     }
   }
 
+  // After building all fight rows, wire each one's nextFightId/nextFightSlot
+  // to the fight in the next round that will receive its winner. The slot
+  // alternates RED/BLUE based on whether this fight's boutNo is odd/even —
+  // standard single-elim bracket math. Updates are batched in parallel
+  // because they have no inter-dependencies.
   private async linkFightDependencies(
     tx: Prisma.TransactionClient,
     bracketId: string,
@@ -555,6 +635,10 @@ export class DrawService {
     );
   }
 
+  // Used by autoConfirmByes: take a freshly-decided fight (BYE walkover) and
+  // copy the winner into the next round's matching slot. Idempotent — if the
+  // slot already holds the winner, we no-op. Returns null when there's no
+  // next fight (already at the final) or the data is incomplete.
   private async propagateWinnerToNextFight(
     tx: Prisma.TransactionClient,
     fight: {
@@ -589,6 +673,11 @@ export class DrawService {
     });
   }
 
+  // Greedy reordering pass that prevents two adjacent athletes in the seed
+  // list from sharing a club — keeps clubmates from meeting in round 1.
+  // Picks the next athlete whose clubId differs from the previous output.
+  // When no remaining athlete differs (everyone left shares the trailing
+  // club), gives up and flushes whatever's left. Imperfect but cheap.
   private separateSameClub(
     athleteIds: string[],
     athletes: Array<{ id: string; clubId: string | null }>,

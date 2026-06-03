@@ -10,11 +10,16 @@ import {
   isWeighInComplete,
 } from './weighin-completion.helper';
 
+// Loose shape for the JSON `dates` blob on an Event row. We only need
+// registrationDays here; the index signature keeps TS happy with whatever
+// else might live on the blob.
 interface EventDates {
   registrationDays?: string[];
   [key: string]: unknown;
 }
 
+// Minimal row shape we need to make an auto-advance decision. Pulled with a
+// narrow `select` so we don't drag the entire Event row through this hot path.
 type EventCandidate = {
   id: string;
   name: string;
@@ -31,6 +36,10 @@ type EventCandidate = {
   competitionEndDate: Date;
 };
 
+// Background service that walks events through their lifecycle automatically
+// based on dates and weigh-in completion. Drives the system without admin
+// intervention so events naturally REG_OPEN → LOCKED → WEIGHIN → ... → COMPLETED.
+// Runs hourly via cron and also opportunistically from EventsService reads.
 @Injectable()
 export class EventStageAutomationService {
   private readonly logger = new Logger(EventStageAutomationService.name);
@@ -41,6 +50,9 @@ export class EventStageAutomationService {
   ) {}
 
   /** Runs at minute 5 of every hour (e.g. 00:05, 01:05 …) */
+  // Cron entry point — scheduled via NestScheduleModule wired in AppModule.
+  // Picked an off-hour offset (xx:05) to avoid clashing with other periodic
+  // jobs that tend to run on the hour.
   @Cron('0 5 * * * *')
   async runHourlyCheck(): Promise<void> {
     await this.checkAndAdvanceStages();
@@ -50,6 +62,10 @@ export class EventStageAutomationService {
    * Check a single specific event and advance it if conditions are met.
    * Used in read endpoints so pages are always up-to-date, even if cron missed a run.
    */
+  // Opportunistic single-event check called from EventsService.getById and
+  // getPublicOrRegistrableBySlug. Cheap enough (one indexed read + maybe one
+  // updateMany) that running it on each page load keeps the UI in sync without
+  // waiting for the next hourly cron tick.
   async maybeAutoAdvanceById(eventId: string): Promise<void> {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
@@ -79,6 +95,10 @@ export class EventStageAutomationService {
    * Scan all events eligible for auto-advance and apply transitions.
    * Called by the hourly cron and by the admin "run now" endpoint.
    */
+  // Filter: events where autoAdvanceStage=true AND lifecycle is one we can
+  // auto-progress, plus WEIGHIN and LIVE which always need evaluation (weigh-in
+  // completion + end-of-competition-day don't depend on autoAdvanceStage).
+  // Returns the number of events that actually changed lifecycle.
   async checkAndAdvanceStages(organisationId?: string): Promise<number> {
     const candidates = await this.prisma.event.findMany({
       where: {
@@ -87,7 +107,13 @@ export class EventStageAutomationService {
           {
             autoAdvanceStage: true,
             lifecycle: {
-              in: ['REG_OPEN', 'LOCKED', 'WEIGH_IN_COMPLETED', 'DRAWN', 'PUBLISHED'],
+              in: [
+                'REG_OPEN',
+                'LOCKED',
+                'WEIGH_IN_COMPLETED',
+                'DRAWN',
+                'PUBLISHED',
+              ],
             },
           },
           { lifecycle: 'WEIGHIN' },
@@ -130,6 +156,15 @@ export class EventStageAutomationService {
    * Core logic: evaluate one event and update stage if conditions are met.
    * Returns true if the stage was changed.
    */
+  // Per-state rules, in order:
+  //   REG_OPEN              → LOCKED                when registration window is CLOSED
+  //   LOCKED                → WEIGHIN               when today >= weighInStartDate
+  //   WEIGHIN               → WEIGH_IN_COMPLETED    when every non-withdrawn registration has a final status
+  //   WEIGH_IN_COMPLETED    → DRAWN                 unconditionally (just gates publish)
+  //   DRAWN | PUBLISHED     → LIVE                  when today >= competitionStartDate
+  //   LIVE                  → COMPLETED             when today > competitionEndDate
+  // All date comparisons happen in the event's timezone (fallback Asia/Tbilisi).
+  // Errors are swallowed and logged — never block other events in the loop.
   private async tryAdvanceEventRecord(event: EventCandidate): Promise<boolean> {
     try {
       const timezone = event.timezone || 'Asia/Tbilisi';
@@ -171,6 +206,9 @@ export class EventStageAutomationService {
       }
 
       if (event.lifecycle === 'WEIGHIN') {
+        // BF-7: settle any lapsed reweigh / one-hour windows first, otherwise a
+        // stalled non-final REWEIGH_ALLOWED status blocks completion forever.
+        await this.resolveExpiredReweighWindows(event.id, event.organisationId);
         const completed = await this.hasCompletedWeighIn(event.id);
         if (!completed) return false;
 
@@ -237,6 +275,10 @@ export class EventStageAutomationService {
     }
   }
 
+  // True when every non-withdrawn registration for this event has reached a
+  // final weigh-in status (PASSED / FAILED / etc.). On false, logs a debug
+  // sample of the holdouts so admins can see which registrations are blocking
+  // the WEIGHIN → WEIGH_IN_COMPLETED transition.
   private async hasCompletedWeighIn(eventId: string): Promise<boolean> {
     const registrations = await this.prisma.registration.findMany({
       where: {
@@ -275,7 +317,94 @@ export class EventStageAutomationService {
     return complete;
   }
 
-  private getWeighInStartDate(event: EventCandidate, timezone: string): string | null {
+  // BF-7: a reweigh / one-hour window that lapsed without resolution leaves the
+  // registration parked in the non-final REWEIGH_ALLOWED state, which blocks
+  // WEIGHIN → WEIGH_IN_COMPLETED indefinitely (and there is no operator action
+  // that auto-fires at the deadline). Auto-resolve every expired window to its
+  // terminal decision (DISQUALIFIED) so a stalled reweigh can't freeze the event.
+  private async resolveExpiredReweighWindows(
+    eventId: string,
+    organisationId: string,
+  ): Promise<number> {
+    const now = new Date();
+    const expired = await this.prisma.weighInAttempt.findMany({
+      where: {
+        eventId,
+        organisationId,
+        decision: { in: ['ONE_HOUR', 'REWEIGH'] },
+        resolvedAt: null,
+        deadlineAt: { not: null, lt: now },
+        registration: { weighInStatus: 'REWEIGH_ALLOWED' },
+      },
+      select: { id: true, registrationId: true },
+    });
+
+    let resolved = 0;
+    for (const attempt of expired) {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          // Re-check inside the tx so we never clobber a window an operator
+          // settled between our read and this write.
+          const fresh = await tx.weighInAttempt.findFirst({
+            where: {
+              id: attempt.id,
+              resolvedAt: null,
+              registration: { weighInStatus: 'REWEIGH_ALLOWED' },
+            },
+            select: { id: true },
+          });
+          if (!fresh) return;
+
+          await tx.weighInAttempt.update({
+            where: { id: attempt.id },
+            data: { resolvedAt: now, resolvedAction: 'AUTO_DQ_DEADLINE' },
+          });
+          await tx.registration.update({
+            where: { id: attempt.registrationId },
+            data: { status: 'REJECTED', weighInStatus: 'DISQUALIFIED' },
+          });
+          await this.audit.write(
+            {
+              organisationId,
+              eventId,
+              actorUserId: null,
+              action: 'WEIGHIN_REWEIGH_DEADLINE_AUTO_DQ',
+              entityType: 'weighin',
+              entityId: attempt.id,
+              before: null,
+              after: {
+                reason: 'reweigh window expired',
+              } as unknown as Prisma.JsonValue,
+              reason: 'Auto-DQ: reweigh deadline passed with no resolution',
+              override: true,
+            },
+            tx,
+          );
+          resolved += 1;
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to auto-resolve expired reweigh attempt ${attempt.id}: ${String(err)}`,
+        );
+      }
+    }
+
+    if (resolved > 0) {
+      this.logger.log(
+        `Auto-resolved ${resolved} expired reweigh window(s) for event ${eventId}`,
+      );
+    }
+    return resolved;
+  }
+
+  // Resolve the start-of-weigh-in day (YYYY-MM-DD) for this event in its
+  // timezone. Prefers the canonical weighInStartDate column; falls back to the
+  // earliest entry in dates.registrationDays for older events that still use
+  // the legacy JSON-blob date format.
+  private getWeighInStartDate(
+    event: EventCandidate,
+    timezone: string,
+  ): string | null {
     if (event.weighInStartDate) {
       return formatInTimeZone(event.weighInStartDate, timezone, 'yyyy-MM-dd');
     }
@@ -285,6 +414,11 @@ export class EventStageAutomationService {
     return [...weighInDays].sort()[0];
   }
 
+  // Single point of mutation for auto-advance. Uses updateMany with both id
+  // AND from-lifecycle in the where-clause as an optimistic lock: if another
+  // process raced us and already moved the event past `from`, the update
+  // affects 0 rows and we silently bail. Always writes an audit row attributing
+  // the change to no user (actorUserId=null) so it's clearly system-driven.
   private async advanceLifecycle(input: {
     event: EventCandidate;
     from: EventLifecycle;
@@ -317,6 +451,9 @@ export class EventStageAutomationService {
     return true;
   }
 
+  // Defensive parse of the legacy JSON `dates` blob to pull out
+  // registrationDays. Returns null when the blob is missing, malformed, or
+  // has an empty registrationDays array.
   private extractWeighInDays(dates: unknown): string[] | null {
     if (!dates || typeof dates !== 'object') return null;
     const d = dates as EventDates;
@@ -325,6 +462,9 @@ export class EventStageAutomationService {
     return d.registrationDays;
   }
 
+  // Today's date as a YYYY-MM-DD string in the event's local timezone.
+  // Public (not private) because lifecycle.spec.ts and other tests mock or
+  // call it to drive deterministic clock scenarios.
   getTodayInTimezone(timezone: string): string {
     const zonedNow = toZonedTime(new Date(), timezone);
     return format(zonedNow, 'yyyy-MM-dd', { timeZone: timezone });

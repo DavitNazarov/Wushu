@@ -5,12 +5,22 @@ import {
   roundStageLabel,
 } from './brackets.helpers';
 
+// Pin behavior of the post-draw helpers — status derivation, issue detection,
+// stage labels. All four functions are pure so tests are straight in/out.
 describe('brackets.helpers', () => {
   it('treats lifecycle published stages as published', () => {
-    expect(isEventPublished({ lifecycle: 'PUBLISHED', published: false })).toBe(true);
-    expect(isEventPublished({ lifecycle: 'LIVE', published: false })).toBe(true);
-    expect(isEventPublished({ lifecycle: 'LOCKED', published: true })).toBe(true);
-    expect(isEventPublished({ lifecycle: 'LOCKED', published: false })).toBe(false);
+    expect(isEventPublished({ lifecycle: 'PUBLISHED', published: false })).toBe(
+      true,
+    );
+    expect(isEventPublished({ lifecycle: 'LIVE', published: false })).toBe(
+      true,
+    );
+    expect(isEventPublished({ lifecycle: 'LOCKED', published: true })).toBe(
+      true,
+    );
+    expect(isEventPublished({ lifecycle: 'LOCKED', published: false })).toBe(
+      false,
+    );
   });
 
   it('derives empty and not-generated statuses correctly', () => {

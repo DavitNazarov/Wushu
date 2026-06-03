@@ -7,6 +7,9 @@ import type {
   DrawValidationSummary,
 } from './draw.readiness.types';
 
+// Combined output of the validation pass: critical+warning issues, the
+// derived button-availability map, and the rolled-up category counters
+// shown in the page summary cards.
 export type DrawValidationBuildResult = {
   validation: DrawValidationSummary;
   actions: DrawActionAvailability;
@@ -20,6 +23,21 @@ export type DrawValidationBuildResult = {
   };
 };
 
+// Pure aggregation step. Walks the per-category rows + event-wide context to
+// emit:
+//   - counters for every readinessStatus bucket
+//   - a critical issue list (each one blocks the draw)
+//   - a warning issue list (each one shows a banner but doesn't block)
+//   - the derived action availability for the Generate/Regenerate buttons
+// CRITICAL set (in order added):
+//   NO_EVENT_CATEGORIES | EVENT_NOT_LOCKED | WEIGHIN_NOT_COMPLETED_FOR_DRAW |
+//   MISSING_FINAL_CATEGORY_ASSIGNMENT | INVALID_FINAL_CATEGORY_REFERENCE |
+//   BLOCKED_CATEGORIES_PRESENT | NO_READY_CATEGORIES
+// WARNING set:
+//   DRAW_ALREADY_GENERATED | NEEDS_REVIEW_CATEGORIES_PRESENT |
+//   MOVED_UP_ATHLETES_PRESENT | OVERRIDE_RECORDS_PRESENT |
+//   ONE_ATHLETE_POOLS_PRESENT
+// `sampleIds` is always capped at 5 (UI shows "+N more").
 export function buildValidationAndSummary(input: {
   categoriesComputed: DrawCategoryComputedRow[];
   drawStatus: DrawOverallStatus;
@@ -52,7 +70,8 @@ export function buildValidationAndSummary(input: {
     (row) => row.readinessStatus === 'NEEDS_REVIEW',
   ).length;
   const readyCategoriesCount = input.categoriesComputed.filter(
-    (row) => row.readinessStatus === 'READY' || row.readinessStatus === 'NEEDS_REVIEW',
+    (row) =>
+      row.readinessStatus === 'READY' || row.readinessStatus === 'NEEDS_REVIEW',
   ).length;
   const emptyCategoriesCount = input.categoriesComputed.filter(
     (row) => row.readinessStatus === 'EMPTY',
@@ -72,7 +91,10 @@ export function buildValidationAndSummary(input: {
     });
   }
 
-  if (input.drawStatus === 'NOT_GENERATED' && !input.registrationClosedForDraw) {
+  if (
+    input.drawStatus === 'NOT_GENERATED' &&
+    !input.registrationClosedForDraw
+  ) {
     critical.push({
       code: 'EVENT_NOT_LOCKED',
       severity: 'CRITICAL',

@@ -3,8 +3,16 @@ import {
   resolveCompetitionFormat,
   type CompetitionFormat,
 } from '../draw/competition-format';
-import type { ScheduleDisplayAthlete, ScheduleSourceFight } from './schedule-order.types';
+import type {
+  ScheduleDisplayAthlete,
+  ScheduleSourceFight,
+} from './schedule-order.types';
 
+// Pure schedule-ordering primitives used by buildScheduleRows and the
+// auto-scheduler. No Prisma — all data comes in as plain objects.
+
+// Enriched view of a fight + everything needed to compare/sort it.
+// stagePriority drives the global "Finals first, then SF, then QF" order.
 export type FightCandidate = {
   fight: ScheduleSourceFight;
   bucketKey: string;
@@ -19,12 +27,22 @@ export type FightCandidate = {
   blueSourceFightId: string | null;
 };
 
+// All fights inside the same bracket / weight category / category code get
+// the same bucket so their internal round structure can be reasoned about
+// together. Falls back to fight.id when no broader grouping is available.
 function getBucketKey(fight: ScheduleSourceFight): string {
   return (
-    fight.bracketId ?? fight.eventWeightCategoryId ?? fight.categoryCode ?? fight.id
+    fight.bracketId ??
+    fight.eventWeightCategoryId ??
+    fight.categoryCode ??
+    fight.id
   );
 }
 
+// Build the EN display string for a participant cell in the schedule:
+//   real athlete             → "First Last"
+//   upstream not yet decided → "Winner of N" using the source bout's scheduleOrder
+//   nothing                  → "TBD"
 export function displayName(input: {
   athlete: ScheduleDisplayAthlete;
   sourceScheduleOrder: number | null;
@@ -38,6 +56,10 @@ export function displayName(input: {
   return 'TBD';
 }
 
+// Georgian display name only when BOTH KA fields are present — partial KA
+// data would render as a mongrel "GeorgianFirst LatinLast". Returns null
+// instead so the frontend can fall back to the EN string.
+// NOTE: there's no KA "Winner of N" — we only ship a KA name for real athletes.
 export function displayNameKa(input: {
   athlete: ScheduleDisplayAthlete;
 }): string | null {
@@ -47,6 +69,9 @@ export function displayNameKa(input: {
   return null;
 }
 
+// Convert (round, maxRound, format) into the round-name shown alongside each
+// schedule row: "Final" / "Semifinal" / "Quarterfinal" / "Round of 16" /
+// "Round N", with a separate "Round robin" label for that format.
 function bracketRoundLabel(input: {
   round: number;
   maxRound: number;
@@ -61,6 +86,9 @@ function bracketRoundLabel(input: {
   return `Round ${input.round}`;
 }
 
+// Same playability gate ScheduleService uses, replicated here so this file
+// stays standalone. Both sides filled with distinct athletes, no winner yet,
+// status is QUEUED / ON_DECK / IN_PROGRESS / PAUSED.
 export function isFightPlayable(fight: {
   redAthleteId: string | null;
   blueAthleteId: string | null;
@@ -78,6 +106,11 @@ export function isFightPlayable(fight: {
   );
 }
 
+// Decide whether a fight should show in the schedule view. Hides:
+//   - dead nodes (no athletes AND no upstream dependency),
+//   - first-round BYEs (one side filled in the opening round).
+// Same rules as ScheduleService.isScheduleVisibleFight — duplicated to keep
+// this module pure.
 function isScheduleVisibleFight(input: {
   fight: ScheduleSourceFight;
   openingRound: number;
@@ -87,12 +120,25 @@ function isScheduleVisibleFight(input: {
   const blueKnown = !!input.fight.blueAthleteId;
 
   if (!redKnown && !blueKnown && !input.hasSourceDependencies) return false;
-  if (input.fight.round === input.openingRound && redKnown !== blueKnown) return false;
+  if (input.fight.round === input.openingRound && redKnown !== blueKnown)
+    return false;
 
   return true;
 }
 
-export function buildFightCandidates(fights: ScheduleSourceFight[]): FightCandidate[] {
+// Turn raw fights into FightCandidate entries:
+//   1. Group fights by bucket key (bracket / category / etc.).
+//   2. Per bucket, compute opening + max round and the unique athlete count
+//      so we can pick a competition format.
+//   3. For each fight in the bucket, infer red/blue source bouts (the
+//      one-round-earlier feeders), then drop schedule-hidden fights.
+//   4. Pack everything into FightCandidate with a stagePriority that puts
+//      finals before semifinals before quarterfinals etc.
+// stagePriority for round-robin uses (MAX_SAFE - boutNo) so all round-robin
+// matchups sort last but keep their internal boutNo order.
+export function buildFightCandidates(
+  fights: ScheduleSourceFight[],
+): FightCandidate[] {
   const fightsByBucket = new Map<string, ScheduleSourceFight[]>();
 
   for (const fight of fights) {
@@ -137,17 +183,19 @@ export function buildFightCandidates(fights: ScheduleSourceFight[]): FightCandid
       bucket[0]?.categoryCode ??
       bucketKey;
     const ageGroupName =
-      bucket[0]?.eventWeightCategory?.eventAgeGroup?.categoryTemplateAgeGroup?.name ??
-      null;
+      bucket[0]?.eventWeightCategory?.eventAgeGroup?.categoryTemplateAgeGroup
+        ?.name ?? null;
 
     for (const fight of bucket) {
       const redSourceFightId =
         fight.round > openingRound
-          ? byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2 - 1}`)?.id ?? null
+          ? (byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2 - 1}`)
+              ?.id ?? null)
           : null;
       const blueSourceFightId =
         fight.round > openingRound
-          ? byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2}`)?.id ?? null
+          ? (byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2}`)?.id ??
+            null)
           : null;
       const hasSourceDependencies = !!redSourceFightId || !!blueSourceFightId;
 
@@ -189,7 +237,18 @@ export function buildFightCandidates(fights: ScheduleSourceFight[]): FightCandid
   return candidates;
 }
 
-export function compareFightCandidate(left: FightCandidate, right: FightCandidate): number {
+// Total-ordering comparator. Tie-breaks are stable on every keys-path:
+//   1. stagePriority (DESCENDING so finals come first),
+//   2. age group sort order,
+//   3. weight sort order,
+//   4. bucket key (alphabetical fallback),
+//   5. round, boutNo,
+//   6. fight id (final tie-break for deterministic output).
+// Pure: no DB or side effects — safe to call in tight loops.
+export function compareFightCandidate(
+  left: FightCandidate,
+  right: FightCandidate,
+): number {
   if (left.stagePriority !== right.stagePriority) {
     return right.stagePriority - left.stagePriority;
   }

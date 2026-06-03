@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
-import { apiGet, apiPost } from '@/lib/api/client';
+import { apiGet, apiPost, ApiError } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
@@ -115,13 +115,23 @@ export function AdminLivePageClient({ eventId }: Props) {
         winner,
         method,
         notes: notes || null,
+        // BF-2: optimistic lock — reject if another judge already scored this.
+        expectedUpdatedAt: currentFight?.updatedAt ?? undefined,
       }),
     onSuccess: () => {
       invalidate();
       toast(t('resultSuccess'));
       setResultOpen(false);
     },
-    onError,
+    onError: (error: unknown) => {
+      if (error instanceof ApiError && error.code === 'FIGHT_STALE_UPDATE') {
+        invalidate();
+        setResultOpen(false);
+        toast(t('resultStale'), 'error');
+        return;
+      }
+      onError(error);
+    },
   });
 
   const roundResultMutation = useMutation({

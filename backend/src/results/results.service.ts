@@ -88,7 +88,9 @@ export class ResultsService {
         where: { organisationId, eventId },
         include: {
           redAthlete: { select: { id: true, firstName: true, lastName: true } },
-          blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+          blueAthlete: {
+            select: { id: true, firstName: true, lastName: true },
+          },
           winnerAthlete: {
             select: { id: true, firstName: true, lastName: true },
           },
@@ -97,7 +99,9 @@ export class ResultsService {
               id: true,
               categoryTemplateWeight: { select: { name: true } },
               eventAgeGroup: {
-                select: { categoryTemplateAgeGroup: { select: { name: true } } },
+                select: {
+                  categoryTemplateAgeGroup: { select: { name: true } },
+                },
               },
             },
           },
@@ -133,7 +137,8 @@ export class ResultsService {
     const registrationsByCategory = new Map<string, CompetitionAthlete[]>();
     for (const row of registrations) {
       if (!row.eventWeightCategoryId) continue;
-      const bucket = registrationsByCategory.get(row.eventWeightCategoryId) ?? [];
+      const bucket =
+        registrationsByCategory.get(row.eventWeightCategoryId) ?? [];
       bucket.push({
         athleteId: row.athleteId,
         athleteName: `${row.athlete.firstName} ${row.athlete.lastName}`,
@@ -151,27 +156,30 @@ export class ResultsService {
 
     const categories: CategorySummaryRow[] = [...fightsByCategory.entries()]
       .map(([eventWeightCategoryId, categoryFights]) => {
-        const athletes = registrationsByCategory.get(eventWeightCategoryId) ?? [];
+        const athletes =
+          registrationsByCategory.get(eventWeightCategoryId) ?? [];
         const categoryName =
-          categoryFights[0]?.eventWeightCategory?.categoryTemplateWeight?.name ??
+          categoryFights[0]?.eventWeightCategory?.categoryTemplateWeight
+            ?.name ??
           categoryFights[0]?.categoryCode ??
           eventWeightCategoryId;
         const ageGroupName =
           categoryFights[0]?.eventWeightCategory?.eventAgeGroup
-            ?.categoryTemplateAgeGroup?.name ??
-          null;
+            ?.categoryTemplateAgeGroup?.name ?? null;
 
-        const competitionFights: CompetitionFight[] = categoryFights.map((fight) => ({
-          id: fight.id,
-          round: fight.round,
-          boutNo: fight.boutNo,
-          status: fight.status,
-          redAthleteId: fight.redAthleteId ?? null,
-          blueAthleteId: fight.blueAthleteId ?? null,
-          winnerAthleteId: fight.winnerAthleteId ?? null,
-          winMethod: fight.winMethod ?? null,
-          notes: fight.notes ?? null,
-        }));
+        const competitionFights: CompetitionFight[] = categoryFights.map(
+          (fight) => ({
+            id: fight.id,
+            round: fight.round,
+            boutNo: fight.boutNo,
+            status: fight.status,
+            redAthleteId: fight.redAthleteId ?? null,
+            blueAthleteId: fight.blueAthleteId ?? null,
+            winnerAthleteId: fight.winnerAthleteId ?? null,
+            winMethod: fight.winMethod ?? null,
+            notes: fight.notes ?? null,
+          }),
+        );
 
         const athleteById = new Map<string, string>();
         for (const athlete of athletes) {
@@ -229,7 +237,11 @@ export class ResultsService {
               id: finalFightRaw.id,
               round: finalFightRaw.round,
               boutNo: finalFightRaw.boutNo,
-              stageLabel: roundStageLabel(finalFightRaw.round, highestRound, format),
+              stageLabel: roundStageLabel(
+                finalFightRaw.round,
+                highestRound,
+                format,
+              ),
               status: finalFightRaw.status,
               winnerAthleteId: finalFightRaw.winnerAthleteId,
               winMethod: finalFightRaw.winMethod ?? null,
@@ -237,17 +249,20 @@ export class ResultsService {
               redAthleteId: finalFightRaw.redAthleteId,
               blueAthleteId: finalFightRaw.blueAthleteId,
               redAthleteName: finalFightRaw.redAthleteId
-                ? athleteById.get(finalFightRaw.redAthleteId) ?? finalFightRaw.redAthleteId
+                ? (athleteById.get(finalFightRaw.redAthleteId) ??
+                  finalFightRaw.redAthleteId)
                 : null,
               blueAthleteName: finalFightRaw.blueAthleteId
-                ? athleteById.get(finalFightRaw.blueAthleteId) ?? finalFightRaw.blueAthleteId
+                ? (athleteById.get(finalFightRaw.blueAthleteId) ??
+                  finalFightRaw.blueAthleteId)
                 : null,
             }
           : null;
 
         return {
           eventWeightCategoryId,
-          categoryCode: categoryFights[0]?.categoryCode ?? eventWeightCategoryId,
+          categoryCode:
+            categoryFights[0]?.categoryCode ?? eventWeightCategoryId,
           categoryName,
           ageGroupName,
           competitionFormat: format,
@@ -264,7 +279,9 @@ export class ResultsService {
         };
       })
       .sort((a, b) => {
-        const byAgeGroup = (a.ageGroupName ?? '').localeCompare(b.ageGroupName ?? '');
+        const byAgeGroup = (a.ageGroupName ?? '').localeCompare(
+          b.ageGroupName ?? '',
+        );
         if (byAgeGroup !== 0) return byAgeGroup;
         return a.categoryName.localeCompare(b.categoryName);
       });
@@ -309,7 +326,10 @@ function buildMedalTable(input: {
     }
   >();
 
-  const add = (athleteId: string | null, medal: 'gold' | 'silver' | 'bronze') => {
+  const add = (
+    athleteId: string | null,
+    medal: 'gold' | 'silver' | 'bronze',
+  ) => {
     if (!athleteId) return;
     const club = input.athleteClubById.get(athleteId) ?? {
       clubId: null,

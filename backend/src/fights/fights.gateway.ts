@@ -12,13 +12,20 @@ import { Logger } from '@nestjs/common';
 import { createCorsOriginDelegate } from '../config/runtime-env';
 import { AuthService, JWT_COOKIE_NAME } from '../auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CAPABILITIES } from '../auth/capabilities';
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// BF-7: how often a live socket is re-checked against the DB so a user who is
+// suspended/disabled/archived mid-session is dropped within a bounded window
+// rather than keeping the live stream until their 15-min JWT expires.
+const SOCKET_REVALIDATE_MS = 60_000;
 
-function assertUuid(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !UUID_RE.test(value)) {
-    throw new WsException(`Invalid ${field}: must be a UUID`);
+// Event/Mat ids are Prisma cuids (e.g. "cmpuw57s9...") — not UUIDs. Accept cuid
+// or uuid shape as input hygiene; the org-scoped DB lookup below is the real gate.
+const ID_RE = /^[a-z0-9-]{8,64}$/i;
+
+function assertId(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !ID_RE.test(value)) {
+    throw new WsException(`Invalid ${field}`);
   }
   return value;
 }
@@ -28,6 +35,7 @@ const SOCKET_IO_PATH = '/api/socket.io';
 type SocketWithAuth = Socket & {
   data: {
     auth?: import('../auth/auth.service').AuthTokenPayload;
+    revalidateTimer?: ReturnType<typeof setInterval>;
   };
 };
 
@@ -50,26 +58,44 @@ export class FightsGateway implements OnGatewayInit<Server> {
 
   afterInit(server: Server) {
     server.use((socket: SocketWithAuth, next) => {
-      try {
-        const token =
-          this.extractCookieToken(socket.request.headers.cookie) ??
-          this.extractBearerToken(socket.handshake.auth?.token);
-        if (!token) {
+      void (async () => {
+        try {
+          const token =
+            this.extractCookieToken(socket.request.headers.cookie) ??
+            this.extractBearerToken(socket.handshake.auth?.token);
+          if (!token) {
+            return next(new WsException('UNAUTHENTICATED'));
+          }
+          const payload = this.auth.verifyToken(token);
+          if (!payload) {
+            return next(new WsException('UNAUTHENTICATED'));
+          }
+
+          // BF-7: a valid signature is NOT enough — re-validate against the DB
+          // (reject archived/disabled/DQ-suspended users) and require the
+          // LIVE_RUN capability before granting a live scoring socket. Mirrors
+          // the HTTP AuthGuard + CapabilityGuard, which the socket bypassed.
+          const validated = await this.auth.validateAuthenticatedUser(
+            payload.sub,
+          );
+          if (!validated.ok) {
+            return next(new WsException('UNAUTHENTICATED'));
+          }
+          if (!validated.payload.capabilities.includes(CAPABILITIES.LIVE_RUN)) {
+            return next(new WsException('FORBIDDEN'));
+          }
+          socket.data.auth = validated.payload;
+          return next();
+        } catch {
           return next(new WsException('UNAUTHENTICATED'));
         }
-        const payload = this.auth.verifyToken(token);
-        if (!payload) {
-          return next(new WsException('UNAUTHENTICATED'));
-        }
-        socket.data.auth = payload;
-        return next();
-      } catch {
-        return next(new WsException('UNAUTHENTICATED'));
-      }
+      })();
     });
   }
 
-  private extractCookieToken(rawCookieHeader: string | undefined): string | null {
+  private extractCookieToken(
+    rawCookieHeader: string | undefined,
+  ): string | null {
     if (!rawCookieHeader) return null;
     const parts = rawCookieHeader.split(';');
     for (const part of parts) {
@@ -89,6 +115,12 @@ export class FightsGateway implements OnGatewayInit<Server> {
   }
 
   handleConnection(client: SocketWithAuth) {
+    // BF-7: keep re-checking the user while the socket is open so a mid-session
+    // suspend/disable/role-change drops them within SOCKET_REVALIDATE_MS.
+    client.data.revalidateTimer = setInterval(() => {
+      void this.revalidateSocket(client);
+    }, SOCKET_REVALIDATE_MS);
+
     this.logger.debug(
       JSON.stringify({
         scope: 'realtime',
@@ -100,6 +132,10 @@ export class FightsGateway implements OnGatewayInit<Server> {
   }
 
   handleDisconnect(client: SocketWithAuth) {
+    if (client.data.revalidateTimer) {
+      clearInterval(client.data.revalidateTimer);
+      client.data.revalidateTimer = undefined;
+    }
     this.logger.debug(
       JSON.stringify({
         scope: 'realtime',
@@ -108,6 +144,39 @@ export class FightsGateway implements OnGatewayInit<Server> {
         userId: client.data.auth?.sub ?? null,
       }),
     );
+  }
+
+  // BF-7: re-validate an open socket against the DB; disconnect if the user is
+  // no longer valid or has lost the LIVE_RUN capability.
+  private async revalidateSocket(client: SocketWithAuth): Promise<void> {
+    const sub = client.data.auth?.sub;
+    if (!sub) {
+      client.disconnect(true);
+      return;
+    }
+    try {
+      const validated = await this.auth.validateAuthenticatedUser(sub);
+      if (
+        !validated.ok ||
+        !validated.payload.capabilities.includes(CAPABILITIES.LIVE_RUN)
+      ) {
+        this.logger.warn(
+          JSON.stringify({
+            scope: 'realtime',
+            action: 'revalidate-drop',
+            clientId: client.id,
+            userId: sub,
+            reason: validated.ok ? 'LIVE_RUN_REVOKED' : validated.code,
+          }),
+        );
+        client.disconnect(true);
+        return;
+      }
+      client.data.auth = validated.payload;
+    } catch {
+      // On a transient DB error, leave the socket connected; the next tick
+      // re-checks. (Don't drop live operators over a blip.)
+    }
   }
 
   @SubscribeMessage('join-event')
@@ -119,8 +188,10 @@ export class FightsGateway implements OnGatewayInit<Server> {
       throw new WsException('UNAUTHENTICATED');
     }
 
-    const eventId = assertUuid(
-      data && typeof data === 'object' ? (data as Record<string, unknown>).eventId : undefined,
+    const eventId = assertId(
+      data && typeof data === 'object'
+        ? (data as Record<string, unknown>).eventId
+        : undefined,
       'eventId',
     );
 
@@ -155,8 +226,10 @@ export class FightsGateway implements OnGatewayInit<Server> {
       throw new WsException('UNAUTHENTICATED');
     }
 
-    const matId = assertUuid(
-      data && typeof data === 'object' ? (data as Record<string, unknown>).matId : undefined,
+    const matId = assertId(
+      data && typeof data === 'object'
+        ? (data as Record<string, unknown>).matId
+        : undefined,
       'matId',
     );
 
@@ -238,6 +311,12 @@ export class FightsGateway implements OnGatewayInit<Server> {
       ...(Array.isArray(record.matIds) ? record.matIds : []),
     ];
 
-    return [...new Set(candidates.filter((value): value is string => typeof value === 'string'))];
+    return [
+      ...new Set(
+        candidates.filter(
+          (value): value is string => typeof value === 'string',
+        ),
+      ),
+    ];
   }
 }

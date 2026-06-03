@@ -8,11 +8,18 @@ import type {
   WinMethod,
 } from '@prisma/client';
 
+// JSON contract types for the athlete profile pages. All Dates are serialized
+// to ISO strings — these mirror the wire shape exactly so the frontend can
+// pull them in unmodified via React Query.
+
+// Slim coach summary shown in the profile header (one row per active coach
+// in the athlete's club).
 export type AthleteProfileCoachRow = {
   id: string;
   displayName: string;
 };
 
+// Slim club summary shown in the profile header.
 export type AthleteProfileClubRow = {
   id: string;
   name: string;
@@ -20,6 +27,9 @@ export type AthleteProfileClubRow = {
   country: string | null;
 };
 
+// One row in the "Events" section of the profile. The optional `?` fields
+// (registrationStatus, weighInStatus, latestWeighIn*) only appear in the
+// PRIVATE shape — public callers never get them.
 export type AthleteProfileRegistrationRow = {
   id: string;
   eventId: string;
@@ -41,6 +51,10 @@ export type AthleteProfileRegistrationRow = {
   latestWeighInAt?: string | null;
 };
 
+// One row in the "Fights" section. `score` is the textual score-token
+// (e.g. "5-2") extracted from fight.notes by extractScoreToken (see
+// draw/brackets.helpers.ts) — the score is encoded into notes for legacy
+// compatibility rather than being a first-class column.
 export type AthleteProfileFightRow = {
   id: string;
   eventId: string;
@@ -61,6 +75,10 @@ export type AthleteProfileFightRow = {
   winnerAthleteId: string | null;
 };
 
+// Top-level response shape returned by AthleteProfileService.
+// `dateOfBirth` and `coaches` are optional because the public flavor omits
+// them — anyone with a published-event link to the athlete should not be
+// able to see their DOB or the staff roster.
 export type AthleteProfileResponse = {
   athlete: {
     id: string;

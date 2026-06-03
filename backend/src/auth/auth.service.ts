@@ -43,19 +43,32 @@ export class AuthService {
   private getJwtSecret(): string {
     const secret = process.env.JWT_SECRET;
     if (!secret) throw new Error('JWT_SECRET is not set');
+    // SEC-10: a short/low-entropy secret makes HS256 tokens forgeable. Enforce a
+    // minimum length so a weak secret can't slip into production unnoticed.
+    if (secret.length < 32) {
+      throw new Error('JWT_SECRET must be at least 32 characters');
+    }
     return secret;
   }
 
   signToken(payload: Omit<AuthTokenPayload, 'type'>): string {
-    return jwt.sign({ ...payload, type: 'access' } satisfies AuthTokenPayload, this.getJwtSecret(), {
-      expiresIn: ACCESS_EXPIRES_IN_SECONDS,
-    });
+    return jwt.sign(
+      { ...payload, type: 'access' } satisfies AuthTokenPayload,
+      this.getJwtSecret(),
+      {
+        expiresIn: ACCESS_EXPIRES_IN_SECONDS,
+      },
+    );
   }
 
   signRefreshToken(payload: Omit<AuthTokenPayload, 'type'>): string {
-    return jwt.sign({ ...payload, type: 'refresh' } satisfies AuthTokenPayload, this.getJwtSecret(), {
-      expiresIn: REFRESH_EXPIRES_IN_SECONDS,
-    });
+    return jwt.sign(
+      { ...payload, type: 'refresh' } satisfies AuthTokenPayload,
+      this.getJwtSecret(),
+      {
+        expiresIn: REFRESH_EXPIRES_IN_SECONDS,
+      },
+    );
   }
 
   verifyToken(token: string): AuthTokenPayload | null {
@@ -378,7 +391,8 @@ export class AuthService {
 
     if (!user) return { ok: false, error: 'INVALID_CREDENTIALS' };
     if (!user.isActive) return { ok: false, error: 'INVALID_CREDENTIALS' };
-    if (isUserDqActive(user)) return { ok: false, error: 'INVALID_CREDENTIALS' };
+    if (isUserDqActive(user))
+      return { ok: false, error: 'INVALID_CREDENTIALS' };
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return { ok: false, error: 'INVALID_CREDENTIALS' };

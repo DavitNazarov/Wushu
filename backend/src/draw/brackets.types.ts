@@ -5,9 +5,16 @@ import type {
   PublishTimingPolicyCode,
   WinMethod,
 } from '@prisma/client';
-import type { DrawAthletePoolRow, DrawOverallStatus } from './draw.readiness.types';
+import type {
+  DrawAthletePoolRow,
+  DrawOverallStatus,
+} from './draw.readiness.types';
 import type { CompetitionFormat } from './competition-format';
 
+// JSON contract types for /api/brackets/overview and /api/brackets/category.
+// Mirrored on the frontend — keep the codes stable.
+
+// Per-bracket pill values. See deriveBracketCategoryStatus for the rules.
 export type BracketViewStatus =
   | 'NOT_GENERATED'
   | 'GENERATED_DRAFT'
@@ -17,15 +24,19 @@ export type BracketViewStatus =
   | 'NEEDS_REVIEW'
   | 'EMPTY';
 
+// Two-state publish flag for each bracket row.
 export type BracketPublicationStatus = 'DRAFT' | 'PUBLISHED';
 
+// CRITICAL blocks publication; WARNING is a yellow-banner-only.
 export type BracketIssueSeverity = 'CRITICAL' | 'WARNING';
 
+// One inline issue surfaced under a bracket row. Codes are i18n keys.
 export type BracketIssue = {
   code: string;
   severity: BracketIssueSeverity;
 };
 
+// One row in the brackets overview table — slim summary per category.
 export type BracketsOverviewCategoryRow = {
   id: string;
   ageGroupCode: string;
@@ -46,6 +57,10 @@ export type BracketsOverviewCategoryRow = {
   updatedAt: Date | null;
 };
 
+// Top-level shape returned from GET /api/brackets/overview. Powers the admin
+// "Brackets" page after a draw has been run. Carries event header, summary
+// counters, action availability, last-update metadata, recent audit slice,
+// and the full per-bracket list.
 export type BracketsOverviewResponse = {
   event: {
     id: string;
@@ -93,6 +108,8 @@ export type BracketsOverviewResponse = {
   categories: BracketsOverviewCategoryRow[];
 };
 
+// Slim athlete projection used inside a bracket cell. Carries the "moved up"
+// + "overrideUsed" flags so the UI can render badges without joining back.
 export type BracketParticipantView = {
   athleteId: string;
   athleteName: string;
@@ -105,12 +122,19 @@ export type BracketParticipantView = {
   finalCategory: string | null;
 };
 
+// Per-slot kind in a bracket cell:
+//   ATHLETE             — real athlete attached
+//   WINNER_PLACEHOLDER  — "Winner of bout N" (upstream undecided)
+//   BYE                 — automatic walkover slot
+//   TBD                 — unknown (rare; should be replaced before publish)
+// sourceBoutNo is set for WINNER_PLACEHOLDER so the UI can render "W of #5".
 export type BracketParticipantSlotView = {
   kind: 'ATHLETE' | 'WINNER_PLACEHOLDER' | 'BYE' | 'TBD';
   sourceBoutNo: number | null;
   athlete: BracketParticipantView | null;
 };
 
+// One fight in a round column of the bracket grid view.
 export type BracketRoundMatchup = {
   fightId: string;
   boutNo: number;
@@ -133,12 +157,16 @@ export type BracketRoundMatchup = {
   };
 };
 
+// One column in the bracket grid view (a round). `label` is a localized
+// stage tag like FINAL / SEMIFINAL / ROUND_4 derived from roundStageLabel.
 export type BracketRoundColumn = {
   round: number;
   label: string;
   matchups: BracketRoundMatchup[];
 };
 
+// Flat-table representation of the same fights — used by the "list view"
+// tab on the bracket detail page. Same data, different shape.
 export type BracketFightListRow = {
   id: string;
   boutNo: number;
@@ -159,6 +187,10 @@ export type BracketFightListRow = {
   orderInMat: number | null;
 };
 
+// Top-level shape for GET /api/brackets/category — full per-bracket detail.
+// Returns event header, category overview row, summary counters, both the
+// grid-view rounds AND the flat fight list, eligible+excluded athlete pools,
+// and per-bracket action availability (publish/unpublish).
 export type BracketCategoryDetailsResponse = {
   event: {
     id: string;

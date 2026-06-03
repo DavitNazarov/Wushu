@@ -1,5 +1,11 @@
 import { DrawService } from './draw.service';
 
+// Unit tests for the executeDraw guard pipeline + resetDraw. The actual
+// bracket-building logic is covered by draw.utils.spec.ts — these tests
+// focus on the lifecycle / override / mutation-blocked guards that gate
+// whether the draw even gets attempted.
+
+// Minimal prisma stub — methods are added on demand per test.
 function createPrismaMock() {
   return {
     event: {

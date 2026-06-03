@@ -1,6 +1,12 @@
 import type { FightStatus } from '@prisma/client';
 import type { CompetitionFormat } from '../draw/competition-format';
 
+// Input/output types for schedule-order.logic. Hand-rolled rather than
+// Prisma-inferred because the same shapes flow through the pure logic
+// helpers and need to stay decoupled from Prisma types.
+
+// Minimal athlete projection — names only, plus optional KA variants for
+// the bilingual display.
 type FightAthlete = {
   id: string;
   firstName: string;
@@ -9,12 +15,15 @@ type FightAthlete = {
   lastNameKa?: string | null;
 };
 
+// Slim mat projection used to fill matName/matOrder in schedule rows.
 type FightMat = {
   id: string;
   name: string;
   order?: number | null;
 };
 
+// Joined category metadata. Optional chains throughout because not every
+// fight has a full category attached (e.g. very old data).
 type FightCategory = {
   categoryTemplateWeight?: {
     name: string;
@@ -28,6 +37,9 @@ type FightCategory = {
   } | null;
 };
 
+// Shape ScheduleService passes into the pure logic layer. Mirrors what
+// Prisma returns from getSchedule's include block, but written by hand so
+// the logic file has no Prisma import.
 export type ScheduleSourceFight = {
   id: string;
   bracketId: string | null;
@@ -51,6 +63,9 @@ export type ScheduleSourceFight = {
   eventWeightCategory?: FightCategory | null;
 };
 
+// Output shape from buildScheduleRows. One row per visible fight, ready
+// for the schedule UI: pre-computed display strings, bilingual variants,
+// playability flag, scheduled time, and mat/session placement.
 export type BuiltScheduleRow = {
   id: string;
   categoryCode: string;
@@ -78,4 +93,6 @@ export type BuiltScheduleRow = {
   orderInSession: number | null;
 };
 
+// Loose alias so displayName/displayNameKa can accept whatever shape the
+// caller has (joined athlete, missing relation, or undefined).
 export type ScheduleDisplayAthlete = FightAthlete | null | undefined;

@@ -4,15 +4,15 @@ import { use } from 'react';
 import Link from 'next/link';
 import { useTranslations, useLocale } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, MapPin, Swords } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ArrowLeft } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { StatusChip } from '@/components/ui/StatusChip';
 import { ApiError, apiGet } from '@/lib/api/client';
-import { localizedName } from '@/lib/bilingual';
 import type { EventRow, ScheduleFightRow } from '@/types/api';
+
+import { groupByMat } from './schedule.utils';
+import { ScheduleMatGroup } from './components/ScheduleMatGroup';
 
 type Props = { params: Promise<{ locale: string; eventSlug: string }> };
 
@@ -20,7 +20,6 @@ export default function CoachSchedulePage({ params }: Props) {
   const { locale, eventSlug } = use(params);
   const t = useTranslations('coach.schedule');
   const tC = useTranslations('common');
-  const tLocale = useLocale();
 
   const { data: event } = useQuery({
     queryKey: ['public', 'event', eventSlug],
@@ -44,13 +43,7 @@ export default function CoachSchedulePage({ params }: Props) {
   });
 
   const list = fights ?? [];
-  const byMat = list.reduce<Record<string, typeof list>>((acc, f) => {
-    const mat = f.matName ?? t('unassigned');
-    if (!acc[mat]) acc[mat] = [];
-    acc[mat].push(f);
-    return acc;
-  }, {});
-  const mats = Object.keys(byMat).sort();
+  const { mats, byMat } = groupByMat(list, t('unassigned'));
 
   return (
     <div className="space-y-6">
@@ -87,87 +80,15 @@ export default function CoachSchedulePage({ params }: Props) {
         </Card>
       ) : (
         <div className="space-y-6">
-          {mats.map((matName, matIdx) => {
-            const items = byMat[matName] ?? [];
-            return (
-              <motion.div
-                key={matName}
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: matIdx * 0.06, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <div className="mb-3 flex items-center gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <MapPin className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
-                    <h3 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]">
-                      {matName}
-                    </h3>
-                  </div>
-                  <div className="h-px flex-1 bg-[var(--color-border)]" />
-                  <span className="text-[12px] text-[var(--color-text-muted)]">{items.length} fights</span>
-                </div>
-
-                <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)]">
-                  {items.map((f, idx) => {
-                    const isRunning = f.liveStatus === 'RUNNING';
-                    return (
-                    <motion.div
-                      key={f.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.03, duration: 0.25, ease: 'easeOut' }}
-                      className={`flex items-center gap-3 px-4 py-3 ${
-                        idx < items.length - 1 ? 'border-b border-[var(--color-border)]' : ''
-                      } ${isRunning ? 'bg-[var(--color-primary)]/5' : ''}`}
-                    >
-                      {/* Live pulse or order */}
-                      <div className="w-10 shrink-0 text-center">
-                        {isRunning ? (
-                          <span className="relative flex h-2.5 w-2.5 mx-auto">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-primary)] opacity-60" />
-                            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--color-primary)]" />
-                          </span>
-                        ) : (
-                          <p className="text-[12px] font-semibold tabular-nums text-[var(--color-text-muted)]">
-                            #{f.scheduleOrder ?? '—'}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Divider */}
-                      <div className="h-8 w-px shrink-0 bg-[var(--color-border)]" />
-
-                      {/* Athletes */}
-                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className={`truncate text-[13px] font-medium ${isRunning ? 'text-[var(--color-primary)]' : 'text-[var(--color-text)]'}`}>
-                            {localizedName(f.redDisplayName, f.redDisplayNameKa, locale)}
-                          </span>
-                          <Swords className="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" />
-                          <span className={`truncate text-[13px] font-medium ${isRunning ? 'text-[var(--color-primary)]' : 'text-[var(--color-text)]'}`}>
-                            {localizedName(f.blueDisplayName, f.blueDisplayNameKa, locale)}
-                          </span>
-                        </div>
-                        {isRunning && (
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-primary)]">Live now</p>
-                        )}
-                      </div>
-
-                      {/* Status */}
-                      <div className="shrink-0">
-                        <StatusChip
-                          status={f.status}
-                          label={tC(`fightStatus.${f.status}` as Parameters<typeof tC>[0])}
-                          domain="fight"
-                        />
-                      </div>
-                    </motion.div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            );
-          })}
+          {mats.map((matName, matIdx) => (
+            <ScheduleMatGroup
+              key={matName}
+              matName={matName}
+              matIdx={matIdx}
+              fights={byMat[matName] ?? []}
+              locale={locale}
+            />
+          ))}
         </div>
       )}
     </div>

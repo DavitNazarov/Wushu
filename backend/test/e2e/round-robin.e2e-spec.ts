@@ -51,7 +51,8 @@ async function approveAndPass(input: {
       registrationId: registration.body.id,
       weightKg: 64,
       override: true,
-      reason: 'Allow weigh-in before lifecycle transition for round robin e2e setup',
+      reason:
+        'Allow weigh-in before lifecycle transition for round robin e2e setup',
       decision: 'PASS',
     }),
   );
@@ -102,8 +103,8 @@ describeIfDb('Round robin (e2e)', () => {
         ],
       }),
     );
-    const eventWeightCategoryId = categories.body.ageGroups[0].weightCategories[0]
-      .id as string;
+    const eventWeightCategoryId = categories.body.ageGroups[0]
+      .weightCategories[0].id as string;
 
     const athleteA = await ctx.createAthlete({
       clubId: club.id,

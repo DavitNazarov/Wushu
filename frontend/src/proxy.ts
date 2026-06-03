@@ -31,8 +31,20 @@ function isLoginRoute(pathname: string): boolean {
   return LOGIN_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
 }
 
+const SENTRY_PATH_PREFIXES = ['/sentry-example-page', '/sentry-tunnel'];
+
+function isSentryRoute(pathname: string): boolean {
+  return SENTRY_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (isSentryRoute(pathname)) {
+    return NextResponse.next();
+  }
   const locale = pathname.match(/^\/(en|ka)\b/)?.[1] ?? routing.defaultLocale;
   const forceLogin = request.nextUrl.searchParams.get('force') === '1';
 

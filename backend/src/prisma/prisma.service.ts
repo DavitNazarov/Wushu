@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Client } from 'pg';
@@ -34,8 +39,7 @@ export class PrismaService
    * the PgBouncer pooler, which can silently drop uncommitted DDL on Neon.
    */
   private async repairSchema() {
-    const connectionString =
-      process.env.DIRECT_URL || process.env.DATABASE_URL;
+    const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
     if (!connectionString) {
       throw new Error('Neither DIRECT_URL nor DATABASE_URL is set');
     }

@@ -21,6 +21,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
     const response = ctx.getResponse<Response>();
 
+    // LOW-1: error responses must NEVER be cached. The public read controllers
+    // declare `@Header('Cache-Control', CACHE_LONG)`, which Nest applies to the
+    // response BEFORE the handler runs — so a thrown 404/500 would otherwise go
+    // out with `public, max-age=30` and an edge/CDN could cache the error.
+    // Forcing no-store here (overwriting any handler-set value) covers every
+    // route from one place, on every error path below.
+    response.setHeader('Cache-Control', 'no-store');
+
     // Zod validation errors
     if (exception instanceof ZodError) {
       logger.error(
@@ -77,6 +85,29 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return response.status(statusAndBody.status).json(statusAndBody.body);
     }
 
+    // REL-3: connection/initialization failures (connect refused, auth failure,
+    // pool can't be established) are NOT KnownRequestErrors — without this they
+    // fall through to a generic 500. Map to 503 so a DB blip degrades gracefully.
+    if (
+      exception instanceof Prisma.PrismaClientInitializationError ||
+      (exception instanceof Error &&
+        exception.name === 'PrismaClientInitializationError')
+    ) {
+      logger.error(
+        {
+          type: 'PrismaClientInitializationError',
+          message: exception instanceof Error ? exception.message : undefined,
+          path: request.url,
+          method: request.method,
+        },
+        'Database connection/initialization error',
+      );
+      return response.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+        code: 'DATABASE_UNAVAILABLE',
+        message: 'Database is temporarily unavailable. Please retry shortly.',
+      });
+    }
+
     // Unknown / unhandled errors
     logger.error(
       {
@@ -108,13 +139,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     switch (error.code) {
       case 'P1001':
       case 'P1002':
-      case 'P1017': {
+      case 'P1017':
+      // REL-3: P2024 = timed out fetching a connection from the pool (pool
+      // exhaustion under load). Surface as 503 so clients back off + retry
+      // rather than treating it as a hard 500.
+      case 'P2024': {
         return {
           status: HttpStatus.SERVICE_UNAVAILABLE,
           body: {
             code: 'DATABASE_UNAVAILABLE',
             message:
-              'Database is unreachable. Ensure PostgreSQL is running and DATABASE_URL is correct.',
+              'Database is temporarily unavailable. Please retry shortly.',
           },
         };
       }

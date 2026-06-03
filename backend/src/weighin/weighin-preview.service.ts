@@ -1,8 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { isWeighInStage } from '../events/lifecycle-rules';
-import { computePolicyWeighInOutcome, type WeightCategoryBounds } from './weighin.logic';
-import { mapPreviewStateFromOutcome, toCategorySummary } from './weighin.preview.mapper';
+import {
+  computePolicyWeighInOutcome,
+  type WeightCategoryBounds,
+} from './weighin.logic';
+import {
+  mapPreviewStateFromOutcome,
+  toCategorySummary,
+} from './weighin.preview.mapper';
 import type { WeighInDecisionPreviewResponse } from './weighin.preview.types';
 import {
   extractOpenOneHourWindow,
@@ -14,10 +20,20 @@ import {
   type RegistrationPreviewContext,
 } from './weighin-preview.helpers';
 
+// Read-only "what would happen if we recorded X kg right now?" computation.
+// Backs the weigh-in form's live preview so the operator can see
+// "PASS / FAIL / MOVE_UP / 1-hour deadline" before committing.
+// No DB writes — calls computePolicyWeighInOutcome with a synthesized
+// `now` and returns a rich UI payload, including extra hints
+// (overLimit/underLimit/delta) you wouldn't get from the policy alone.
 @Injectable()
 export class WeighinPreviewService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Internal: pulls the registration with the same heavy include shape
+  // record() uses, plus existing weigh-in attempts (for the open-window check)
+  // and weighInStatus (for the "already finalized" guard). Throws
+  // REGISTRATION_NOT_FOUND on miss.
   private async getRegistrationForPreview(input: {
     registrationId: string;
     organisationId: string;
@@ -114,6 +130,18 @@ export class WeighinPreviewService {
     return registration;
   }
 
+  // Build the preview payload. Decision flow:
+  //   - Reject obvious bad input (INVALID_WEIGHT).
+  //   - Skip policy evaluation when the registration is already finalized
+  //     (passed/disqualified) AND there's no open ONE_HOUR window.
+  //   - Skip policy evaluation under MANUAL_ADMIN_DECISION — no automatic
+  //     outcome to show.
+  //   - Otherwise call computePolicyWeighInOutcome with the snapshotted state.
+  // The response includes both the policy's nominal nextCategory and a
+  // fallback computed from current bounds, so the UI can always tell the
+  // operator "weight 64.2 would land you in CategoryB".
+  // recordingAllowed is gated by lifecycle so the UI can disable the submit
+  // button when we're past the WEIGHIN phase.
   async preview(input: {
     organisationId: string;
     registrationId: string;
@@ -139,7 +167,8 @@ export class WeighinPreviewService {
         registration.eventWeightCategory.categoryTemplateWeight.minWeightKgExcl,
       maxWeightKgIncl:
         registration.eventWeightCategory.categoryTemplateWeight.maxWeightKgIncl,
-      sortOrder: registration.eventWeightCategory.categoryTemplateWeight.sortOrder,
+      sortOrder:
+        registration.eventWeightCategory.categoryTemplateWeight.sortOrder,
     };
     const categories = toBounds(registration.eventWeightCategory);
     const openOneHourWindow = extractOpenOneHourWindow(registration, now);
@@ -172,7 +201,8 @@ export class WeighinPreviewService {
       categories,
     });
     const nextCategory =
-      findCategoryById(categories, outcome?.moveToCategoryId) ?? fallbackNextCategory;
+      findCategoryById(categories, outcome?.moveToCategoryId) ??
+      fallbackNextCategory;
 
     const mapped = mapPreviewStateFromOutcome({
       alreadyRecorded,
@@ -182,7 +212,8 @@ export class WeighinPreviewService {
     });
     const recordingAllowed = isWeighInStage(registration.event.lifecycle);
     const metrics = metricFromCategory(input.weightKg, currentCategory);
-    const latest = registration.weighIns[registration.weighIns.length - 1] ?? null;
+    const latest =
+      registration.weighIns[registration.weighIns.length - 1] ?? null;
     const registeredCategory = registration.registeredEventWeightCategory;
 
     return {

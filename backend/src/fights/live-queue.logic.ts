@@ -7,7 +7,13 @@ export type LiveQueueRow = {
   sessionOrder: number | null;
   orderInSession: number | null;
   scheduleOrder: number | null;
-  status: 'QUEUED' | 'ON_DECK' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETE' | 'CONFIRMED';
+  status:
+    | 'QUEUED'
+    | 'ON_DECK'
+    | 'IN_PROGRESS'
+    | 'PAUSED'
+    | 'COMPLETE'
+    | 'CONFIRMED';
   isPlayable: boolean;
   isFinished: boolean;
 };
@@ -23,7 +29,8 @@ export function compareQueueOrder(a: LiveQueueRow, b: LiveQueueRow): number {
     if (!aHasSession && bHasSession) return 1;
 
     // Both have sessions — sort by session order, then position within session
-    if (a.sessionOrder !== b.sessionOrder) return a.sessionOrder! - b.sessionOrder!;
+    if (a.sessionOrder !== b.sessionOrder)
+      return a.sessionOrder! - b.sessionOrder!;
     return a.orderInSession! - b.orderInSession!;
   }
 
@@ -39,7 +46,9 @@ export function compareQueueOrder(a: LiveQueueRow, b: LiveQueueRow): number {
   return a.id.localeCompare(b.id);
 }
 
-export function computeLiveStatuses(rows: LiveQueueRow[]): Map<string, LiveFightStatus> {
+export function computeLiveStatuses(
+  rows: LiveQueueRow[],
+): Map<string, LiveFightStatus> {
   const byMat = new Map<string, LiveQueueRow[]>();
 
   for (const row of rows) {
@@ -121,12 +130,12 @@ export function deriveLiveQueueBoard<T extends LiveQueueRow>(
   const onDeck =
     current == null
       ? null
-      : sorted.find((row) => {
+      : (sorted.find((row) => {
           if (row.id === current.id) return false;
           if (statuses.get(row.id) === 'FINISHED') return false;
           if (!row.isPlayable) return false;
           return compareQueueOrder(row, current) > 0;
-        }) ?? null;
+        }) ?? null);
 
   const next = sorted.filter((row) => {
     if (current && row.id === current.id) return false;

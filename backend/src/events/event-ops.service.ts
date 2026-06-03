@@ -17,6 +17,11 @@ export class EventOpsService {
     private readonly audit: AuditService,
   ) {}
 
+  // Compute the dashboard summary shown on the event overview page:
+  // total registrations, registrations grouped by status (PENDING/APPROVED/...),
+  // unique athletes count, unique clubs count. Runs the count + groupBy in
+  // parallel; the unique counts are done in JS over a separate findMany rather
+  // than two distinct counts (single round-trip).
   async getEventSummary(
     eventId: string,
     organisationId: string,
@@ -58,6 +63,11 @@ export class EventOpsService {
     };
   }
 
+  // Toggle the public visibility flag. Special case: when an event is in the
+  // DRAWN lifecycle state and gets published, we also bump it to PUBLISHED
+  // (and vice versa when un-publishing) — so admins don't have to make two
+  // separate transitions for the most common case. Returns null when the
+  // event doesn't exist in the org. Writes an EVENT_PUBLISHED/UNPUBLISHED audit row.
   async setPublished(
     eventId: string,
     organisationId: string,
@@ -95,6 +105,13 @@ export class EventOpsService {
     return updated;
   }
 
+  // Hard-delete an event and every child row. Performed in a single
+  // transaction so a partial failure rolls back cleanly. Order matters:
+  //   - AuditLog / NewsPost: detached (nulled), not deleted, to preserve history
+  //   - TimerState rows hang off Fight, so they go first
+  //   - Then Fight, ScheduleSession, Bracket, Mat, WeighInAttempt, Registration
+  //   - Finally the snapshot row and the Event itself
+  // Throws EVENT_NOT_FOUND when nothing matches.
   async deleteEvent(
     eventId: string,
     organisationId: string,
@@ -140,6 +157,17 @@ export class EventOpsService {
     });
   }
 
+  // Move an event between lifecycle states. Enforces three layers of rules:
+  //   1. Direction sanity: must be a defined forward OR backward transition.
+  //   2. Override gating: backward moves AND forward-skip moves both require
+  //      allowOverride=true + a non-empty reason (audit accountability).
+  //   3. Domain guards:
+  //        REG_OPEN → LOCKED is rejected if the registration window is still open
+  //        ? → LIVE is rejected before competitionStartDate
+  //      Both can be bypassed via allowOverride.
+  // Backward moves additionally set autoAdvanceStage=false so the cron doesn't
+  // immediately push the event forward again. Writes an audit row capturing
+  // the override flag and reason.
   async transitionLifecycle(input: {
     eventId: string;
     organisationId: string;

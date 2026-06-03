@@ -22,7 +22,9 @@ export type CategoryTemplateListRecord = CategoryTemplate & {
   _count: { ageGroups: number; snapshots: number };
 };
 
-export function mapCategoryTemplateListRow(template: CategoryTemplateListRecord) {
+export function mapCategoryTemplateListRow(
+  template: CategoryTemplateListRecord,
+) {
   const type = getCategoryTemplateType(template);
   const isSystem = type !== 'CUSTOM';
   const inUse = template._count.snapshots > 0;
@@ -59,7 +61,8 @@ export function getCategoryTemplateProtectionState(
   const reasons: string[] = [];
 
   if (type !== 'CUSTOM') reasons.push('SYSTEM_CATEGORY_TEMPLATE_PROTECTED');
-  if (usage.snapshotCount > 0) reasons.push('CATEGORY_TEMPLATE_STRUCTURE_LOCKED_BY_USAGE');
+  if (usage.snapshotCount > 0)
+    reasons.push('CATEGORY_TEMPLATE_STRUCTURE_LOCKED_BY_USAGE');
   if (template.status === 'ACTIVE') {
     reasons.push('ACTIVE_CATEGORY_TEMPLATE_DELETE_FORBIDDEN');
   }
@@ -82,54 +85,60 @@ export function assertMutableCategoryTemplate(template: CategoryTemplate) {
 }
 
 export async function getCategoryTemplateUsageSummary(
-  prisma: Prisma.TransactionClient | {
-    eventAgeGroup: Prisma.TransactionClient['eventAgeGroup'];
-    eventWeightCategory: Prisma.TransactionClient['eventWeightCategory'];
-    event: Prisma.TransactionClient['event'];
-  },
+  prisma:
+    | Prisma.TransactionClient
+    | {
+        eventAgeGroup: Prisma.TransactionClient['eventAgeGroup'];
+        eventWeightCategory: Prisma.TransactionClient['eventWeightCategory'];
+        event: Prisma.TransactionClient['event'];
+      },
   categoryTemplateId: string,
 ): Promise<UsageSummary> {
-  const [snapshotCount, eventAgeGroupCount, eventWeightCategoryCount, recentEvents] =
-    await Promise.all([
-      prisma.event.count({
-        where: {
-          categoryTemplateSnapshot: {
+  const [
+    snapshotCount,
+    eventAgeGroupCount,
+    eventWeightCategoryCount,
+    recentEvents,
+  ] = await Promise.all([
+    prisma.event.count({
+      where: {
+        categoryTemplateSnapshot: {
+          categoryTemplateId,
+        },
+      },
+    }),
+    prisma.eventAgeGroup.count({
+      where: {
+        categoryTemplateAgeGroup: {
+          categoryTemplateId,
+        },
+      },
+    }),
+    prisma.eventWeightCategory.count({
+      where: {
+        categoryTemplateWeight: {
+          ageGroup: {
             categoryTemplateId,
           },
         },
-      }),
-      prisma.eventAgeGroup.count({
-        where: {
-          categoryTemplateAgeGroup: {
-            categoryTemplateId,
-          },
+      },
+    }),
+    prisma.event.findMany({
+      where: {
+        categoryTemplateSnapshot: {
+          categoryTemplateId,
         },
-      }),
-      prisma.eventWeightCategory.count({
-        where: {
-          categoryTemplateWeight: {
-            ageGroup: {
-              categoryTemplateId,
-            },
-          },
-        },
-      }),
-      prisma.event.findMany({
-        where: {
-          categoryTemplateSnapshot: {
-            categoryTemplateId,
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          lifecycle: true,
-          competitionStartDate: true,
-        },
-        orderBy: { competitionStartDate: 'desc' },
-        take: 5,
-      }),
-    ]);
+      },
+      select: {
+        id: true,
+        name: true,
+        lifecycle: true,
+        competitionStartDate: true,
+      },
+      orderBy: { competitionStartDate: 'desc' },
+      take: 5,
+    }),
+  ]);
 
   return {
     snapshotCount,

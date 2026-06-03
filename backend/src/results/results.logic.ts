@@ -21,7 +21,8 @@ export function buildPlacementsFromConfirmedFights(
 ): PlacementRow[] {
   const byCategory = new Map<string, FightRow[]>();
   for (const fight of fights) {
-    if (!byCategory.has(fight.categoryCode)) byCategory.set(fight.categoryCode, []);
+    if (!byCategory.has(fight.categoryCode))
+      byCategory.set(fight.categoryCode, []);
     byCategory.get(fight.categoryCode)!.push(fight);
   }
 
@@ -60,7 +61,9 @@ export function buildPlacementsFromConfirmedFights(
     });
   }
 
-  return placements.sort((a, b) => a.categoryCode.localeCompare(b.categoryCode));
+  return placements.sort((a, b) =>
+    a.categoryCode.localeCompare(b.categoryCode),
+  );
 }
 
 export function buildMedalTable(input: {
@@ -69,10 +72,20 @@ export function buildMedalTable(input: {
 }) {
   const medalMap = new Map<
     string,
-    { clubId: string | null; clubName: string; gold: number; silver: number; bronze: number; total: number }
+    {
+      clubId: string | null;
+      clubName: string;
+      gold: number;
+      silver: number;
+      bronze: number;
+      total: number;
+    }
   >();
 
-  const add = (athleteId: string | null, medal: 'gold' | 'silver' | 'bronze') => {
+  const add = (
+    athleteId: string | null,
+    medal: 'gold' | 'silver' | 'bronze',
+  ) => {
     if (!athleteId) return;
     const club = input.athleteClubById.get(athleteId) ?? {
       clubId: null,

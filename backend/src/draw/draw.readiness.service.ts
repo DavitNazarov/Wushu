@@ -7,10 +7,16 @@ import type {
 import { DrawReadinessQueryService } from './draw.readiness.queries';
 import { computeDrawReadiness } from './draw.readiness.compute';
 
+// Thin orchestrator: pulls the data context via DrawReadinessQueryService,
+// runs the pure compute step via computeDrawReadiness, and exposes the two
+// shapes the controller cares about (overview + per-category details).
+// Kept thin so the heavy compute logic stays unit-testable on its own.
 @Injectable()
 export class DrawReadinessService {
   constructor(private readonly query: DrawReadinessQueryService) {}
 
+  // Full computed result with both the overview and a per-category map.
+  // Internal API — exposes the map so getCategoryDetails can pick from it.
   async computeOverview(input: {
     organisationId: string;
     eventId: string;
@@ -19,6 +25,8 @@ export class DrawReadinessService {
     return computeDrawReadiness(context);
   }
 
+  // The narrowed "summary" view exposed at GET /draw/overview — drops the
+  // per-category map.
   async getOverview(input: {
     organisationId: string;
     eventId: string;
@@ -27,6 +35,10 @@ export class DrawReadinessService {
     return computed.overview;
   }
 
+  // Per-category detail for the expansion panel. Throws CATEGORY_NOT_FOUND
+  // when the eventWeightCategoryId isn't in the computed map (wrong event,
+  // bad id, etc). Cherry-picks the relevant fields from the computed category
+  // record into the response shape.
   async getCategoryDetails(input: {
     organisationId: string;
     eventId: string;

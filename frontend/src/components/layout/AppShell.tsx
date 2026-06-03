@@ -7,9 +7,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Menu } from 'lucide-react';
 import { apiGet } from '@/lib/api/client';
 import type { EventRow } from '@/types/api';
-import { TopbarToggles } from './TopbarToggles';
 import { LogoutButton } from './LogoutButton';
-import { MobileNav } from './MobileNav';
+import { TopbarActions } from './TopbarActions';
 import { AppSidebar } from './AppSidebar';
 import type { SidebarNavSection } from './AppSidebar';
 import { getActiveAdminNavKey } from './adminNavMatcher';
@@ -125,8 +124,7 @@ export function AppShell({ children }: AppShellProps) {
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <MobileNav variant="dashboard" />
-            <TopbarToggles />
+            <TopbarActions />
           </div>
         </header>
 

@@ -52,7 +52,11 @@ export class CategoryTemplateAdminService {
           },
         },
       },
-      orderBy: [{ organisationId: 'asc' }, { updatedAt: 'desc' }, { name: 'asc' }],
+      orderBy: [
+        { organisationId: 'asc' },
+        { updatedAt: 'desc' },
+        { name: 'asc' },
+      ],
     });
 
     return templates
@@ -80,7 +84,10 @@ export class CategoryTemplateAdminService {
 
     if (!template) throw new Error('CATEGORY_TEMPLATE_NOT_FOUND');
 
-    const usage = await getCategoryTemplateUsageSummary(this.prisma, template.id);
+    const usage = await getCategoryTemplateUsageSummary(
+      this.prisma,
+      template.id,
+    );
     const protection = getCategoryTemplateProtectionState(template, usage);
 
     return {
@@ -100,7 +107,9 @@ export class CategoryTemplateAdminService {
         genders: new Set(
           template.ageGroups
             .map((ageGroup) => ageGroup.sex)
-            .filter((value): value is NonNullable<typeof value> => Boolean(value)),
+            .filter((value): value is NonNullable<typeof value> =>
+              Boolean(value),
+            ),
         ).size,
         weightCategories: template.ageGroups.reduce(
           (total, ageGroup) => total + ageGroup.weights.length,
@@ -144,13 +153,19 @@ export class CategoryTemplateAdminService {
     const template = await this.prisma.categoryTemplate.findFirst({
       where: {
         id: input.categoryTemplateId,
-        OR: [{ organisationId: input.organisationId }, { organisationId: null }],
+        OR: [
+          { organisationId: input.organisationId },
+          { organisationId: null },
+        ],
       },
     });
 
     if (!template) throw new Error('CATEGORY_TEMPLATE_NOT_FOUND');
 
-    const usage = await getCategoryTemplateUsageSummary(this.prisma, template.id);
+    const usage = await getCategoryTemplateUsageSummary(
+      this.prisma,
+      template.id,
+    );
     assertMutableCategoryTemplate(template);
 
     const nextOptionIds = input.dto.categoryOptionIds
@@ -165,7 +180,10 @@ export class CategoryTemplateAdminService {
     }
 
     const ageGroups = structureChanged
-      ? await buildTemplateStructureFromCategoryOptions(this.prisma, nextOptionIds)
+      ? await buildTemplateStructureFromCategoryOptions(
+          this.prisma,
+          nextOptionIds,
+        )
       : null;
 
     return this.prisma.$transaction(async (tx) => {
@@ -183,8 +201,12 @@ export class CategoryTemplateAdminService {
       const updated = await tx.categoryTemplate.update({
         where: { id: template.id },
         data: {
-          ...(input.dto.name !== undefined ? { name: input.dto.name.trim() } : {}),
-          ...(input.dto.status !== undefined ? { status: input.dto.status } : {}),
+          ...(input.dto.name !== undefined
+            ? { name: input.dto.name.trim() }
+            : {}),
+          ...(input.dto.status !== undefined
+            ? { status: input.dto.status }
+            : {}),
           ...(input.dto.categoryOptionIds !== undefined
             ? {
                 definition: {
@@ -230,13 +252,19 @@ export class CategoryTemplateAdminService {
     const template = await this.prisma.categoryTemplate.findFirst({
       where: {
         id: input.categoryTemplateId,
-        OR: [{ organisationId: input.organisationId }, { organisationId: null }],
+        OR: [
+          { organisationId: input.organisationId },
+          { organisationId: null },
+        ],
       },
     });
 
     if (!template) throw new Error('CATEGORY_TEMPLATE_NOT_FOUND');
 
-    const usage = await getCategoryTemplateUsageSummary(this.prisma, template.id);
+    const usage = await getCategoryTemplateUsageSummary(
+      this.prisma,
+      template.id,
+    );
     assertMutableCategoryTemplate(template);
     if (template.status === 'ACTIVE') {
       throw new Error('ACTIVE_CATEGORY_TEMPLATE_DELETE_FORBIDDEN');
@@ -264,5 +292,4 @@ export class CategoryTemplateAdminService {
       });
     });
   }
-
 }

@@ -2,27 +2,38 @@ import type { Organisation } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
- * Slug of the organisation the public site serves.
+ * Optional slug of the organisation the public site serves.
  *
- * The app is effectively single-federation, but multiple Organisation rows
- * can exist (the auth-bootstrap 'default' org from the first admin login plus
- * the seeded federation org). Public reads must therefore resolve THE org
- * deterministically — `organisation.findFirst()` has no ORDER BY and returns
- * an arbitrary row, which silently shows the wrong (often empty) org after a
- * restore or once a second org exists.
+ * If it is not configured, prefer the organisation that owns an active admin.
+ * This keeps public pages aligned with the admin-created data in local/single
+ * federation setups, even when old mock seed organisations still exist.
+ *
+ * PRODUCTION: always set PUBLIC_ORG_SLUG in deployed environments. Without it
+ * the public site serves whichever org has the oldest active admin, which is
+ * deterministic but order-dependent — if a second org is ever created the
+ * wrong federation can surface. Setting the slug pins the canonical org.
  */
-export const PUBLIC_ORG_SLUG =
-  process.env.PUBLIC_ORG_SLUG ?? 'georgian-wushu-federation';
+export const PUBLIC_ORG_SLUG = process.env.PUBLIC_ORG_SLUG?.trim() || null;
 
 /** Canonical org for all public, unauthenticated reads. */
 export async function resolvePublicOrg(
   prisma: PrismaService,
 ): Promise<Organisation | null> {
-  return (
-    (await prisma.organisation.findUnique({
+  if (PUBLIC_ORG_SLUG) {
+    return prisma.organisation.findUnique({
       where: { slug: PUBLIC_ORG_SLUG },
+    });
+  }
+
+  return (
+    (await prisma.organisation.findFirst({
+      where: {
+        users: {
+          some: { role: 'admin', isActive: true, deletedAt: null },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
     })) ??
-    // Deterministic fallback: oldest org, never a random row.
     (await prisma.organisation.findFirst({ orderBy: { createdAt: 'asc' } }))
   );
 }

@@ -20,7 +20,10 @@ describe('FightTimerAutomationService', () => {
       emitScheduleUpdate: jest.fn(),
     };
 
-    const service = new FightTimerAutomationService(fights as any, gateway as any);
+    const service = new FightTimerAutomationService(
+      fights as any,
+      gateway as any,
+    );
 
     await service.advanceExpiredTimers();
 

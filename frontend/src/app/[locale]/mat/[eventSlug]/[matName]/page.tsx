@@ -118,11 +118,21 @@ export default function MatScreenPage({
           path: SOCKET_IO_PATH,
           transports: ['polling', 'websocket'],
           withCredentials: true,
+          // C1: this public TV page is anonymous (no LIVE_RUN token) so the
+          // gateway rejects the socket; cap reconnection backoff to 30s to bound
+          // the retry storm. Live data still arrives via the 30s loadFeed()
+          // polling fallback below. See docs/DEPLOYMENT.md "Known scaling limits".
+          reconnectionDelayMax: 30_000,
         })
       : io({
           path: SOCKET_IO_PATH,
           transports: ['polling', 'websocket'],
           withCredentials: true,
+          // C1: this public TV page is anonymous (no LIVE_RUN token) so the
+          // gateway rejects the socket; cap reconnection backoff to 30s to bound
+          // the retry storm. Live data still arrives via the 30s loadFeed()
+          // polling fallback below. See docs/DEPLOYMENT.md "Known scaling limits".
+          reconnectionDelayMax: 30_000,
         });
     socketRef.current = socket;
 

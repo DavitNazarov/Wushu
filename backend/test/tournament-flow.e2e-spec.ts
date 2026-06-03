@@ -45,7 +45,9 @@ describeIfDb('Tournament flow (e2e)', () => {
     })
       .overrideGuard(AuthGuard)
       .useValue({
-        canActivate: (ctx: { switchToHttp(): { getRequest(): Record<string, unknown> } }) => {
+        canActivate: (ctx: {
+          switchToHttp(): { getRequest(): Record<string, unknown> };
+        }) => {
           const req = ctx.switchToHttp().getRequest();
           req.auth = {
             sub: userId,
@@ -133,11 +135,15 @@ describeIfDb('Tournament flow (e2e)', () => {
       await prisma.timerState.deleteMany({
         where: { fight: { eventId: { in: createdEventIds } } },
       });
-      await prisma.fight.deleteMany({ where: { eventId: { in: createdEventIds } } });
+      await prisma.fight.deleteMany({
+        where: { eventId: { in: createdEventIds } },
+      });
       await prisma.bracket.deleteMany({
         where: { eventId: { in: createdEventIds } },
       });
-      await prisma.mat.deleteMany({ where: { eventId: { in: createdEventIds } } });
+      await prisma.mat.deleteMany({
+        where: { eventId: { in: createdEventIds } },
+      });
       await prisma.weighInAttempt.deleteMany({
         where: { eventId: { in: createdEventIds } },
       });
@@ -162,7 +168,9 @@ describeIfDb('Tournament flow (e2e)', () => {
           ],
         },
       });
-      await prisma.athlete.deleteMany({ where: { id: { in: createdAthleteIds } } });
+      await prisma.athlete.deleteMany({
+        where: { id: { in: createdAthleteIds } },
+      });
     }
 
     if (clubId) {
@@ -187,21 +195,23 @@ describeIfDb('Tournament flow (e2e)', () => {
     const suffix = Date.now().toString();
 
     const createEvent = await expectOk(
-      request(app.getHttpServer()).post('/api/events').send({
-        name: `Tournament Flow Open ${suffix}`,
-        slug: `tournament-flow-open-${suffix}`,
-        location: 'Tbilisi',
-        timezone: 'Asia/Tbilisi',
-        categoryTemplateId,
-        dates: {
-          registrationStartDate: isoOffset({ days: -3 }),
-          registrationEndDate: isoOffset({ days: -2 }),
-          weighInStartDate: isoOffset({ days: -1, hours: -4 }),
-          weighInEndDate: isoOffset({ days: -1, hours: -2 }),
-          competitionStartDate: isoOffset({ hours: -6 }),
-          competitionEndDate: isoOffset({ days: 1 }),
-        },
-      }),
+      request(app.getHttpServer())
+        .post('/api/events')
+        .send({
+          name: `Tournament Flow Open ${suffix}`,
+          slug: `tournament-flow-open-${suffix}`,
+          location: 'Tbilisi',
+          timezone: 'Asia/Tbilisi',
+          categoryTemplateId,
+          dates: {
+            registrationStartDate: isoOffset({ days: -3 }),
+            registrationEndDate: isoOffset({ days: -2 }),
+            weighInStartDate: isoOffset({ days: -1, hours: -4 }),
+            weighInEndDate: isoOffset({ days: -1, hours: -2 }),
+            competitionStartDate: isoOffset({ hours: -6 }),
+            competitionEndDate: isoOffset({ days: 1 }),
+          },
+        }),
     );
     const eventId = createEvent.body.id as string;
     const eventSlug = createEvent.body.slug as string;
@@ -220,8 +230,8 @@ describeIfDb('Tournament flow (e2e)', () => {
           ],
         }),
     );
-    const eventWeightCategoryId = categories.body.ageGroups[0].weightCategories[0]
-      .id as string;
+    const eventWeightCategoryId = categories.body.ageGroups[0]
+      .weightCategories[0].id as string;
 
     const athleteNames = ['Nika', 'Luka', 'Saba', 'Dato'];
     const registrationIds: string[] = [];
@@ -275,16 +285,20 @@ describeIfDb('Tournament flow (e2e)', () => {
 
     for (const [index, registrationId] of registrationIds.entries()) {
       const weighin = await expectOk(
-        request(app.getHttpServer()).post('/api/weighin').send({
-          registrationId,
-          weightKg: 61 + index,
-        }),
+        request(app.getHttpServer())
+          .post('/api/weighin')
+          .send({
+            registrationId,
+            weightKg: 61 + index,
+          }),
       );
       expect(weighin.body.registration.weighInStatus).toBe('PASSED');
     }
 
     const automation = await expectOk(
-      request(app.getHttpServer()).post(`/api/events/${eventId}/run-automation`),
+      request(app.getHttpServer()).post(
+        `/api/events/${eventId}/run-automation`,
+      ),
     );
     expect(automation.body.event.lifecycle).toBe('WEIGH_IN_COMPLETED');
 
@@ -294,7 +308,9 @@ describeIfDb('Tournament flow (e2e)', () => {
     expect(readiness.body.summary.readyCategoriesCount).toBe(1);
 
     const draw = await expectOk(
-      request(app.getHttpServer()).post('/api/draw').send({ eventId, seed: 17 }),
+      request(app.getHttpServer())
+        .post('/api/draw')
+        .send({ eventId, seed: 17 }),
     );
     expect(draw.body.brackets).toHaveLength(1);
     expect(draw.body.brackets[0].fights).toHaveLength(3);
@@ -341,7 +357,8 @@ describeIfDb('Tournament flow (e2e)', () => {
         isPlayable: boolean;
         matId: string | null;
         orderInMat: number | null;
-      }) => row.isPlayable && row.matId === mat.body.id && row.orderInMat != null,
+      }) =>
+        row.isPlayable && row.matId === mat.body.id && row.orderInMat != null,
     );
     expect(scheduledPlayableFights).toHaveLength(2);
 

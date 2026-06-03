@@ -18,6 +18,10 @@ import { CAPABILITIES } from '../auth/capabilities';
 import { ClubDetailsService } from './club-details.service';
 import { upsertClubSchema } from './clubs.schemas';
 
+// Admin + coach club routes mounted at `/api/clubs`. Coaches need read access
+// for the registration UIs ("which club is this athlete from?"), so the GETs
+// only require ATHLETES_MANAGE (both roles have it). Writes are admin-only —
+// see the role check in upsert() below.
 @Controller('clubs')
 @UseGuards(AuthGuard, CapabilityGuard)
 export class ClubsController {
@@ -26,6 +30,7 @@ export class ClubsController {
     private readonly clubDetails: ClubDetailsService,
   ) {}
 
+  // GET /api/clubs — list all clubs in the org for the admin/coach UI.
   @Get()
   @RequireCapability(CAPABILITIES.ATHLETES_MANAGE)
   async list(@Req() req: AuthenticatedRequest) {
@@ -33,6 +38,9 @@ export class ClubsController {
     return this.clubs.list(auth.organisationId);
   }
 
+  // GET /api/clubs/:id — single-club detail (roster, coaches, recent events).
+  // Delegated to ClubDetailsService so the same shape powers the public
+  // /clubs/:id page.
   @Get(':id')
   @RequireCapability(CAPABILITIES.ATHLETES_MANAGE)
   async getById(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
@@ -49,7 +57,11 @@ export class ClubsController {
     return detail;
   }
 
+  // POST /api/clubs — admin-only upsert. SEC-13: gated by EVENTS_MANAGE (only
+  // admins hold it) for consistency with the rest of the app's write paths; the
+  // inline role check is kept as defense in depth. READ stays open to coaches.
   @Post()
+  @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
   async upsert(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
     const auth = req.auth!;
 
@@ -80,4 +92,3 @@ export class ClubsController {
     });
   }
 }
-

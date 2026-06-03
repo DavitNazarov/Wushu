@@ -19,6 +19,10 @@ import { CapabilityGuard } from '../auth/capability.guard';
 import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
 
+// Admin-only draw + bracket routes. Mixes two top-level prefixes (/api/draw
+// and /api/brackets) under one controller because they share the same
+// guards, capability, and audience. DRAW_RUN gates everything — admins hold
+// it, coaches do not.
 @Controller()
 @UseGuards(AuthGuard, CapabilityGuard)
 export class DrawController {
@@ -29,6 +33,18 @@ export class DrawController {
     private readonly brackets: BracketsService,
   ) {}
 
+  // POST /api/draw — actually run the draw algorithm. Inputs:
+  //   - seed             : deterministic randomness for reproducibility
+  //   - sameClubSeparation: prefer not to face same-club athletes in R1
+  //   - override + reason: admin escape hatch to redraw / force a draw
+  //                        outside the normal preflight rules
+  // Maps service errors to HTTP codes:
+  //   EVENT_NOT_FOUND                                                 → 404
+  //   EVENT_NOT_LOCKED / WEIGHIN_NOT_COMPLETED_FOR_DRAW,
+  //   OVERRIDE_REASON_REQUIRED, NO_ELIGIBLE_REGISTRATIONS,
+  //   NO_READY_CATEGORIES, DRAW_BLOCKED_CATEGORIES,
+  //   DRAW_VALIDATION_FAILED, DRAW_ALREADY_EXISTS,
+  //   DRAW_MUTATION_BLOCKED, EVENT_READ_ONLY                          → 400
   @Post('draw')
   @RequireCapability(CAPABILITIES.DRAW_RUN)
   async executeDraw(
@@ -78,13 +94,17 @@ export class DrawController {
       ) {
         throw new HttpException(msg, HttpStatus.BAD_REQUEST);
       }
+      // SEC-6: never echo the raw internal error string to clients.
       throw new HttpException(
-        msg || 'Internal Server Error',
+        'Internal Server Error',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
+  // POST /api/draw/reset — discard all brackets+fights for an event so the
+  // admin can redraw. Always requires override+reason because it's destructive.
+  //   OVERRIDE_REQUIRED / REASON_REQUIRED / DRAW_MUTATION_BLOCKED → 400
   @Post('draw/reset')
   @RequireCapability(CAPABILITIES.DRAW_RUN)
   async resetDraw(
@@ -118,6 +138,10 @@ export class DrawController {
     }
   }
 
+  // GET /api/draw/overview?eventId=... — pre-draw readiness summary.
+  // Tells the admin which categories are ready, which are blocked
+  // (and why), and how many athletes/registrations each has. Powers the
+  // pre-draw checklist screen.
   @Get('draw/overview')
   @RequireCapability(CAPABILITIES.DRAW_RUN)
   async drawOverview(
@@ -139,13 +163,18 @@ export class DrawController {
       if (msg === 'EVENT_NOT_FOUND') {
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
       }
+      // SEC-6: never echo the raw internal error string to clients.
       throw new HttpException(
-        msg || 'Internal Server Error',
+        'Internal Server Error',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
+  // GET /api/draw/category?eventId=&eventWeightCategoryId= — per-category
+  // readiness detail: full athlete list, any blockers (missing weigh-in,
+  // wrong age group, etc.). Used by the per-row expansion in the
+  // pre-draw checklist.
   @Get('draw/category')
   @RequireCapability(CAPABILITIES.DRAW_RUN)
   async drawCategoryDetails(
@@ -172,13 +201,16 @@ export class DrawController {
       if (msg === 'EVENT_NOT_FOUND' || msg === 'CATEGORY_NOT_FOUND') {
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
       }
+      // SEC-6: never echo the raw internal error string to clients.
       throw new HttpException(
-        msg || 'Internal Server Error',
+        'Internal Server Error',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
+  // GET /api/brackets?eventId=... — list every drawn bracket for an event.
+  // Slim shape; the per-bracket full structure lives at GET /brackets/:id.
   @Get('brackets')
   @RequireCapability(CAPABILITIES.DRAW_RUN)
   async listBrackets(
@@ -191,6 +223,9 @@ export class DrawController {
     return this.draw.listBrackets(auth.organisationId, eventId);
   }
 
+  // GET /api/brackets/overview?eventId=... — POST-draw aggregate view of every
+  // drawn bracket (vs /draw/overview which is PRE-draw). Powers the
+  // admin's "Brackets" page after the draw has been run.
   @Get('brackets/overview')
   @RequireCapability(CAPABILITIES.DRAW_RUN)
   async bracketsOverview(
@@ -212,13 +247,17 @@ export class DrawController {
       if (msg === 'EVENT_NOT_FOUND') {
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
       }
+      // SEC-6: never echo the raw internal error string to clients.
       throw new HttpException(
-        msg || 'Internal Server Error',
+        'Internal Server Error',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
+  // GET /api/brackets/category?eventId=&eventWeightCategoryId= — full fight
+  // tree for one category. Returns the round-by-round structure the bracket
+  // UI renders.
   @Get('brackets/category')
   @RequireCapability(CAPABILITIES.DRAW_RUN)
   async bracketCategoryDetails(
@@ -245,13 +284,19 @@ export class DrawController {
       if (msg === 'EVENT_NOT_FOUND' || msg === 'CATEGORY_NOT_FOUND') {
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
       }
+      // SEC-6: never echo the raw internal error string to clients.
       throw new HttpException(
-        msg || 'Internal Server Error',
+        'Internal Server Error',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
+  // POST /api/brackets/swap — admin tool to swap two athletes between
+  // bracket slots after the draw. Useful when the algorithm pairs up
+  // same-club athletes the seeding policy should've prevented, or when
+  // late substitutions land. SWAP_SAME_SLOT → 400 if both targets are the
+  // same slot (a no-op). FIGHT_NOT_FOUND → 404.
   @Post('brackets/swap')
   @RequireCapability(CAPABILITIES.DRAW_RUN)
   async swapBracketParticipants(
@@ -267,7 +312,10 @@ export class DrawController {
   ) {
     const auth = req.auth!;
     if (!body.eventId || !body.fightId1 || !body.fightId2) {
-      throw new HttpException('MISSING_REQUIRED_FIELDS', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'MISSING_REQUIRED_FIELDS',
+        HttpStatus.BAD_REQUEST,
+      );
     }
     try {
       await this.brackets.swapParticipants({
@@ -281,12 +329,22 @@ export class DrawController {
       return { ok: true };
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
-      if (msg === 'FIGHT_NOT_FOUND') throw new HttpException(msg, HttpStatus.NOT_FOUND);
-      if (msg === 'SWAP_SAME_SLOT') throw new HttpException(msg, HttpStatus.BAD_REQUEST);
-      throw new HttpException('Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
+      if (msg === 'FIGHT_NOT_FOUND' || msg === 'EVENT_NOT_FOUND')
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      if (msg === 'SWAP_SAME_SLOT')
+        throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      // BF-12: bracket is locked by lifecycle (LIVE/COMPLETED) or a started fight.
+      if (msg === 'BRACKET_LOCKED')
+        throw new HttpException(msg, HttpStatus.CONFLICT);
+      throw new HttpException(
+        'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
+  // GET /api/brackets/:id — single-bracket detail (round-by-round fight tree).
+  // BRACKET_NOT_FOUND → 404 if the id doesn't exist or isn't in this org.
   @Get('brackets/:id')
   @RequireCapability(CAPABILITIES.DRAW_RUN)
   async getBracket(@Req() req: AuthenticatedRequest, @Param('id') id: string) {

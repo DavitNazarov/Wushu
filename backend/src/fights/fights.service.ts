@@ -42,6 +42,9 @@ import {
   type FightTimerSnapshot,
 } from './fight-timer.logic';
 
+// Allowed direct fight state transitions. Anything not listed requires an
+// admin override + reason. CONFIRMED is terminal — once a result has been
+// confirmed, you need a deliberate corrective action.
 const FIGHT_STATE_TRANSITIONS: Record<FightStatus, FightStatus[]> = {
   QUEUED: ['ON_DECK'],
   ON_DECK: ['IN_PROGRESS', 'QUEUED'],
@@ -51,13 +54,22 @@ const FIGHT_STATE_TRANSITIONS: Record<FightStatus, FightStatus[]> = {
   CONFIRMED: [],
 };
 
+// Live queue board cache TTL. ~1 second is enough to absorb burst polling
+// from many mat displays without going visibly stale.
 const LIVE_BOARD_CACHE_TTL_MS = 800;
 
+// Big service: scoring + timer + status + live boards for one fight at a time.
+// Subscribes to FIGHT_STATE_TRANSITIONS for direct moves and falls back to
+// override+reason for anything else. The `liveBoardCache` shaves load when
+// dozens of clients poll the same board within a second.
 @Injectable()
 export class FightsService {
   private readonly liveBoardCache = new Map<
     string,
-    { data: Awaited<ReturnType<FightsService['computeLiveQueueBoard']>>; ts: number }
+    {
+      data: Awaited<ReturnType<FightsService['computeLiveQueueBoard']>>;
+      ts: number;
+    }
   >();
 
   constructor(
@@ -125,8 +137,10 @@ export class FightsService {
   }): 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'NEEDS_REVIEW' {
     if (input.needsReview) return 'NEEDS_REVIEW';
     if (input.totalVisibleFights === 0) return 'NOT_STARTED';
-    if (input.completedVisibleFights >= input.totalVisibleFights) return 'COMPLETED';
-    if (input.completedVisibleFights > 0 || input.hasActiveFight) return 'IN_PROGRESS';
+    if (input.completedVisibleFights >= input.totalVisibleFights)
+      return 'COMPLETED';
+    if (input.completedVisibleFights > 0 || input.hasActiveFight)
+      return 'IN_PROGRESS';
     return 'NOT_STARTED';
   }
 
@@ -173,10 +187,32 @@ export class FightsService {
     return this.prisma.fight.findMany({
       where,
       include: {
-        redAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
-        blueAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
+        redAthlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
+        blueAthlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
         winnerAthlete: {
-          select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
         },
         mat: true,
         timerState: true,
@@ -189,10 +225,32 @@ export class FightsService {
     return this.prisma.fight.findFirst({
       where: { id: fightId, organisationId },
       include: {
-        redAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
-        blueAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
+        redAthlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
+        blueAthlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
         winnerAthlete: {
-          select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
         },
         mat: true,
         timerState: true,
@@ -201,10 +259,7 @@ export class FightsService {
   }
 
   /** Cached live board — expires after TTL or on explicit invalidation. */
-  async getLiveQueueBoard(input: {
-    organisationId: string;
-    eventId: string;
-  }) {
+  async getLiveQueueBoard(input: { organisationId: string; eventId: string }) {
     const cacheKey = `${input.organisationId}:${input.eventId}`;
     const cached = this.liveBoardCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < LIVE_BOARD_CACHE_TTL_MS) {
@@ -253,7 +308,9 @@ export class FightsService {
         include: {
           mat: true,
           redAthlete: { select: { id: true, firstName: true, lastName: true } },
-          blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+          blueAthlete: {
+            select: { id: true, firstName: true, lastName: true },
+          },
           winnerAthlete: {
             select: { id: true, firstName: true, lastName: true },
           },
@@ -266,7 +323,11 @@ export class FightsService {
               eventAgeGroup: {
                 select: {
                   categoryTemplateAgeGroup: {
-                    select: { name: true, sortOrder: true, roundDurationSeconds: true },
+                    select: {
+                      name: true,
+                      sortOrder: true,
+                      roundDurationSeconds: true,
+                    },
                   },
                 },
               },
@@ -292,7 +353,9 @@ export class FightsService {
       ...row,
       matId: null,
       orderInMat: null,
-      sessionOrder: row.sessionId ? (sessionOrderById.get(row.sessionId) ?? null) : null,
+      sessionOrder: row.sessionId
+        ? (sessionOrderById.get(row.sessionId) ?? null)
+        : null,
       isFinished: row.status === 'COMPLETE' || row.status === 'CONFIRMED',
     }));
     const liveStatuses = computeLiveStatuses(
@@ -329,6 +392,9 @@ export class FightsService {
 
       return {
         id: fight.id,
+        // BF-2: row-version token so the client can pass expectedUpdatedAt when
+        // recording a result (rejects stale concurrent writes).
+        updatedAt: fight.updatedAt,
         categoryCode: row.categoryCode,
         categoryName: row.categoryName,
         ageGroupName: row.ageGroupName,
@@ -395,10 +461,32 @@ export class FightsService {
         eventWeightCategoryId: { not: null },
       },
       include: {
-        redAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
-        blueAthlete: { select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true } },
+        redAthlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
+        blueAthlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
         winnerAthlete: {
-          select: { id: true, firstName: true, lastName: true, firstNameKa: true, lastNameKa: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
         },
         timerState: true,
         mat: { select: { id: true, name: true } },
@@ -492,7 +580,10 @@ export class FightsService {
               )
             : 0;
         const byRoundBout = new Map(
-          categoryFights.map((fight) => [`${fight.round}:${fight.boutNo}`, fight]),
+          categoryFights.map((fight) => [
+            `${fight.round}:${fight.boutNo}`,
+            fight,
+          ]),
         );
 
         const sourceByFightId = new Map<
@@ -502,15 +593,18 @@ export class FightsService {
         const visibleFights = categoryFights.filter((fight) => {
           const redSourceFightId =
             fight.round > openingRound
-              ? byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2 - 1}`)?.id ??
-                null
+              ? (byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2 - 1}`)
+                  ?.id ?? null)
               : null;
           const blueSourceFightId =
             fight.round > openingRound
-              ? byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2}`)?.id ??
-                null
+              ? (byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2}`)
+                  ?.id ?? null)
               : null;
-          sourceByFightId.set(fight.id, { redSourceFightId, blueSourceFightId });
+          sourceByFightId.set(fight.id, {
+            redSourceFightId,
+            blueSourceFightId,
+          });
           return this.isScheduleVisibleFight({
             fight,
             openingRound,
@@ -532,10 +626,10 @@ export class FightsService {
             blueSourceFightId: null,
           };
           const redSourceScheduleOrder = source.redSourceFightId
-            ? scheduleOrderByFightId.get(source.redSourceFightId) ?? null
+            ? (scheduleOrderByFightId.get(source.redSourceFightId) ?? null)
             : null;
           const blueSourceScheduleOrder = source.blueSourceFightId
-            ? scheduleOrderByFightId.get(source.blueSourceFightId) ?? null
+            ? (scheduleOrderByFightId.get(source.blueSourceFightId) ?? null)
             : null;
           const redDisplayName = fight.redAthlete
             ? `${fight.redAthlete.firstName} ${fight.redAthlete.lastName}`
@@ -565,7 +659,11 @@ export class FightsService {
             id: fight.id,
             round: fight.round,
             boutNo: fight.boutNo,
-            stageLabel: roundStageLabel(fight.round, maxRound, competitionFormat),
+            stageLabel: roundStageLabel(
+              fight.round,
+              maxRound,
+              competitionFormat,
+            ),
             bracketRoundLabel:
               fight.round === maxRound
                 ? 'Final'
@@ -590,9 +688,8 @@ export class FightsService {
                   ? ('WINNER_PLACEHOLDER' as const)
                   : ('TBD' as const),
               sourceBoutNo: source.redSourceFightId
-                ? byRoundBout.get(
-                    `${fight.round - 1}:${fight.boutNo * 2 - 1}`,
-                  )?.boutNo ?? null
+                ? (byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2 - 1}`)
+                    ?.boutNo ?? null)
                 : null,
             },
             blue: {
@@ -604,8 +701,8 @@ export class FightsService {
                   ? ('WINNER_PLACEHOLDER' as const)
                   : ('TBD' as const),
               sourceBoutNo: source.blueSourceFightId
-                ? byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2}`)?.boutNo ??
-                  null
+                ? (byRoundBout.get(`${fight.round - 1}:${fight.boutNo * 2}`)
+                    ?.boutNo ?? null)
                 : null,
             },
             timerState,
@@ -653,13 +750,13 @@ export class FightsService {
         const onDeck =
           currentFight == null
             ? null
-            : sortedBySchedule.find(
+            : (sortedBySchedule.find(
                 (row) =>
                   row.id !== currentFight.id &&
                   row.liveStatus === 'UPCOMING' &&
                   (row.scheduleOrder ?? Number.MAX_SAFE_INTEGER) >
                     (currentFight.scheduleOrder ?? Number.MAX_SAFE_INTEGER),
-              ) ?? null;
+              ) ?? null);
 
         const queue = sortedBySchedule.filter((row) => {
           if (currentFight && row.id === currentFight.id) return false;
@@ -674,16 +771,20 @@ export class FightsService {
 
         const completed = sortedBySchedule.filter((row) => row.isCompleted);
         const totalVisibleFights = rows.length;
-        const completedVisibleFights = rows.filter((row) => row.isCompleted).length;
+        const completedVisibleFights = rows.filter(
+          (row) => row.isCompleted,
+        ).length;
         const hasActiveFight = rows.some(
           (row) => row.status === 'IN_PROGRESS' || row.status === 'PAUSED',
         );
 
         return {
           eventWeightCategoryId,
-          categoryCode: categoryFights[0]?.categoryCode ?? eventWeightCategoryId,
+          categoryCode:
+            categoryFights[0]?.categoryCode ?? eventWeightCategoryId,
           categoryName:
-            categoryFights[0]?.eventWeightCategory?.categoryTemplateWeight?.name ??
+            categoryFights[0]?.eventWeightCategory?.categoryTemplateWeight
+              ?.name ??
             categoryFights[0]?.categoryCode ??
             eventWeightCategoryId,
           ageGroupName:
@@ -715,11 +816,13 @@ export class FightsService {
     const selectedCategoryId =
       (input.eventWeightCategoryId &&
       categories.some(
-        (category) => category.eventWeightCategoryId === input.eventWeightCategoryId,
+        (category) =>
+          category.eventWeightCategoryId === input.eventWeightCategoryId,
       )
         ? input.eventWeightCategoryId
         : null) ??
-      categories.find((category) => category.board.currentFight)?.eventWeightCategoryId ??
+      categories.find((category) => category.board.currentFight)
+        ?.eventWeightCategoryId ??
       categories[0]?.eventWeightCategoryId ??
       null;
 
@@ -790,7 +893,10 @@ export class FightsService {
       auditAction: string;
     },
   ) {
-    const winnerAthleteId = this.getWinnerAthleteIdBySlot(input.fight, input.winner);
+    const winnerAthleteId = this.getWinnerAthleteIdBySlot(
+      input.fight,
+      input.winner,
+    );
     if (!winnerAthleteId) throw new Error('WINNER_NOT_PRESENT');
 
     const now = new Date();
@@ -800,8 +906,8 @@ export class FightsService {
         winnerAthleteId,
         loserAthleteId:
           winnerAthleteId === input.fight.redAthleteId
-            ? input.fight.blueAthleteId ?? null
-            : input.fight.redAthleteId ?? null,
+            ? (input.fight.blueAthleteId ?? null)
+            : (input.fight.redAthleteId ?? null),
         winMethod: input.method,
         notes: input.notes ?? null,
         status: 'CONFIRMED',
@@ -863,7 +969,10 @@ export class FightsService {
             entityType: 'event',
             entityId: input.fight.eventId,
             before: { lifecycle: 'LIVE' } as Prisma.JsonValue,
-            after: { lifecycle: 'COMPLETED', reason: 'All fights confirmed' } as Prisma.JsonValue,
+            after: {
+              lifecycle: 'COMPLETED',
+              reason: 'All fights confirmed',
+            } as Prisma.JsonValue,
           },
           tx,
         );
@@ -991,7 +1100,9 @@ export class FightsService {
       if (latestTimer.phase === 'REST') {
         const updatedFight = await tx.fight.update({
           where: { id: input.fightId },
-          data: { status: latestTimer.state === 'PAUSED' ? 'PAUSED' : 'IN_PROGRESS' },
+          data: {
+            status: latestTimer.state === 'PAUSED' ? 'PAUSED' : 'IN_PROGRESS',
+          },
         });
 
         await this.audit.write(
@@ -1271,6 +1382,7 @@ export class FightsService {
     notes?: string | null;
     override?: boolean;
     reason?: string | null;
+    expectedUpdatedAt?: string | null;
   }) {
     const { fight, advanced } = await this.setResult({
       organisationId: input.organisationId,
@@ -1281,6 +1393,7 @@ export class FightsService {
       notes: input.notes ?? null,
       override: input.override ?? false,
       reason: input.reason ?? null,
+      expectedUpdatedAt: input.expectedUpdatedAt ?? null,
     });
     return { fight, advanced };
   }
@@ -1349,7 +1462,8 @@ export class FightsService {
     }
 
     const updateData: Prisma.FightUncheckedUpdateInput = { status: input.to };
-    const resolvedRoundDurationSeconds = this.resolveRoundDurationSeconds(fight);
+    const resolvedRoundDurationSeconds =
+      this.resolveRoundDurationSeconds(fight);
     if (input.to === 'IN_PROGRESS' && !fight.roundDurationSeconds) {
       updateData.roundDurationSeconds = resolvedRoundDurationSeconds;
     }
@@ -1420,8 +1534,10 @@ export class FightsService {
               startedAt: now,
               pausedAt: null,
               pausedMs: 0,
-              phaseDurationSeconds: timer.roundDurationSeconds || resolvedRoundDurationSeconds,
-              roundDurationSeconds: timer.roundDurationSeconds || resolvedRoundDurationSeconds,
+              phaseDurationSeconds:
+                timer.roundDurationSeconds || resolvedRoundDurationSeconds,
+              roundDurationSeconds:
+                timer.roundDurationSeconds || resolvedRoundDurationSeconds,
               restDurationSeconds:
                 timer.restDurationSeconds || DEFAULT_REST_DURATION_SECONDS,
               updatedByUserId: input.actorUserId,
@@ -1525,8 +1641,7 @@ export class FightsService {
     let pausedMs = existing?.pausedMs ?? 0;
     let phase: TimerPhaseEnum = existing?.phase ?? 'ROUND';
     let phaseDurationSeconds =
-      existing?.phaseDurationSeconds ??
-      this.resolveRoundDurationSeconds(fight);
+      existing?.phaseDurationSeconds ?? this.resolveRoundDurationSeconds(fight);
     let round = input.round ?? existing?.round ?? 1;
     let fightStatusUpdate: FightStatus | null = null;
 
@@ -1540,8 +1655,9 @@ export class FightsService {
         pausedMs = 0;
         phaseDurationSeconds =
           phase === 'REST'
-            ? existing?.restDurationSeconds ?? DEFAULT_REST_DURATION_SECONDS
-            : existing?.roundDurationSeconds ?? this.resolveRoundDurationSeconds(fight);
+            ? (existing?.restDurationSeconds ?? DEFAULT_REST_DURATION_SECONDS)
+            : (existing?.roundDurationSeconds ??
+              this.resolveRoundDurationSeconds(fight));
         fightStatusUpdate = 'IN_PROGRESS';
         break;
       case 'PAUSE':
@@ -1587,7 +1703,8 @@ export class FightsService {
       pausedMs,
       phaseDurationSeconds,
       roundDurationSeconds:
-        existing?.roundDurationSeconds ?? this.resolveRoundDurationSeconds(fight),
+        existing?.roundDurationSeconds ??
+        this.resolveRoundDurationSeconds(fight),
       restDurationSeconds:
         existing?.restDurationSeconds ?? DEFAULT_REST_DURATION_SECONDS,
       redRoundWins: existing?.redRoundWins ?? 0,
@@ -1647,12 +1764,27 @@ export class FightsService {
     notes?: string | null;
     override?: boolean;
     reason?: string | null;
+    expectedUpdatedAt?: string | null;
   }) {
     const fight = await this.prisma.fight.findFirst({
       where: { id: input.fightId, organisationId: input.organisationId },
       include: { event: true },
     });
     if (!fight) throw new Error('FIGHT_NOT_FOUND');
+
+    // BF-2: optimistic lock. The client echoes the fight.updatedAt it last saw;
+    // if the row changed since (another judge already scored it), reject the
+    // stale write instead of last-writer-wins silently overwriting the result.
+    // Mirrors the TIMER_STALE_UPDATE guard already used by the timer endpoints.
+    if (input.expectedUpdatedAt) {
+      const expectedMs = new Date(input.expectedUpdatedAt).getTime();
+      if (
+        Number.isNaN(expectedMs) ||
+        expectedMs !== fight.updatedAt.getTime()
+      ) {
+        throw new Error('FIGHT_STALE_UPDATE');
+      }
+    }
 
     this.assertLiveStage(fight.event.lifecycle, input.override, input.reason);
 
@@ -1698,7 +1830,9 @@ export class FightsService {
         notes: input.notes ?? null,
         reason: input.reason ?? null,
         override: input.override ?? false,
-        auditAction: input.override ? 'FIGHT_RESULT_AMENDED' : 'FIGHT_RESULT_SET',
+        auditAction: input.override
+          ? 'FIGHT_RESULT_AMENDED'
+          : 'FIGHT_RESULT_SET',
       });
     });
     this.invalidateLiveBoardCache(input.organisationId, fight.eventId);
@@ -1719,6 +1853,7 @@ export class FightsService {
 
     const nextFight = await tx.fight.findUnique({
       where: { id: fight.nextFightId },
+      include: { timerState: { select: { state: true } } },
     });
     if (!nextFight) return null;
 
@@ -1729,6 +1864,15 @@ export class FightsService {
       : nextFight.blueAthleteId;
 
     if (existingAthleteId === fight.winnerAthleteId) {
+      return nextFight;
+    }
+
+    // BF-3: never overwrite a downstream slot once that fight has already
+    // started or been scored — propagating into a live/decided bout corrupts
+    // it. This guard lives inside propagation so EVERY caller (setResult,
+    // recordRoundResult, finishFight) is protected, not just the ones with a
+    // preamble lock check. Leave the slot for manual review instead.
+    if (isDownstreamFightLocked(nextFight)) {
       return nextFight;
     }
 

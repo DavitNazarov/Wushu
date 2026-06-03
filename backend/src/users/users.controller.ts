@@ -24,17 +24,26 @@ import {
   updateUserSchema,
 } from './users.schemas';
 
+// Admin user management routes mounted at `/api/admin/users`.
+// Every endpoint requires the EVENTS_MANAGE capability — we reuse this
+// existing top-level admin permission rather than introducing a separate
+// USERS_MANAGE, since only admins have it anyway.
 @Controller('admin/users')
 @UseGuards(AuthGuard, CapabilityGuard)
 export class UsersController {
   constructor(private readonly users: UsersService) {}
 
+  // GET /api/admin/users — list every user in the caller's organisation
+  // (used by the admin users index page).
   @Get()
   @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
   async list(@Req() req: AuthenticatedRequest) {
     return this.users.list(req.auth!.organisationId);
   }
 
+  // POST /api/admin/users — create a new admin/coach/judge/timekeeper.
+  // Body is validated by createUserSchema; nationality + clubId are coach-only
+  // hints used to drive the coach athlete form (see CLAUDE.md "Coach Nationality").
   @Post()
   @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
   async create(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
@@ -57,6 +66,7 @@ export class UsersController {
     }
   }
 
+  // GET /api/admin/users/:id — single-user detail for the admin edit drawer.
   @Get(':id')
   @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
   async getOne(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
@@ -67,6 +77,10 @@ export class UsersController {
     }
   }
 
+  // PATCH /api/admin/users/:id — partial update (email, displayName, role,
+  // clubId, nationality, isActive). Service enforces role/club consistency
+  // (COACH_CLUB_REQUIRED, ADMIN_CLUB_FORBIDDEN) and these surface as 400s
+  // via rethrowKnownError.
   @Patch(':id')
   @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
   async update(
@@ -94,6 +108,9 @@ export class UsersController {
     }
   }
 
+  // POST /api/admin/users/:id/dq — suspend ("DQ") a user for a fixed window.
+  // Used for coach disqualifications. Returns SELF_DQ_FORBIDDEN if the actor
+  // tries to suspend themselves, and INVALID_DQ_RANGE if end ≤ start.
   @Post(':id/dq')
   @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
   async suspend(
@@ -119,6 +136,8 @@ export class UsersController {
     }
   }
 
+  // POST /api/admin/users/:id/remove-dq — clear an active suspension early.
+  // Returns USER_NOT_SUSPENDED if there's no active DQ to clear.
   @Post(':id/remove-dq')
   @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
   async removeSuspension(
@@ -136,6 +155,9 @@ export class UsersController {
     }
   }
 
+  // DELETE /api/admin/users/:id — soft-archive (NOT a hard delete). Sets
+  // isArchived=true to preserve audit history and FK integrity. Blocks
+  // self-archive (SELF_DELETE_FORBIDDEN) so admins can't lock themselves out.
   @Delete(':id')
   @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
   async archive(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
@@ -150,12 +172,12 @@ export class UsersController {
     }
   }
 
+  // GET /api/admin/users/:id/activity — audit-log slice for this user
+  // (logins, actions taken, suspensions issued). Powers the "Activity" tab
+  // in the admin user drawer.
   @Get(':id/activity')
   @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
-  async getActivity(
-    @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
-  ) {
+  async getActivity(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     try {
       return await this.users.getActivity(req.auth!.organisationId, id);
     } catch (error) {
@@ -163,6 +185,9 @@ export class UsersController {
     }
   }
 
+  // GET /api/admin/users/:id/capabilities — the computed permission set
+  // (capabilities derived from role + flags). Used by the admin to inspect
+  // what a user can actually do at runtime.
   @Get(':id/capabilities')
   @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
   async getCapabilities(
@@ -176,6 +201,10 @@ export class UsersController {
     }
   }
 
+  // Shared Zod-parse helper. Converts Zod validation errors into a
+  // 400 BadRequest with a structured { code, message, issues } body the
+  // frontend can render field-level error messages from. Any non-Zod error
+  // is rethrown unchanged.
   private parseBody<T extends z.ZodTypeAny>(
     schema: T,
     body: unknown,
@@ -197,6 +226,17 @@ export class UsersController {
     }
   }
 
+  // Maps service-layer string errors (thrown as `throw new Error('CODE')`) to
+  // the correct HTTP status:
+  //   USER_NOT_FOUND                                  → 404
+  //   COACH_CLUB_REQUIRED | ADMIN_CLUB_FORBIDDEN
+  //   INVALID_CLUB | INVALID_DQ_RANGE
+  //   USER_ALREADY_SUSPENDED | USER_NOT_SUSPENDED
+  //   USER_ARCHIVED                                   → 400
+  //   SELF_DELETE_FORBIDDEN | SELF_DQ_FORBIDDEN       → 403
+  //   EMAIL_ALREADY_IN_USE                            → 409
+  //   anything else                                   → 500
+  // Returns `never` so callers can use it in a tail-position throw.
   private rethrowKnownError(error: unknown): never {
     const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
 
@@ -239,6 +279,9 @@ export class UsersController {
     );
   }
 
+  // Human-readable copy for each error code. Returned as the `message`
+  // field next to the machine-readable `code`, so the frontend can show the
+  // text directly (or translate via `code` if it has its own i18n).
   private errorMessage(code: string): string {
     switch (code) {
       case 'COACH_CLUB_REQUIRED':

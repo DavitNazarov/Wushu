@@ -12,7 +12,9 @@ function createPrismaMock() {
       update: jest.fn(),
       findMany: jest.fn(),
     },
-    $transaction: jest.fn(async (fn: (tx: any) => Promise<unknown>) => fn(prisma)),
+    $transaction: jest.fn(async (fn: (tx: any) => Promise<unknown>) =>
+      fn(prisma),
+    ),
   };
   return prisma;
 }

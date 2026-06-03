@@ -1,6 +1,8 @@
 import type { UserRole } from '@prisma/client';
 import type { UserAccountStatus } from './users.state';
 
+// JSON contract for one row in GET /admin/users. Dates are ISO strings (not
+// Date instances) since this type is meant to mirror what crosses the wire.
 export type UserListRow = {
   id: string;
   email: string;
@@ -15,6 +17,8 @@ export type UserListRow = {
   club: { id: string; name: string } | null;
 };
 
+// JSON contract for GET /admin/users/:id. Adds the nested `disciplinary`
+// summary and the archive timestamp on top of the list shape.
 export type UserDetailRow = {
   id: string;
   email: string;
@@ -37,6 +41,7 @@ export type UserDetailRow = {
   updatedAt: string;
 };
 
+// One row in GET /admin/users/:id/activity — slim projection of AuditLog.
 export type UserActivityEntry = {
   id: string;
   action: string;
@@ -47,6 +52,9 @@ export type UserActivityEntry = {
   createdAt: string;
 };
 
+// One row in GET /admin/users/:id/capabilities. Two booleans (isDefault +
+// isCustom) instead of a single source enum so the UI can show both states
+// independently (e.g. "granted by role, NOT customizable").
 export type UserCapabilityRow = {
   code: string;
   granted: boolean;
@@ -54,6 +62,11 @@ export type UserCapabilityRow = {
   isCustom: boolean;
 };
 
+// Discriminated union returned by the AuthGuard when it validates a token
+// + DB lookup. On success carries the decoded JWT payload; on failure carries
+// a typed reason so the guard can map it to the correct 401/403 response.
+// Lives here (not in auth/) because UsersService shares the underlying state
+// rules that drive these failure codes.
 export type AuthGuardValidationResult =
   | {
       ok: true;

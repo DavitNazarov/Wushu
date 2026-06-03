@@ -6,12 +6,21 @@ import type {
   WeighInStatus,
 } from '@prisma/client';
 
+// JSON contract types for /draw/overview and /draw/category. All ids stable;
+// changing one breaks the frontend.
+
+// CRITICAL blocks the draw; WARNING just shows a yellow banner.
 export type DrawIssueSeverity = 'CRITICAL' | 'WARNING';
 
+// Top-level draw status pill at the header. See deriveDrawOverallStatus for
+// the precise mapping.
 export type DrawOverallStatus = 'NOT_GENERATED' | 'GENERATED' | 'PUBLISHED';
 
+// Per-category "has the bracket been drawn?" — separate from the readinessStatus
+// because a DRAWN category can still have issues (we just don't surface them).
 export type DrawBracketStatus = 'NOT_DRAWN' | 'DRAWN';
 
+// Per-category readiness pill. See deriveCategoryStatus for the precedence.
 export type DrawCategoryStatus =
   | 'READY'
   | 'BLOCKED'
@@ -19,6 +28,8 @@ export type DrawCategoryStatus =
   | 'EMPTY'
   | 'NEEDS_REVIEW';
 
+// One validation issue. `count` may exceed `sampleIds.length` because we cap
+// the array at 5 entries — UI shows "+N more".
 export type DrawValidationIssue = {
   code: string;
   severity: DrawIssueSeverity;
@@ -26,12 +37,16 @@ export type DrawValidationIssue = {
   sampleIds: string[];
 };
 
+// Top-level validation report. `healthy` is the convenience flag — true when
+// both critical AND warnings are empty.
 export type DrawValidationSummary = {
   critical: DrawValidationIssue[];
   warnings: DrawValidationIssue[];
   healthy: boolean;
 };
 
+// Tells the UI whether the two big draw buttons should be enabled. If not,
+// the *BlockedReasonCode strings are i18n keys for the disabled tooltip.
 export type DrawActionAvailability = {
   canGenerate: boolean;
   canRegenerate: boolean;
@@ -39,6 +54,7 @@ export type DrawActionAvailability = {
   regenerateBlockedReasonCode: string | null;
 };
 
+// Slim audit log projection for the "Recent activity" panel.
 export type DrawAuditSummaryItem = {
   id: string;
   action: string;
@@ -49,6 +65,8 @@ export type DrawAuditSummaryItem = {
   override: boolean;
 };
 
+// One row in the eligible/excluded athlete tables shown on the per-category
+// detail view. `eligibilityState` is the column the UI sorts/filters on.
 export type DrawAthletePoolRow = {
   registrationId: string;
   athleteId: string;
@@ -65,6 +83,8 @@ export type DrawAthletePoolRow = {
   exclusionReasonCode: string | null;
 };
 
+// One row in the per-category overview table. Carries pre-computed counters
+// + an inline issues list so the UI can render without re-deriving anything.
 export type DrawCategoryOverviewRow = {
   id: string;
   ageGroupCode: string;
@@ -84,6 +104,7 @@ export type DrawCategoryOverviewRow = {
   issues: DrawValidationIssue[];
 };
 
+// Wire shape for GET /api/draw/category — overview row + the two athlete lists.
 export type DrawCategoryDetailsResponse = {
   eventId: string;
   category: DrawCategoryOverviewRow;
@@ -91,6 +112,7 @@ export type DrawCategoryDetailsResponse = {
   excludedAthletes: DrawAthletePoolRow[];
 };
 
+// Header summary numbers for the readiness page cards.
 export type DrawOverviewSummary = {
   totalCategories: number;
   readyCategoriesCount: number;
@@ -105,6 +127,8 @@ export type DrawOverviewSummary = {
   warningIssuesCount: number;
 };
 
+// Full wire shape for GET /api/draw/overview. The richest single payload in
+// the draw module — the UI builds the entire pre-draw page from this object.
 export type DrawOverviewResponse = {
   event: {
     id: string;
@@ -131,11 +155,15 @@ export type DrawOverviewResponse = {
   categories: DrawCategoryOverviewRow[];
 };
 
+// Internal: row carrying the full athlete lists inline so per-category lookups
+// don't need a second DB pass. NOT serialized to the client.
 export type DrawCategoryComputedRow = DrawCategoryOverviewRow & {
   eligibleAthletes: DrawAthletePoolRow[];
   excludedAthletes: DrawAthletePoolRow[];
 };
 
+// Internal: full result returned by computeDrawReadiness — both the
+// client-shaped overview and the per-category Map for cheap lookups.
 export type DrawComputedOverview = {
   overview: DrawOverviewResponse;
   categoriesById: Map<string, DrawCategoryComputedRow>;

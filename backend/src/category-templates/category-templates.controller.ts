@@ -56,7 +56,11 @@ export class CategoryTemplatesController {
     @Query('type') type?: string,
   ) {
     const auth = req.auth!;
-    const parsed = CategoryTemplateListQuerySchema.safeParse({ q, status, type });
+    const parsed = CategoryTemplateListQuerySchema.safeParse({
+      q,
+      status,
+      type,
+    });
     if (!parsed.success) {
       throw new HttpException(
         {
@@ -117,7 +121,10 @@ export class CategoryTemplatesController {
     const auth = req.auth!;
 
     try {
-      return await this.categoryTemplateAdmin.getDetail(auth.organisationId, id);
+      return await this.categoryTemplateAdmin.getDetail(
+        auth.organisationId,
+        id,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'UNKNOWN';
       if (message === 'CATEGORY_TEMPLATE_NOT_FOUND') {
@@ -205,7 +212,10 @@ export class CategoryTemplatesController {
   ) {
     const auth = req.auth!;
     try {
-      return await this.categoryTemplates.getCategoryTree(auth.organisationId, id);
+      return await this.categoryTemplates.getCategoryTree(
+        auth.organisationId,
+        id,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'UNKNOWN';
       if (message === 'CATEGORY_TEMPLATE_NOT_FOUND') {

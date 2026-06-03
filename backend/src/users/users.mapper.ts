@@ -2,6 +2,9 @@ import type { Prisma } from '@prisma/client';
 import { getUserAccountStatus, isUserDqActive } from './users.state';
 import type { UserDetailRow, UserListRow } from './users.types';
 
+// The shape returned by every Prisma read in UsersService — built from
+// `userSelect` below. Kept as a hand-written type rather than Prisma-inferred
+// because it crosses module boundaries (audit snapshots, list/detail mappers).
 export type ManagedUserRecord = {
   id: string;
   organisationId: string;
@@ -21,6 +24,10 @@ export type ManagedUserRecord = {
   club: { id: string; name: string } | null;
 };
 
+// Canonical Prisma `select` block reused by every UsersService query.
+// `satisfies Prisma.UserSelect` keeps the type narrow while still letting
+// Prisma's generated typings drive the resulting row shape. Changing this
+// block changes the shape of ManagedUserRecord everywhere — be intentional.
 export const userSelect = {
   id: true,
   organisationId: true,
@@ -45,6 +52,9 @@ export const userSelect = {
   },
 } satisfies Prisma.UserSelect;
 
+// Map a DB row to the index-page row shape. Adds a computed `status`
+// (active / dq'd / archived) and serializes Date instances to ISO strings
+// so the JSON response is stable across timezones.
 export function toListRow(user: ManagedUserRecord): UserListRow {
   return {
     id: user.id,
@@ -61,6 +71,10 @@ export function toListRow(user: ManagedUserRecord): UserListRow {
   };
 }
 
+// Map a DB row to the detail-drawer row shape. Same as toListRow plus a
+// nested `disciplinary` object so the drawer can show the active DQ window
+// without re-deriving it on the client. role is cast to admin|coach because
+// the rest of the codebase guarantees we only operate on those two values.
 export function toDetailRow(user: ManagedUserRecord): UserDetailRow {
   return {
     id: user.id,
@@ -85,6 +99,9 @@ export function toDetailRow(user: ManagedUserRecord): UserDetailRow {
   };
 }
 
+// Stable, JSON-safe snapshot used as the `before`/`after` payload on every
+// USER_* audit log row. Intentionally drops id/createdAt/updatedAt and the
+// club join — we want the diffable fields, not noise from auto-managed cols.
 export function auditSnapshot(user: ManagedUserRecord) {
   return {
     email: user.email,

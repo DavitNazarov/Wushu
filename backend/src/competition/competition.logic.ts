@@ -105,7 +105,10 @@ function maxRound(fights: CompetitionFight[]): number {
 
 function openingRound(fights: CompetitionFight[]): number {
   if (fights.length === 0) return 0;
-  return fights.reduce((min, fight) => Math.min(min, fight.round), fights[0].round);
+  return fights.reduce(
+    (min, fight) => Math.min(min, fight.round),
+    fights[0].round,
+  );
 }
 
 function fightIsComplete(status: FightStatus): boolean {
@@ -132,7 +135,10 @@ function getFightByRoundBout(
   round: number,
   boutNo: number,
 ): CompetitionFight | null {
-  return fights.find((fight) => fight.round === round && fight.boutNo === boutNo) ?? null;
+  return (
+    fights.find((fight) => fight.round === round && fight.boutNo === boutNo) ??
+    null
+  );
 }
 
 function isResultStatus(status: FightStatus): boolean {
@@ -150,10 +156,7 @@ function loserAthleteId(fight: CompetitionFight): string | null {
   return null;
 }
 
-function participantName(
-  athleteId: string,
-  byId: Map<string, string>,
-): string {
+function participantName(athleteId: string, byId: Map<string, string>): string {
   return byId.get(athleteId) ?? athleteId;
 }
 
@@ -164,7 +167,11 @@ function isFightReadyForExecution(input: {
 }): boolean {
   const { fight, format, openingRoundNo } = input;
   if (fightIsComplete(fight.status)) return false;
-  if (fight.status === 'IN_PROGRESS' || fight.status === 'PAUSED' || fight.status === 'ON_DECK') {
+  if (
+    fight.status === 'IN_PROGRESS' ||
+    fight.status === 'PAUSED' ||
+    fight.status === 'ON_DECK'
+  ) {
     return true;
   }
   if (fight.status !== 'QUEUED') return false;
@@ -218,9 +225,7 @@ function participantView(input: {
   }
 
   const sourceBoutNo =
-    input.side === 'red'
-      ? input.fight.boutNo * 2 - 1
-      : input.fight.boutNo * 2;
+    input.side === 'red' ? input.fight.boutNo * 2 - 1 : input.fight.boutNo * 2;
   const sourceFight = getFightByRoundBout(
     input.fights,
     input.fight.round - 1,
@@ -364,9 +369,7 @@ export function validateCompetitionStructure(input: {
         );
       }
     }
-    if (
-      [...openingAppearances.values()].some((count) => count > 1)
-    ) {
+    if ([...openingAppearances.values()].some((count) => count > 1)) {
       issues.push({
         code: 'DUPLICATE_OPENING_ROUND_ATHLETE',
         severity: 'CRITICAL',
@@ -425,7 +428,10 @@ export function validateCompetitionStructure(input: {
       pairings.add(key);
     }
 
-    if (pairings.size !== expectedPairings || fights.length !== expectedPairings) {
+    if (
+      pairings.size !== expectedPairings ||
+      fights.length !== expectedPairings
+    ) {
       issues.push({
         code: 'ROUND_ROBIN_MISSING_PAIRINGS',
         severity: 'CRITICAL',
@@ -433,7 +439,11 @@ export function validateCompetitionStructure(input: {
     }
   }
 
-  if (fights.some((fight) => isResultStatus(fight.status) && !fight.winnerAthleteId)) {
+  if (
+    fights.some(
+      (fight) => isResultStatus(fight.status) && !fight.winnerAthleteId,
+    )
+  ) {
     issues.push({
       code: 'MISSING_FIGHT_WINNER',
       severity: 'CRITICAL',
@@ -442,15 +452,15 @@ export function validateCompetitionStructure(input: {
 
   return {
     needsReview: issues.some((issue) => issue.severity === 'CRITICAL'),
-    issues: [...new Set(issues.map((issue) => `${issue.code}:${issue.severity}`))].map(
-      (key) => {
-        const [code, severity] = key.split(':');
-        return {
-          code,
-          severity: severity as CompetitionValidationIssueSeverity,
-        };
-      },
-    ),
+    issues: [
+      ...new Set(issues.map((issue) => `${issue.code}:${issue.severity}`)),
+    ].map((key) => {
+      const [code, severity] = key.split(':');
+      return {
+        code,
+        severity: severity as CompetitionValidationIssueSeverity,
+      };
+    }),
   };
 }
 
@@ -507,7 +517,9 @@ export function buildBracketOrCompetitionViewModel(input: {
   });
 
   const nextFight = getNextAvailableFight({ fights, format });
-  const doneCount = fights.filter((fight) => fightIsComplete(fight.status)).length;
+  const doneCount = fights.filter((fight) =>
+    fightIsComplete(fight.status),
+  ).length;
   const firstRound = openingRound(fights);
   const highestRound = maxRound(fights);
 
@@ -527,7 +539,9 @@ export function buildBracketOrCompetitionViewModel(input: {
     });
 
   const queue = fights
-    .filter((fight) => !fightIsComplete(fight.status) && fight.id !== nextFight?.id)
+    .filter(
+      (fight) => !fightIsComplete(fight.status) && fight.id !== nextFight?.id,
+    )
     .map(mapFight);
 
   const completed = fights
@@ -689,7 +703,9 @@ export function computeCategoryResults(input: {
     });
 
   const totalFights = fights.length;
-  const completedFights = fights.filter((fight) => fightIsComplete(fight.status)).length;
+  const completedFights = fights.filter((fight) =>
+    fightIsComplete(fight.status),
+  ).length;
   const isComplete = totalFights > 0 && completedFights === totalFights;
 
   const nameById = new Map<string, string>();
@@ -744,7 +760,9 @@ export function computeCategoryResults(input: {
     highestRound > openingRound(fights)
   ) {
     const semifinalRound = highestRound - 1;
-    for (const semifinal of fights.filter((fight) => fight.round === semifinalRound)) {
+    for (const semifinal of fights.filter(
+      (fight) => fight.round === semifinalRound,
+    )) {
       const loser = loserAthleteId(semifinal);
       if (loser) bronzeAthleteIds.push(loser);
     }
@@ -754,7 +772,9 @@ export function computeCategoryResults(input: {
   placements.push({
     rank: 1,
     athleteId: goldAthleteId,
-    athleteName: goldAthleteId ? participantName(goldAthleteId, nameById) : null,
+    athleteName: goldAthleteId
+      ? participantName(goldAthleteId, nameById)
+      : null,
     medal: 'GOLD',
   });
   placements.push({

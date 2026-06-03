@@ -1,5 +1,9 @@
 /** Pure utility functions for bracket generation (no DI needed). */
 
+// Deterministic Fisher-Yates shuffle. Uses a Linear Congruential Generator
+// seeded by `seed` so the same input + seed always produce the same output —
+// critical because we audit the seed and want admins to be able to reproduce
+// a draw byte-for-byte. NOT cryptographically secure (don't use for tokens).
 export function seededShuffle<T>(arr: T[], seed: number): T[] {
   const out = [...arr];
   let s = seed;
@@ -11,12 +15,22 @@ export function seededShuffle<T>(arr: T[], seed: number): T[] {
   return out;
 }
 
+// Smallest power of two ≥ n. Brackets are always sized to a power of two so
+// the single-elim tree is balanced; the extra slots become BYEs.
 export function nextPowerOfTwo(n: number): number {
   let p = 1;
   while (p < n) p <<= 1;
   return p;
 }
 
+// Build a single-elimination bracket from a seeded athlete list.
+//   1. Pad to the next power of two with null slots (these become BYEs).
+//   2. Re-order leaves with buildSeedOrder so the 1-vs-N, 4-vs-5 standard
+//      bracket distribution is preserved — top seeds meet bottom seeds first.
+//   3. Walk pairs in each round to emit { round, boutNo, redId, blueId } rows.
+//      Subsequent rounds are emitted with null athletes — the actual winner
+//      gets propagated in by DrawService.linkFightDependencies + the
+//      autoConfirmByes pass after the DB write.
 export function buildSingleElimBracket(athleteIds: (string | null)[]): Array<{
   round: number;
   boutNo: number;
@@ -60,6 +74,10 @@ export function buildSingleElimBracket(athleteIds: (string | null)[]): Array<{
   return bouts;
 }
 
+// Recursive construction of the canonical bracket seed order. For size N the
+// output is the seed numbers placed left-to-right in the bracket: e.g. size 8
+// → [1, 8, 4, 5, 2, 7, 3, 6]. Each level mirrors the previous level around
+// the midpoint, which is what gives you the 1-vs-N matchups at every round.
 function buildSeedOrder(size: number): number[] {
   if (size <= 1) return [1];
   if (size === 2) return [1, 2];
@@ -73,6 +91,10 @@ function buildSeedOrder(size: number): number[] {
   return current;
 }
 
+// Round-robin (everyone plays everyone) bouts. Used when there are too few
+// athletes for a single-elim bracket to make sense. All bouts are placed in
+// round 1 because round-robins have no upstream/downstream propagation;
+// boutNo is a monotonically increasing display order.
 export function buildRoundRobinBracket(athleteIds: string[]): Array<{
   round: number;
   boutNo: number;

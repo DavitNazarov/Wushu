@@ -6,13 +6,24 @@ import type {
 } from './brackets.types';
 import type { CompetitionFormat } from './competition-format';
 
+// Pure helpers for the post-draw "Brackets" page. Status derivation, issue
+// detection, round labels. No Prisma, no DI — every fn takes a plain input
+// and returns a plain output for trivial testing.
+
+// Fight statuses that count as "done" — covers both judge-confirmed and the
+// pre-confirmation COMPLETE state.
 const COMPLETE_FIGHT_STATUSES = new Set<FightStatus>(['COMPLETE', 'CONFIRMED']);
+
+// "Something is happening on this fight right now" — used to pick the
+// IN_PROGRESS bracket status and to know when a bracket can't be reset.
 const IN_PROGRESS_FIGHT_STATUSES = new Set<FightStatus>([
   'IN_PROGRESS',
   'PAUSED',
   'ON_DECK',
 ]);
 
+// Input shape for deriveBracketCategoryStatus. Carries the small set of
+// per-bracket facts the status machine needs.
 export type BracketStatusInput = {
   hasFights: boolean;
   totalFights: number;
@@ -24,6 +35,9 @@ export type BracketStatusInput = {
   eventPublished: boolean;
 };
 
+// "Is this event in a publicly-visible state?" — true if either the explicit
+// flag is on OR the lifecycle has moved past DRAWN. Used everywhere we need
+// to know if changes should be visible to the public.
 export function isEventPublished(input: {
   lifecycle: EventLifecycle;
   published: boolean;
@@ -36,6 +50,9 @@ export function isEventPublished(input: {
   );
 }
 
+// One-pass counter over an array of fight statuses. Returns how many fights
+// are done and how many are mid-fight, so the UI can show "5 of 8 fights
+// complete, 2 in progress".
 export function fightStateCounters(statuses: FightStatus[]): {
   completed: number;
   inProgress: number;
@@ -56,6 +73,17 @@ export function fightStateCounters(statuses: FightStatus[]): {
   return { completed, inProgress };
 }
 
+// Pill shown next to each bracket. Priority order:
+//   No fights:
+//     EMPTY          (no eligible athletes ever)
+//     NOT_GENERATED  (other brackets in this event drawn but not this one)
+//     NEEDS_REVIEW   (some brackets generated, this one missing — drift)
+//   Has fights:
+//     NEEDS_REVIEW   (integrity issue detected)
+//     COMPLETED      (every fight done, none in progress)
+//     IN_PROGRESS    (anything running OR partially completed)
+//     PUBLISHED      (event flagged published and nothing's started)
+//     GENERATED_DRAFT (drawn but not yet published)
 export function deriveBracketCategoryStatus(
   input: BracketStatusInput,
 ): BracketViewStatus {
@@ -81,6 +109,8 @@ export function deriveBracketCategoryStatus(
   return input.eventPublished ? 'PUBLISHED' : 'GENERATED_DRAFT';
 }
 
+// Two-state publication pill for the brackets list. DRAFT until both
+// fights exist AND the event is published.
 export function derivePublicationStatus(input: {
   hasFights: boolean;
   eventPublished: boolean;
@@ -89,6 +119,17 @@ export function derivePublicationStatus(input: {
   return input.eventPublished ? 'PUBLISHED' : 'DRAFT';
 }
 
+// Catalog of structural integrity checks on a bracket. Each input flag is
+// computed by BracketsService.getCategoryDetails; this fn turns them into
+// the user-visible issue list. Code/severity pairings:
+//   INVALID_EMPTY_FIGHT          CRITICAL  — fight row with neither athlete + not a BYE
+//   MISSING_FIGHT_WINNER         CRITICAL  — COMPLETE/CONFIRMED but no winner attached
+//   MISSING_FINAL_FIGHT          WARNING   — single-elim missing the final fight row
+//   DUPLICATE_OPENING_ROUND_ATHLETE CRITICAL — same athlete on two R1 fights
+//   DUPLICATE_ACTIVE_FIGHT_ATHLETE  CRITICAL — same athlete appears twice as athlete
+//   ROUND_ROBIN_INVALID_BYE      CRITICAL  — round-robin should never have BYEs
+//   ROUND_ROBIN_MISSING_PAIRINGS CRITICAL  — not every pair was generated
+// Round-robin-only and bracket-only branches are mutually exclusive.
 export function detectCategoryIntegrityIssues(input: {
   competitionFormat: CompetitionFormat;
   hasFights: boolean;
@@ -109,23 +150,26 @@ export function detectCategoryIntegrityIssues(input: {
   if (input.completeWithoutWinner) {
     issues.push({ code: 'MISSING_FIGHT_WINNER', severity: 'CRITICAL' });
   }
-  if (
-    input.competitionFormat !== 'ROUND_ROBIN' &&
-    input.hasMissingFinalRound
-  ) {
+  if (input.competitionFormat !== 'ROUND_ROBIN' && input.hasMissingFinalRound) {
     issues.push({ code: 'MISSING_FINAL_FIGHT', severity: 'WARNING' });
   }
   if (
     input.competitionFormat !== 'ROUND_ROBIN' &&
     input.duplicateAthleteInOpeningRound
   ) {
-    issues.push({ code: 'DUPLICATE_OPENING_ROUND_ATHLETE', severity: 'CRITICAL' });
+    issues.push({
+      code: 'DUPLICATE_OPENING_ROUND_ATHLETE',
+      severity: 'CRITICAL',
+    });
   }
   if (
     input.competitionFormat !== 'ROUND_ROBIN' &&
     input.duplicateAthleteInActiveFights
   ) {
-    issues.push({ code: 'DUPLICATE_ACTIVE_FIGHT_ATHLETE', severity: 'CRITICAL' });
+    issues.push({
+      code: 'DUPLICATE_ACTIVE_FIGHT_ATHLETE',
+      severity: 'CRITICAL',
+    });
   }
   if (input.competitionFormat === 'ROUND_ROBIN' && input.hasRoundRobinByes) {
     issues.push({ code: 'ROUND_ROBIN_INVALID_BYE', severity: 'CRITICAL' });
@@ -140,6 +184,9 @@ export function detectCategoryIntegrityIssues(input: {
   return issues;
 }
 
+// Map a round number to a stage label the UI / public site display.
+// Last round = FINAL, second-last = SEMIFINAL, third-last = QUARTERFINAL,
+// everything earlier = ROUND_N. Round-robin always reports ROUND_ROBIN.
 export function roundStageLabel(
   round: number,
   maxRound: number,
@@ -152,6 +199,10 @@ export function roundStageLabel(
   return `ROUND_${round}`;
 }
 
+// Pull a score-looking token (e.g. "5-2", "10:8") out of fight.notes. Scores
+// are stored inside notes for legacy reasons — there's no first-class column.
+// Strips internal whitespace so "5 - 2" becomes "5-2" for display.
+// Returns null when notes is empty or no token matches.
 export function extractScoreToken(input: string | null): string | null {
   if (!input) return null;
   const match = input.match(/(\d{1,2}\s*[-:]\s*\d{1,2})/);

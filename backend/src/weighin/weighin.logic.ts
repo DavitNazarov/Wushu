@@ -4,6 +4,12 @@ import type {
   WeighInStatus,
 } from '@prisma/client';
 
+// Pure weigh-in decision logic — NO Prisma, NO Nest. All state needed for a
+// decision is passed in, all output is a plain object. Lives separate from
+// WeighinService so we can unit-test every policy branch deterministically.
+
+// Bounds for one weight category. minWeightKgExcl is exclusive (>),
+// maxWeightKgIncl is inclusive (≤) — the IWUF convention. nulls mean "no bound".
 export type WeightCategoryBounds = {
   id: string;
   name: string;
@@ -12,12 +18,19 @@ export type WeightCategoryBounds = {
   sortOrder: number;
 };
 
+// Minimal projection of a prior WeighInAttempt — enough to detect an open
+// ONE_HOUR reweigh window without joining everything.
 export type WeighInAttemptContext = {
   decision: WeighInDecision;
   deadlineAt: Date | null;
   resolvedAt: Date | null;
 };
 
+// Output of a policy evaluation. Always carries a decision + status pair
+// (paired in statusForOverrideOutcome too). moveToCategoryId is set when
+// the decision is MOVED_UP; deadlineAt is set when ONE_HOUR triggers.
+// `reason` is a machine-readable code (e.g. WEIGHT_IN_REGISTERED_CATEGORY)
+// that travels into the audit log + reason column.
 export type PolicyWeighInOutcome = {
   decision: WeighInDecision;
   weighInStatus: WeighInStatus;
@@ -26,10 +39,16 @@ export type PolicyWeighInOutcome = {
   reason: string;
 };
 
-function sortCategories(categories: WeightCategoryBounds[]): WeightCategoryBounds[] {
+// Copy + sort by sortOrder ascending — the canonical order categories appear
+// in the UI's weight ladder. Doesn't mutate input.
+function sortCategories(
+  categories: WeightCategoryBounds[],
+): WeightCategoryBounds[] {
   return [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
+// Standalone bounds check, exported because the preview service uses it too.
+// Both nulls mean unbounded on that side.
 export function isWithinCategoryBounds(
   weightKg: number,
   category: WeightCategoryBounds,
@@ -41,6 +60,10 @@ export function isWithinCategoryBounds(
   return aboveMin && belowMax;
 }
 
+// Walk up the sortOrder ladder from the current class and return the FIRST
+// higher class the athlete's actual weight fits in. Used by both MOVE_UP
+// and DIRECT_MOVE_UP policies. Returns null when the athlete is over the
+// heaviest class — i.e. nowhere to go.
 function findNextHigherMatchingCategory(input: {
   weightKg: number;
   currentCategory: WeightCategoryBounds;
@@ -58,6 +81,9 @@ function findNextHigherMatchingCategory(input: {
   return null;
 }
 
+// Find an unresolved ONE_HOUR attempt with the latest deadline. If one
+// exists, we're still inside the reweigh window from a previous fail and
+// must continue that window rather than opening a new one.
 function findOpenOneHourWindow(
   attempts: WeighInAttemptContext[],
 ): WeighInAttemptContext | null {
@@ -72,6 +98,9 @@ function findOpenOneHourWindow(
   return oneHourAttempts.find((row) => !row.resolvedAt) ?? null;
 }
 
+// Helpers below collapse the four valid outcome shapes into single calls so
+// the policy function stays readable. Each enforces a sensible decision↔status
+// pairing — e.g. you can't accidentally produce { decision: PASS, status: FAILED }.
 function buildPassedOutcome(reason: string): PolicyWeighInOutcome {
   return {
     decision: 'PASS',
@@ -121,6 +150,17 @@ function buildMovedUpOutcome(
   };
 }
 
+// Pure policy evaluator. Decision order:
+//   1. Weight fits the registered category exactly → PASS.
+//   2. Under the lower bound → FAIL (no path back).
+//   3. Over upper bound → branches by policy:
+//        DIRECT_MOVE_UP        → MOVED_UP to next fitting class, else FAIL.
+//        IWUF_STRICT_ONE_HOUR  → open/extend the 1-hour reweigh window.
+//                                After it expires → DISQUALIFIED.
+//        MOVE_UP_AFTER_FAILED_REWEIGH → same window, then MOVED_UP on expiry.
+//        MANUAL                → return FAIL with reason MANUAL_DECISION_REQUIRED
+//                                so the service knows to throw.
+// `now` is injectable so tests can drive reweigh-window scenarios.
 export function computePolicyWeighInOutcome(input: {
   policyCode: WeighInPolicyCode;
   weightKg: number;
@@ -147,7 +187,8 @@ export function computePolicyWeighInOutcome(input: {
     input.currentCategory.maxWeightKgIncl != null &&
     input.weightKg > input.currentCategory.maxWeightKgIncl;
 
-  if (!isOverUpperBound) return buildFailOutcome('FAIL', 'OUTSIDE_CATEGORY_RANGE');
+  if (!isOverUpperBound)
+    return buildFailOutcome('FAIL', 'OUTSIDE_CATEGORY_RANGE');
 
   const nextHigher = findNextHigherMatchingCategory({
     weightKg: input.weightKg,
@@ -157,7 +198,10 @@ export function computePolicyWeighInOutcome(input: {
 
   if (input.policyCode === 'DIRECT_MOVE_UP') {
     if (nextHigher) {
-      return buildMovedUpOutcome(nextHigher.id, 'DIRECT_MOVE_UP_TO_NEXT_CATEGORY');
+      return buildMovedUpOutcome(
+        nextHigher.id,
+        'DIRECT_MOVE_UP_TO_NEXT_CATEGORY',
+      );
     }
     return buildFailOutcome('FAIL', 'NO_VALID_HIGHER_CATEGORY');
   }
@@ -182,7 +226,10 @@ export function computePolicyWeighInOutcome(input: {
       );
     }
 
-    return buildFailOutcome('DISQUALIFIED', 'IWUF_STRICT_REWEIGH_WINDOW_EXPIRED');
+    return buildFailOutcome(
+      'DISQUALIFIED',
+      'IWUF_STRICT_REWEIGH_WINDOW_EXPIRED',
+    );
   }
 
   if (input.policyCode === 'MOVE_UP_AFTER_FAILED_REWEIGH') {
@@ -201,7 +248,10 @@ export function computePolicyWeighInOutcome(input: {
     }
 
     if (nextHigher) {
-      return buildMovedUpOutcome(nextHigher.id, 'MOVE_UP_AFTER_REWEIGH_WINDOW_EXPIRED');
+      return buildMovedUpOutcome(
+        nextHigher.id,
+        'MOVE_UP_AFTER_REWEIGH_WINDOW_EXPIRED',
+      );
     }
 
     return buildFailOutcome('FAIL', 'NO_VALID_HIGHER_CATEGORY_AFTER_REWEIGH');
@@ -211,6 +261,12 @@ export function computePolicyWeighInOutcome(input: {
   return buildFailOutcome('FAIL', 'MANUAL_DECISION_REQUIRED');
 }
 
+// Same outcome shape as the policy version, but the decision is supplied by
+// a human (admin override or MANUAL_ADMIN_DECISION policy). We still derive
+// downstream details (deadline for ONE_HOUR, next category for MOVED_UP)
+// so the caller doesn't have to know how each decision maps. MOVED_UP
+// throws NO_HIGHER_CATEGORY_AVAILABLE if there's no fitting class and the
+// caller didn't provide an explicit target id.
 export function computeManualDecisionOutcome(input: {
   decision: WeighInDecision;
   reason: string;

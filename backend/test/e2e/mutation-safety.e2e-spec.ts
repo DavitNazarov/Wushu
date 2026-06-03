@@ -50,8 +50,7 @@ async function setupSingleElimEvent(input: {
       categoryTemplateId: categoryTemplate.categoryTemplateId,
       ageGroups: [
         {
-          categoryTemplateGroupId:
-            categoryTemplate.categoryTemplateAgeGroupId,
+          categoryTemplateGroupId: categoryTemplate.categoryTemplateAgeGroupId,
           weightCategoryIds: categoryTemplate.categoryTemplateWeightIds,
         },
       ],
@@ -83,7 +82,8 @@ async function setupSingleElimEvent(input: {
         registrationId: registration.body.id,
         weightKg: 64,
         override: true,
-        reason: 'Allow weigh-in before lifecycle transition for safety e2e setup',
+        reason:
+          'Allow weigh-in before lifecycle transition for safety e2e setup',
         decision: 'PASS',
       }),
     );
@@ -106,12 +106,14 @@ async function setupSingleElimEvent(input: {
       }),
     );
     matId = mat.body.id as string;
-    await expectOk(client.post('/api/schedule/auto').send({
-      eventId,
-      startTimeIso: new Date().toISOString(),
-      avgBoutSeconds: 180,
-      bufferSeconds: 60,
-    }));
+    await expectOk(
+      client.post('/api/schedule/auto').send({
+        eventId,
+        startTimeIso: new Date().toISOString(),
+        avgBoutSeconds: 180,
+        bufferSeconds: 60,
+      }),
+    );
   }
   return { client, eventId, eventSlug: slug, eventWeightCategoryId, matId };
 }
@@ -128,7 +130,11 @@ describeIfDb('Mutation safety (e2e)', () => {
   });
 
   it('blocks redraw after a fight result is already recorded and leaves fights unchanged', async () => {
-    const { client, eventId } = await setupSingleElimEvent({ ctx, athleteCount: 4, publishTimingPolicyCode: 'MANUAL_PUBLISH_LATER' });
+    const { client, eventId } = await setupSingleElimEvent({
+      ctx,
+      athleteCount: 4,
+      publishTimingPolicyCode: 'MANUAL_PUBLISH_LATER',
+    });
     const fightsBefore = await ctx.prisma.fight.findMany({
       where: { eventId },
       orderBy: [{ round: 'asc' }, { boutNo: 'asc' }],
@@ -166,11 +172,28 @@ describeIfDb('Mutation safety (e2e)', () => {
   });
 
   it('hides unpublished competition data and blocks redraw after publish and LIVE start', async () => {
-    const { client, eventId, eventSlug } = await setupSingleElimEvent({ ctx, athleteCount: 4, publishTimingPolicyCode: 'MANUAL_PUBLISH_LATER', schedule: true });
-    await expectClientError(client.get('/api/public/brackets/overview').query({ eventSlug }), [404]);
-    await expectClientError(client.get('/api/public/schedule').query({ eventSlug }), [404]);
-    await expectClientError(client.get('/api/public/live').query({ eventSlug, mat: 'Mat A' }), [404]);
-    await expectClientError(client.get('/api/public/results').query({ eventSlug }), [404]);
+    const { client, eventId, eventSlug } = await setupSingleElimEvent({
+      ctx,
+      athleteCount: 4,
+      publishTimingPolicyCode: 'MANUAL_PUBLISH_LATER',
+      schedule: true,
+    });
+    await expectClientError(
+      client.get('/api/public/brackets/overview').query({ eventSlug }),
+      [404],
+    );
+    await expectClientError(
+      client.get('/api/public/schedule').query({ eventSlug }),
+      [404],
+    );
+    await expectClientError(
+      client.get('/api/public/live').query({ eventSlug, mat: 'Mat A' }),
+      [404],
+    );
+    await expectClientError(
+      client.get('/api/public/results').query({ eventSlug }),
+      [404],
+    );
     const fightIdsBefore = (
       await ctx.prisma.fight.findMany({
         where: { eventId },
@@ -178,7 +201,9 @@ describeIfDb('Mutation safety (e2e)', () => {
         select: { id: true },
       })
     ).map((fight) => fight.id);
-    await expectOk(client.post(`/api/events/${eventId}/publish`).send({ published: true }));
+    await expectOk(
+      client.post(`/api/events/${eventId}/publish`).send({ published: true }),
+    );
     await expectClientError(
       client.post('/api/draw').send({
         eventId,
@@ -188,7 +213,9 @@ describeIfDb('Mutation safety (e2e)', () => {
       }),
       [400, 409],
     );
-    await expectOk(client.post(`/api/events/${eventId}/lifecycle`).send({ to: 'LIVE' }));
+    await expectOk(
+      client.post(`/api/events/${eventId}/lifecycle`).send({ to: 'LIVE' }),
+    );
     await expectClientError(
       client.post('/api/draw').send({
         eventId,
@@ -209,7 +236,12 @@ describeIfDb('Mutation safety (e2e)', () => {
   });
 
   it('blocks result correction after a downstream fight has been touched', async () => {
-    const { client, eventId } = await setupSingleElimEvent({ ctx, athleteCount: 4, publishTimingPolicyCode: 'MANUAL_PUBLISH_LATER', schedule: true });
+    const { client, eventId } = await setupSingleElimEvent({
+      ctx,
+      athleteCount: 4,
+      publishTimingPolicyCode: 'MANUAL_PUBLISH_LATER',
+      schedule: true,
+    });
     await expectOk(
       client.post(`/api/events/${eventId}/lifecycle`).send({
         to: 'LIVE',
@@ -231,18 +263,26 @@ describeIfDb('Mutation safety (e2e)', () => {
         }),
       );
     }
-    await expectOk(client.post('/api/schedule/auto').send({
-      eventId,
-      startTimeIso: new Date().toISOString(),
-      avgBoutSeconds: 180,
-      bufferSeconds: 60,
-    }));
-    const finalFight = await ctx.prisma.fight.findFirst({ where: { eventId, round: 2 } });
+    await expectOk(
+      client.post('/api/schedule/auto').send({
+        eventId,
+        startTimeIso: new Date().toISOString(),
+        avgBoutSeconds: 180,
+        bufferSeconds: 60,
+      }),
+    );
+    const finalFight = await ctx.prisma.fight.findFirst({
+      where: { eventId, round: 2 },
+    });
     expect(finalFight?.redAthleteId).toBeTruthy();
     expect(finalFight?.blueAthleteId).toBeTruthy();
     await expectOk(client.post(`/api/fights/${finalFight!.id}/start`));
-    const semiOneBefore = await ctx.prisma.fight.findUnique({ where: { id: semiFinals[0].id } });
-    const finalBefore = await ctx.prisma.fight.findUnique({ where: { id: finalFight!.id } });
+    const semiOneBefore = await ctx.prisma.fight.findUnique({
+      where: { id: semiFinals[0].id },
+    });
+    const finalBefore = await ctx.prisma.fight.findUnique({
+      where: { id: finalFight!.id },
+    });
     const correction = await expectClientError(
       client.post(`/api/fights/${semiFinals[0].id}/result`).send({
         winner: 'BLUE',
@@ -253,8 +293,12 @@ describeIfDb('Mutation safety (e2e)', () => {
       [400, 409],
     );
     expect(correction.text || correction.body).toBeTruthy();
-    const semiOneAfter = await ctx.prisma.fight.findUnique({ where: { id: semiFinals[0].id } });
-    const finalAfter = await ctx.prisma.fight.findUnique({ where: { id: finalFight!.id } });
+    const semiOneAfter = await ctx.prisma.fight.findUnique({
+      where: { id: semiFinals[0].id },
+    });
+    const finalAfter = await ctx.prisma.fight.findUnique({
+      where: { id: finalFight!.id },
+    });
     expect(semiOneAfter?.winnerAthleteId).toBe(semiOneBefore?.winnerAthleteId);
     expect(finalAfter?.redAthleteId).toBe(finalBefore?.redAthleteId);
     expect(finalAfter?.blueAthleteId).toBe(finalBefore?.blueAthleteId);
@@ -271,7 +315,8 @@ describeIfDb('Mutation safety (e2e)', () => {
       client.post(`/api/events/${eventId}/lifecycle`).send({
         to: 'LIVE',
         override: true,
-        reason: 'Allow duplicate-start safety verification without publish dependency',
+        reason:
+          'Allow duplicate-start safety verification without publish dependency',
       }),
     );
 

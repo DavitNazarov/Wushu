@@ -16,6 +16,13 @@ import type {
 import type { DrawReadinessContext } from './draw.readiness.queries';
 import { buildValidationAndSummary } from './draw.readiness.validation';
 
+// Pure compute step for draw readiness. Takes a fully-loaded DrawReadinessContext
+// and emits the user-facing overview + per-category map. NO Prisma here — the
+// entire file is deterministic so it's trivially unit-testable.
+
+// Per-category accumulator. Built once per event category, then iterated
+// to attach athletes + tally issue counts before being projected into the
+// final DrawCategoryComputedRow.
 type CategoryBucket = {
   id: string;
   ageGroupCode: string;
@@ -30,6 +37,9 @@ type CategoryBucket = {
   warningIssueCounts: Map<string, { count: number; sampleIds: string[] }>;
 };
 
+// Increment-and-collect helper for issue tallies. We cap sampleIds at 5 so
+// the API doesn't return huge arrays for events with hundreds of athletes;
+// the UI shows "5 affected + N more" using count.
 function pushIssueCount(
   bucket: Map<string, { count: number; sampleIds: string[] }>,
   code: string,
@@ -46,6 +56,8 @@ function pushIssueCount(
   }
 }
 
+// Map → array projection with a severity tag attached. Used when assembling
+// the per-category issues list at the end of the loop.
 function toIssueArray(
   input: Map<string, { count: number; sampleIds: string[] }>,
   severity: 'CRITICAL' | 'WARNING',
@@ -58,6 +70,9 @@ function toIssueArray(
   }));
 }
 
+// Shape one athlete row for the eligible/excluded lists. The eligibility flag
+// is derived upstream; this fn just packages everything for the UI.
+// `eligibilityState` is the string the frontend filters/sorts on.
 function toAthletePoolRow(input: {
   registrationId: string;
   athleteId: string;
@@ -90,7 +105,12 @@ function toAthletePoolRow(input: {
   };
 }
 
-function buildBuckets(input: DrawReadinessContext): Map<string, CategoryBucket> {
+// Build an empty bucket per event category, keyed by eventWeightCategory id.
+// Captures the bracket-drawn flag from drawnCategoryIds so each bucket later
+// knows whether it's been drawn yet without a second pass.
+function buildBuckets(
+  input: DrawReadinessContext,
+): Map<string, CategoryBucket> {
   const buckets = new Map<string, CategoryBucket>();
   for (const category of input.categories) {
     buckets.set(category.id, {
@@ -110,7 +130,20 @@ function buildBuckets(input: DrawReadinessContext): Map<string, CategoryBucket> 
   return buckets;
 }
 
-export function computeDrawReadiness(input: DrawReadinessContext): DrawComputedOverview {
+// Main entry point. Three logical passes:
+//   1. Bucket every active registration into its event category, tagging it
+//      eligible or excluded. Tracks orphans (missing/invalid final category id)
+//      separately so they surface as event-level critical issues, not category ones.
+//   2. After bucketing, walk each bucket once to compute category-level
+//      warnings (MOVED_UP_PRESENT, OVERRIDE_PRESENT, ONE_ATHLETE_POOL) and
+//      derive its readinessStatus.
+//   3. Delegate top-level validation + summary aggregation to
+//      buildValidationAndSummary, then project the final response shape.
+// The returned `categoriesById` Map lets the per-category endpoint avoid
+// recomputing — the caller picks from the map.
+export function computeDrawReadiness(
+  input: DrawReadinessContext,
+): DrawComputedOverview {
   const buckets = buildBuckets(input);
   const missingFinalCategoryIds: string[] = [];
   const invalidFinalCategoryIds: string[] = [];
@@ -121,19 +154,22 @@ export function computeDrawReadiness(input: DrawReadinessContext): DrawComputedO
     if (!ACTIVE_REGISTRATION_STATUSES.has(registration.status)) continue;
 
     if (!registration.eventWeightCategoryId) {
-      if (missingFinalCategoryIds.length < 8) missingFinalCategoryIds.push(registration.id);
+      if (missingFinalCategoryIds.length < 8)
+        missingFinalCategoryIds.push(registration.id);
       continue;
     }
 
     const bucket = buckets.get(registration.eventWeightCategoryId);
     if (!bucket) {
-      if (invalidFinalCategoryIds.length < 8) invalidFinalCategoryIds.push(registration.id);
+      if (invalidFinalCategoryIds.length < 8)
+        invalidFinalCategoryIds.push(registration.id);
       continue;
     }
 
     const movedUp =
       registration.registeredEventWeightCategoryId != null &&
-      registration.eventWeightCategoryId !== registration.registeredEventWeightCategoryId;
+      registration.eventWeightCategoryId !==
+        registration.registeredEventWeightCategoryId;
     const overrideUsed =
       registration.weighInStatus === 'OVERRIDE_APPROVED' ||
       Boolean(registration.weighIns[0]?.override);
@@ -158,8 +194,8 @@ export function computeDrawReadiness(input: DrawReadinessContext): DrawComputedO
       registrationStatus: registration.status,
       weighInStatus: registration.weighInStatus,
       originalCategory:
-        registration.registeredEventWeightCategory?.categoryTemplateWeight.name ??
-        null,
+        registration.registeredEventWeightCategory?.categoryTemplateWeight
+          .name ?? null,
       finalCategory:
         registration.eventWeightCategory?.categoryTemplateWeight.name ?? null,
       movedUp,
@@ -174,7 +210,11 @@ export function computeDrawReadiness(input: DrawReadinessContext): DrawComputedO
       if (overrideUsed) overrideAthletesCount += 1;
     } else {
       bucket.excludedAthletes.push(athleteRow);
-      pushIssueCount(bucket.criticalIssueCounts, exclusionReasonCode!, registration.id);
+      pushIssueCount(
+        bucket.criticalIssueCounts,
+        exclusionReasonCode!,
+        registration.id,
+      );
     }
   }
 
@@ -218,7 +258,9 @@ export function computeDrawReadiness(input: DrawReadinessContext): DrawComputedO
       warningIssueCount: warningIssues.length,
       issueCount: issues.length,
       hasMovedUpAthletes: bucket.eligibleAthletes.some((row) => row.movedUp),
-      hasOverrideAthletes: bucket.eligibleAthletes.some((row) => row.overrideUsed),
+      hasOverrideAthletes: bucket.eligibleAthletes.some(
+        (row) => row.overrideUsed,
+      ),
       issues,
       eligibleAthletes: bucket.eligibleAthletes,
       excludedAthletes: bucket.excludedAthletes,
@@ -275,7 +317,8 @@ export function computeDrawReadiness(input: DrawReadinessContext): DrawComputedO
         blockedCategoriesCount: validationResult.summary.blockedCategoriesCount,
         drawnCategoriesCount: validationResult.summary.drawnCategoriesCount,
         emptyCategoriesCount: validationResult.summary.emptyCategoriesCount,
-        needsReviewCategoriesCount: validationResult.summary.needsReviewCategoriesCount,
+        needsReviewCategoriesCount:
+          validationResult.summary.needsReviewCategoriesCount,
         eligibleAthletesCount: validationResult.summary.eligibleAthletesCount,
         movedUpAthletesCount,
         outstandingIssuesCount:
@@ -308,7 +351,9 @@ export function computeDrawReadiness(input: DrawReadinessContext): DrawComputedO
           override: entry.override,
         })),
       },
-      categories: categoriesComputed.map(({ eligibleAthletes, excludedAthletes, ...row }) => row),
+      categories: categoriesComputed.map(
+        ({ eligibleAthletes, excludedAthletes, ...row }) => row,
+      ),
     },
     categoriesById,
   };

@@ -26,14 +26,34 @@ async function bootstrap() {
     globalPrefix: false,
   });
   await nestApp.init();
+  // REL-2: run Nest shutdown hooks (Prisma $disconnect, timer-interval cleanup)
+  // when the process is asked to stop.
+  nestApp.enableShutdownHooks();
 
   server.use('/api', apiServer);
   server.all(/^(?!\/api(?:\/|$)).*/, (req, res) => nextHandler(req, res));
 
-  server.listen(port, () => {
+  const httpServer = server.listen(port, () => {
     // Keep startup logging minimal and explicit.
     console.log(`Combined Next/Nest server listening on ${port}`);
   });
+
+  // REL-2: graceful shutdown on deploy/restart/scale-down — stop accepting new
+  // connections, then close the Nest app (disconnecting Prisma) before exiting,
+  // instead of abruptly dropping in-flight requests mid-event.
+  const shutdown = async (signal) => {
+    console.log(`Received ${signal}, shutting down gracefully...`);
+    httpServer.close();
+    try {
+      await nestApp.close();
+    } catch (err) {
+      console.error('Error during Nest app shutdown', err);
+    } finally {
+      process.exit(0);
+    }
+  };
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
 }
 
 bootstrap().catch((error) => {

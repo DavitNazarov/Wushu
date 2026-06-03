@@ -1,0 +1,88 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# [FUTURE HETZNER MIGRATION] — NOT USED BY THE CURRENT RENDER DEPLOYMENT.
+#
+# Self-hosted production stack for a single Hetzner box:
+#   nginx (TLS + reverse proxy)  ->  app (combined Next/Nest)  ->  postgres 16
+# Plus a one-shot `migrate` service that applies DB migrations before the app
+# starts, so the app container itself never races migrations.
+#
+# Usage (later, from the repo root):
+#   cp deploy/hetzner/.env.prod.example deploy/hetzner/.env.prod   # then edit
+#   docker compose -f deploy/hetzner/docker-compose.prod.yml --env-file deploy/hetzner/.env.prod up -d --build
+#
+# Scaling note: this runs ONE app replica on purpose (in-process schedulers,
+# socket.io rooms, rate limiter, exports). See README.md before raising it.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: apply schema repair + pending migrations, then exit 0.
+  # The app waits on this completing successfully (service_completed_successfully).
+  migrate:
+    build:
+      context: ../..
+      dockerfile: deploy/hetzner/Dockerfile
+    command: ["npm", "run", "db:deploy"]
+    environment:
+      # Single-box Postgres has no pooler -> runtime and direct URLs are equal.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DIRECT_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/hetzner/Dockerfile
+    restart: unless-stopped
+    # DO NOT set `deploy.replicas > 1` — see README.md "Scaling".
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DIRECT_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      PUBLIC_ORG_SLUG: ${PUBLIC_ORG_SLUG}
+      FRONTEND_URL: ${FRONTEND_URL}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    expose:
+      - "4000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # Mount TLS certs (e.g. from certbot/Let's Encrypt) here:
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - app
+
+volumes:
+  pgdata:

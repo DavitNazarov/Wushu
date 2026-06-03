@@ -54,9 +54,12 @@ export function getLifecycleIndex(lifecycle: EventLifecycle): number {
   return EVENT_LIFECYCLE_ORDER.indexOf(lifecycle);
 }
 
-export function getNextLifecycle(lifecycle: EventLifecycle): EventLifecycle | null {
+export function getNextLifecycle(
+  lifecycle: EventLifecycle,
+): EventLifecycle | null {
   const currentIndex = getLifecycleIndex(lifecycle);
-  if (currentIndex < 0 || currentIndex >= EVENT_LIFECYCLE_ORDER.length - 1) return null;
+  if (currentIndex < 0 || currentIndex >= EVENT_LIFECYCLE_ORDER.length - 1)
+    return null;
   return EVENT_LIFECYCLE_ORDER[currentIndex + 1];
 }
 
@@ -80,7 +83,9 @@ export function isBackwardLifecycleTransition(
   return targetIndex < currentIndex;
 }
 
-export function getPreviousLifecycle(lifecycle: EventLifecycle): EventLifecycle | null {
+export function getPreviousLifecycle(
+  lifecycle: EventLifecycle,
+): EventLifecycle | null {
   const currentIndex = getLifecycleIndex(lifecycle);
   if (currentIndex <= 0) return null;
   return EVENT_LIFECYCLE_ORDER[currentIndex - 1];

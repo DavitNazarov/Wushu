@@ -33,7 +33,9 @@ export async function buildTemplateStructureFromCategoryOptions(
 export async function replaceTemplateStructure(
   tx: Prisma.TransactionClient,
   templateId: string,
-  ageGroups: Awaited<ReturnType<typeof buildTemplateStructureFromCategoryOptions>>,
+  ageGroups: Awaited<
+    ReturnType<typeof buildTemplateStructureFromCategoryOptions>
+  >,
 ): Promise<void> {
   await tx.categoryTemplateWeight.deleteMany({
     where: { ageGroup: { categoryTemplateId: templateId } },
@@ -42,7 +44,11 @@ export async function replaceTemplateStructure(
     where: { categoryTemplateId: templateId },
   });
 
-  for (let ageGroupIndex = 0; ageGroupIndex < ageGroups.length; ageGroupIndex += 1) {
+  for (
+    let ageGroupIndex = 0;
+    ageGroupIndex < ageGroups.length;
+    ageGroupIndex += 1
+  ) {
     const ageGroup = ageGroups[ageGroupIndex];
     const createdAgeGroup = await tx.categoryTemplateAgeGroup.create({
       data: {

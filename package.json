@@ -2,29 +2,45 @@
   "name": "geo-wushu",
   "version": "3.0.1",
   "private": true,
+  "engines": {
+    "node": ">=22 <23"
+  },
   "workspaces": [
     "frontend",
     "backend"
   ],
-  
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run prisma:studio\"",
     "dev:backend": "npm run dev -w backend",
     "dev:frontend": "npm run dev -w frontend",
-
     "prisma:studio": "npm run prisma:studio -w backend",
     "prisma:migrate": "npm run prisma:migrate -w backend",
     "db:dump:local": "npm run db:dump:local -w backend",
     "db:restore:neon": "npm run db:restore:neon -w backend",
-
     "build": "npm run build -w backend && npm run build -w frontend",
     "build:backend": "npm run build -w backend",
     "build:frontend": "npm run build -w frontend",
     "lint": "npm run lint -w frontend",
-    "start": "node server.js"
+    "lint:backend": "npm run lint -w backend",
+    "test": "npm run test -w backend",
+    "knip": "knip",
+    "db:deploy": "node backend/scripts/repair-schema.mjs && node backend/scripts/migrate-deploy.mjs",
+    "start": "node server.js",
+    "loadtest:seed": "SEED_MOCK_DATA=1 npm run prisma:seed -w backend",
+    "loadtest:backend:raised": "THROTTLE_DISABLED=1 npm run dev:backend",
+    "loadtest:setup": "node load-test/setup.mjs",
+    "loadtest:setup:live": "node load-test/setup-live.mjs",
+    "loadtest:smoke": "k6 run load-test/smoke.js",
+    "loadtest:peak": "k6 run load-test/peak.js",
+    "loadtest:stress": "k6 run load-test/stress.js",
+    "loadtest:spike": "k6 run load-test/spike.js",
+    "loadtest:soak": "k6 run load-test/soak.js",
+    "loadtest:socket": "node load-test/socket-load.mjs",
+    "loadtest:socket:probe": "node load-test/socket-probe.mjs",
+    "loadtest:timer": "node load-test/timer-reliability.mjs"
   },
-  
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "knip": "^6.15.0"
   }
 }

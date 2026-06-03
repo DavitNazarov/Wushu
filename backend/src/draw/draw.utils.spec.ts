@@ -4,6 +4,10 @@ import {
   buildSingleElimBracket,
 } from './draw.utils';
 
+// Pure-function tests for the bracket math primitives. No mocks, no DB —
+// pin the exact behavior so a refactor to the algorithm gets caught.
+
+// Sanity checks for the smallest-power-of-two padding helper.
 describe('nextPowerOfTwo', () => {
   it('returns 1 for n=1', () => expect(nextPowerOfTwo(1)).toBe(1));
   it('returns 2 for n=2', () => expect(nextPowerOfTwo(2)).toBe(2));
@@ -12,6 +16,8 @@ describe('nextPowerOfTwo', () => {
   it('returns 8 for n=8', () => expect(nextPowerOfTwo(8)).toBe(8));
 });
 
+// Verify the seeded shuffle is (a) length-preserving and (b) deterministic
+// — critical because we audit the seed and want reproducible draws.
 describe('seededShuffle', () => {
   it('returns same length array', () => {
     const arr = ['a', 'b', 'c', 'd'];

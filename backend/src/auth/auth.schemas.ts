@@ -26,4 +26,3 @@ export const bootstrapAdminSchema = z.object({
   displayName: z.string().trim().min(1),
   bootstrapSecret: z.string().optional(),
 });
-

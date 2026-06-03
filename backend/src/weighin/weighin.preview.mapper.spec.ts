@@ -1,5 +1,7 @@
 import { mapPreviewStateFromOutcome } from './weighin.preview.mapper';
 
+// Pin the policy-outcome → UI-state mapping so accidental edits to the action
+// lists in weighin.preview.mapper don't silently change what buttons appear.
 describe('weigh-in preview mapper', () => {
   it('maps pass outcomes to AUTO_PASS', () => {
     const mapped = mapPreviewStateFromOutcome({

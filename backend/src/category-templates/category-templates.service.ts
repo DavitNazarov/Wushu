@@ -25,9 +25,16 @@ export class CategoryTemplatesService {
   async list(organisationId: string | null) {
     return this.prisma.categoryTemplate.findMany({
       where: {
-        OR: [{ organisationId: organisationId ?? undefined }, { organisationId: null }],
+        OR: [
+          { organisationId: organisationId ?? undefined },
+          { organisationId: null },
+        ],
       },
-      orderBy: [{ organisationId: 'asc' }, { name: 'asc' }, { version: 'desc' }],
+      orderBy: [
+        { organisationId: 'asc' },
+        { name: 'asc' },
+        { version: 'desc' },
+      ],
     });
   }
 
@@ -45,7 +52,10 @@ export class CategoryTemplatesService {
   }
 
   async getCategoryTree(organisationId: string, categoryTemplateId: string) {
-    const template = await this.getAccessibleTemplate(organisationId, categoryTemplateId);
+    const template = await this.getAccessibleTemplate(
+      organisationId,
+      categoryTemplateId,
+    );
     if (!template) throw new Error('CATEGORY_TEMPLATE_NOT_FOUND');
 
     const ageGroups = await this.prisma.categoryTemplateAgeGroup.findMany({
@@ -119,7 +129,10 @@ export class CategoryTemplatesService {
     actorUserId: string;
   }) {
     const template = await this.prisma.categoryTemplate.findFirst({
-      where: { id: input.categoryTemplateId, organisationId: input.organisationId },
+      where: {
+        id: input.categoryTemplateId,
+        organisationId: input.organisationId,
+      },
     });
     if (!template) throw new Error('CATEGORY_TEMPLATE_NOT_FOUND');
     if (template.status === 'ACTIVE') return template;
@@ -162,7 +175,10 @@ export class CategoryTemplatesService {
     });
   }
 
-  async getForEventSelection(organisationId: string, categoryTemplateId: string) {
+  async getForEventSelection(
+    organisationId: string,
+    categoryTemplateId: string,
+  ) {
     return this.getAccessibleTemplate(organisationId, categoryTemplateId);
   }
 

@@ -10,6 +10,8 @@ export type LiveQueueStatus = 'PENDING' | 'UPCOMING' | 'RUNNING' | 'FINISHED';
 
 export interface LiveQueueFightRow {
   id: string;
+  /** Fight row-version (ISO) — pass as expectedUpdatedAt on result writes (BF-2). */
+  updatedAt: string;
   categoryCode: string;
   categoryName: string;
   ageGroupName: string | null;

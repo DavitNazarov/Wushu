@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
 export const CategoryTemplateStatusSchema = z.enum(['DRAFT', 'ACTIVE']);
-export const CategoryTemplateTypeSchema = z.enum(['SYSTEM', 'CUSTOM', 'OFFICIAL']);
+export const CategoryTemplateTypeSchema = z.enum([
+  'SYSTEM',
+  'CUSTOM',
+  'OFFICIAL',
+]);
 
 export const CreateCategoryTemplateSchema = z
   .object({

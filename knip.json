@@ -1,0 +1,33 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "ignore": [".claude/**"],
+  "ignoreBinaries": ["k6"],
+  "ignoreDependencies": ["tailwindcss"],
+  "workspaces": {
+    ".": {
+      "entry": ["server.js", "load-test/**/*.{mjs,js}"],
+      "project": ["*.js", "load-test/**/*.{mjs,js}"]
+    },
+    "backend": {
+      "entry": [
+        "src/main.ts",
+        "prisma/seed.ts",
+        "prisma/seed-*.ts",
+        "scripts/**/*.mjs",
+        "src/**/*.spec.ts",
+        "test/**/*.ts"
+      ],
+      "project": ["src/**/*.ts", "scripts/**/*.mjs"]
+    },
+    "frontend": {
+      "entry": [
+        "next.config.ts",
+        "sentry.*.config.ts",
+        "src/instrumentation*.ts",
+        "src/middleware.ts",
+        "eslint.config.mjs"
+      ],
+      "project": ["src/**/*.{ts,tsx}"]
+    }
+  }
+}

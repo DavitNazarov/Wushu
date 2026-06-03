@@ -17,7 +17,10 @@ export default async function ClubsPage() {
   const locale  = await getLocale();
 
   const url   = await getServerApiUrl('/api/public/clubs');
-  const res   = await fetch(url, { cache: 'no-store' });
+  // Cache the public list briefly: clubs change rarely, and this collapses a
+  // burst of refreshes into a single origin call (so a refresh storm can't
+  // exhaust the rate limiter and blank the page).
+  const res   = await fetch(url, { next: { revalidate: 30 } });
   const clubs = (res.ok ? ((await res.json()) as Club[]) : []) ?? [];
 
   return (

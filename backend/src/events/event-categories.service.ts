@@ -3,6 +3,8 @@ import type { Prisma } from '@prisma/client';
 import { AuditService } from '../common/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+// Shape of the admin's category-selection payload: a single template id plus
+// the chosen age groups and (per group) the chosen weight category ids.
 export type CategorySelection = {
   categoryTemplateId: string;
   ageGroups: Array<{
@@ -11,6 +13,8 @@ export type CategorySelection = {
   }>;
 };
 
+// Manages the per-event category configuration: which age groups and weight
+// classes are open at this event, sourced from a CategoryTemplate.
 @Injectable()
 export class EventCategoriesService {
   constructor(
@@ -18,6 +22,11 @@ export class EventCategoriesService {
     private readonly audit: AuditService,
   ) {}
 
+  // Returns the full, denormalized category selection for an event. Joins
+  // EventAgeGroup → CategoryTemplateAgeGroup → EventWeightCategory →
+  // CategoryTemplateWeight so the response carries display data (name, min/max
+  // age, weight bounds) without the frontend needing extra requests.
+  // Throws EVENT_NOT_FOUND if the event isn't in this org.
   async getCategories(eventId: string, organisationId: string) {
     const event = await this.prisma.event.findFirst({
       where: { id: eventId, organisationId },
@@ -41,7 +50,8 @@ export class EventCategoriesService {
 
     return {
       eventId,
-      categoryTemplateId: event.categoryTemplateSnapshot?.categoryTemplateId ?? null,
+      categoryTemplateId:
+        event.categoryTemplateSnapshot?.categoryTemplateId ?? null,
       ageGroups: ageGroups.map((ageGroup) => ({
         id: ageGroup.id,
         categoryTemplateGroupId: ageGroup.categoryTemplateAgeGroupId,
@@ -50,20 +60,36 @@ export class EventCategoriesService {
         sex: ageGroup.categoryTemplateAgeGroup.sex,
         minAge: ageGroup.categoryTemplateAgeGroup.minAge,
         maxAge: ageGroup.categoryTemplateAgeGroup.maxAge,
-        roundDurationSeconds: ageGroup.categoryTemplateAgeGroup.roundDurationSeconds,
+        roundDurationSeconds:
+          ageGroup.categoryTemplateAgeGroup.roundDurationSeconds,
         sortOrder: ageGroup.categoryTemplateAgeGroup.sortOrder,
         weightCategories: ageGroup.weightCategories.map((weightCategory) => ({
           id: weightCategory.id,
           categoryTemplateCategoryId: weightCategory.categoryTemplateWeightId,
           name: weightCategory.categoryTemplateWeight.name,
-          minWeightKgExcl: weightCategory.categoryTemplateWeight.minWeightKgExcl,
-          maxWeightKgIncl: weightCategory.categoryTemplateWeight.maxWeightKgIncl,
+          minWeightKgExcl:
+            weightCategory.categoryTemplateWeight.minWeightKgExcl,
+          maxWeightKgIncl:
+            weightCategory.categoryTemplateWeight.maxWeightKgIncl,
           sortOrder: weightCategory.categoryTemplateWeight.sortOrder,
         })),
       })),
     };
   }
 
+  // Replace an event's category selection. The numbered sections below mirror
+  // the inline section comments and outline the full guard pipeline:
+  //   1. Event must exist in this org.
+  //   2. CategoryTemplate must exist (org-scoped OR global).
+  //   3. No downstream activity yet — once registrations/weighins/brackets/fights
+  //      exist, changing categories would invalidate the draw, so we lock it.
+  //   4. The payload must select at least one weight category overall.
+  //   5. Validate every referenced age-group / weight-id belongs to this template
+  //      with two bulk queries (avoids N×M round-trips inside the transaction).
+  //   6. Snapshot current state for the audit log.
+  //   7. In a single 15s transaction: delete old age groups/weights (FK cascade
+  //      handles the weight rows), upsert the template snapshot, recreate age
+  //      groups, batch-insert all weight categories, write audit row.
   async setCategories(
     eventId: string,
     organisationId: string,
@@ -89,11 +115,18 @@ export class EventCategoriesService {
     const [registrationCount, weighInCount, bracketCount, fightCount] =
       await Promise.all([
         this.prisma.registration.count({ where: { eventId, organisationId } }),
-        this.prisma.weighInAttempt.count({ where: { eventId, organisationId } }),
+        this.prisma.weighInAttempt.count({
+          where: { eventId, organisationId },
+        }),
         this.prisma.bracket.count({ where: { eventId, organisationId } }),
         this.prisma.fight.count({ where: { eventId, organisationId } }),
       ]);
-    if (registrationCount > 0 || weighInCount > 0 || bracketCount > 0 || fightCount > 0) {
+    if (
+      registrationCount > 0 ||
+      weighInCount > 0 ||
+      bracketCount > 0 ||
+      fightCount > 0
+    ) {
       throw new Error('EVENT_CATEGORIES_LOCKED_AFTER_ACTIVITY');
     }
 
@@ -101,7 +134,9 @@ export class EventCategoriesService {
     const activeGroups = selection.ageGroups.filter(
       (g) => g.weightCategoryIds.length > 0,
     );
-    if (activeGroups.reduce((sum, g) => sum + g.weightCategoryIds.length, 0) === 0) {
+    if (
+      activeGroups.reduce((sum, g) => sum + g.weightCategoryIds.length, 0) === 0
+    ) {
       throw new Error('AT_LEAST_ONE_CATEGORY_REQUIRED');
     }
 
@@ -137,7 +172,8 @@ export class EventCategoriesService {
       if (!validAgeGroupIds.has(group.categoryTemplateGroupId)) {
         throw new Error(`INVALID_AGE_GROUP: ${group.categoryTemplateGroupId}`);
       }
-      const validWeights = validWeightsByAgeGroup.get(group.categoryTemplateGroupId) ?? new Set();
+      const validWeights =
+        validWeightsByAgeGroup.get(group.categoryTemplateGroupId) ?? new Set();
       for (const wId of group.weightCategoryIds) {
         if (!validWeights.has(wId)) {
           throw new Error(`INVALID_WEIGHT_CATEGORY: ${wId}`);
@@ -146,7 +182,9 @@ export class EventCategoriesService {
     }
 
     // ── 6. Snapshot for audit ───────────────────────────────────────────────
-    const before = await this.getCategories(eventId, organisationId).catch(() => null);
+    const before = await this.getCategories(eventId, organisationId).catch(
+      () => null,
+    );
 
     // ── 7. Transaction: delete old data, upsert snapshot, batch-insert new ──
     //    Age groups are created one-at-a-time (to get their generated IDs),
@@ -175,7 +213,8 @@ export class EventCategoriesService {
         });
 
         // Create age groups sequentially (need generated IDs for weight FK)
-        const createdAgeGroups: Array<{ id: string; templateGroupId: string }> = [];
+        const createdAgeGroups: Array<{ id: string; templateGroupId: string }> =
+          [];
         for (const group of activeGroups) {
           const created = await tx.eventAgeGroup.create({
             data: {

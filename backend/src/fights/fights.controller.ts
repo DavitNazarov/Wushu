@@ -17,7 +17,18 @@ import { CapabilityGuard } from '../auth/capability.guard';
 import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
 import type { FightStatus, WinMethod } from '@prisma/client';
+import { parseBody } from '../common/parse-body';
+import {
+  fightStateSchema,
+  fightResultSchema,
+  timerActionSchema,
+  roundResultSchema,
+} from './fights.schemas';
 
+// Fights routes mounted at `/api/fights`. Gated by LIVE_RUN — admins,
+// timekeepers, and judges hold it; coaches don't. After every mutating write
+// we push a socket.io event so any active mat displays + live scoreboards
+// refetch immediately.
 @Controller('fights')
 @UseGuards(AuthGuard, CapabilityGuard)
 @RequireCapability(CAPABILITIES.LIVE_RUN)
@@ -27,6 +38,9 @@ export class FightsController {
     private readonly gateway: FightsGateway,
   ) {}
 
+  // GET /api/fights — filterable fight list. Filters compose with AND.
+  // Used by the admin fights page + auxiliary tools (a single source of truth
+  // for "all fights matching X").
   @Get()
   async list(
     @Req() req: AuthenticatedRequest,
@@ -43,6 +57,9 @@ export class FightsController {
     });
   }
 
+  // GET /api/fights/live/category-board — grouped-by-category live view used
+  // by the public + mat-side displays. Optional eventWeightCategoryId / matId
+  // narrow to a slice. EVENT_NOT_FOUND → 404.
   @Get('live/category-board')
   async getLiveCategoryBoard(
     @Req() req: AuthenticatedRequest,
@@ -73,6 +90,8 @@ export class FightsController {
     }
   }
 
+  // GET /api/fights/live/queue-board — flat per-mat running-queue view
+  // ("on mat now / next up"). Drives the operator queue displays.
   @Get('live/queue-board')
   async getLiveQueueBoard(
     @Req() req: AuthenticatedRequest,
@@ -99,6 +118,8 @@ export class FightsController {
     }
   }
 
+  // GET /api/fights/:id — single-fight detail with athletes + scoring info.
+  // 404 with FIGHT_NOT_FOUND if missing or out of org.
   @Get(':id')
   async getById(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     const auth = req.auth!;
@@ -108,21 +129,30 @@ export class FightsController {
     return fight;
   }
 
+  // POST /api/fights/:id/state — manual lifecycle transition for a fight
+  // (QUEUED → ON_DECK → IN_PROGRESS → COMPLETE → CONFIRMED). Service can also
+  // auto-advance the next fight on the same mat — when it does we emit a
+  // second socket update for that fight. Errors:
+  //   FIGHT_NOT_FOUND                                                → 404
+  //   INVALID_STATE_TRANSITION / OVERRIDE_REASON_REQUIRED /
+  //   EVENT_NOT_LIVE / MAT_ALREADY_IN_PROGRESS /
+  //   WINNER_REQUIRED_FOR_COMPLETE                                   → 400
   @Post(':id/state')
   async setState(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
-    @Body() body: { to: string; override?: boolean; reason?: string },
+    @Body() body: unknown,
   ) {
     const auth = req.auth!;
+    const parsed = parseBody(fightStateSchema, body);
     try {
       const { fight: updated, advanced } = await this.fights.setState({
         organisationId: auth.organisationId,
         fightId: id,
         actorUserId: auth.sub,
-        to: body.to as FightStatus,
-        override: body.override ?? false,
-        reason: body.reason ?? null,
+        to: parsed.to as FightStatus,
+        override: parsed.override ?? false,
+        reason: parsed.reason ?? null,
       });
       this.gateway.emitFightUpdate(updated.eventId, updated.matId, updated);
       this.gateway.emitScheduleUpdate(updated.eventId, {
@@ -161,11 +191,12 @@ export class FightsController {
     }
   }
 
+  // POST /api/fights/:id/start — shortcut for "go straight to IN_PROGRESS".
+  // Equivalent to a state transition but with stricter guards (event must be
+  // LIVE, mat must be idle). MAT_ALREADY_IN_PROGRESS if another fight is
+  // currently running on the same mat.
   @Post(':id/start')
-  async startFight(
-    @Param('id') id: string,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  async startFight(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     const auth = req.auth!;
     try {
       const updated = await this.fights.startFight({
@@ -198,30 +229,35 @@ export class FightsController {
     }
   }
 
+  // POST /api/fights/:id/finish — record the result.
+  // Body carries the winner side, win method, optional notes, and override
+  // flag. The service writes the winner athlete id, marks the fight COMPLETE,
+  // and (if there's a next fight) PROPAGATES the winner to it. The advanced
+  // result triggers a second socket update for the downstream fight.
+  // Errors:
+  //   FIGHT_NOT_FOUND                                           → 404
+  //   RESULT_ALREADY_RECORDED / OVERRIDE_REASON_REQUIRED /
+  //   EVENT_NOT_LIVE / INVALID_RESULT_STATE /
+  //   RESULT_CORRECTION_BLOCKED / WINNER_NOT_PRESENT            → 400
   @Post(':id/finish')
   async finishFight(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
-    @Body()
-    body: {
-      winner: 'RED' | 'BLUE';
-      method: string;
-      notes?: string;
-      override?: boolean;
-      reason?: string;
-    },
+    @Body() body: unknown,
   ) {
     const auth = req.auth!;
+    const parsed = parseBody(fightResultSchema, body);
     try {
       const { fight: updated, advanced } = await this.fights.finishFight({
         organisationId: auth.organisationId,
         fightId: id,
         actorUserId: auth.sub,
-        winner: body.winner,
-        method: body.method as WinMethod,
-        notes: body.notes ?? null,
-        override: body.override ?? false,
-        reason: body.reason ?? null,
+        winner: parsed.winner,
+        method: parsed.method as WinMethod,
+        notes: parsed.notes ?? null,
+        override: parsed.override ?? false,
+        reason: parsed.reason ?? null,
+        expectedUpdatedAt: parsed.expectedUpdatedAt ?? null,
       });
       this.gateway.emitFightUpdate(updated.eventId, updated.matId, updated);
       this.gateway.emitScheduleUpdate(updated.eventId, {
@@ -244,6 +280,8 @@ export class FightsController {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'FIGHT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      if (msg === 'FIGHT_STALE_UPDATE')
+        throw new HttpException(msg, HttpStatus.CONFLICT);
       if (
         msg === 'RESULT_ALREADY_RECORDED' ||
         msg === 'OVERRIDE_REASON_REQUIRED' ||
@@ -261,22 +299,27 @@ export class FightsController {
     }
   }
 
+  // POST /api/fights/:id/timer — drive the round timer.
+  // Actions: START / PAUSE / RESUME / RESET. `round` is required for START
+  // (which round are we counting?). expectedUpdatedAt enables optimistic
+  // concurrency — if it doesn't match the DB timer's updatedAt, return
+  // TIMER_STALE_UPDATE so two operators can't race each other into bad state.
   @Post(':id/timer')
   async timerAction(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
-    @Body()
-    body: { action: string; round?: number; expectedUpdatedAt?: string },
+    @Body() body: unknown,
   ) {
     const auth = req.auth!;
+    const parsed = parseBody(timerActionSchema, body);
     try {
       const { timer, eventId, matId } = await this.fights.timerAction({
         organisationId: auth.organisationId,
         fightId: id,
         actorUserId: auth.sub,
-        action: body.action as 'START' | 'PAUSE' | 'RESUME' | 'RESET',
-        round: body.round,
-        expectedUpdatedAt: body.expectedUpdatedAt ?? null,
+        action: parsed.action,
+        round: parsed.round,
+        expectedUpdatedAt: parsed.expectedUpdatedAt ?? null,
       });
 
       this.gateway.emitTimerUpdate(eventId, matId, { fightId: id, timer });
@@ -306,23 +349,33 @@ export class FightsController {
     }
   }
 
+  // POST /api/fights/:id/round-result — record the winner of one round
+  // (multi-round fights). The service decides whether to advance to the
+  // next round or end the fight based on round count + score. Returns a
+  // shape including timer + advance metadata; the gateway broadcasts both
+  // the current fight update AND any propagated next-fight update.
   @Post(':id/round-result')
   async recordRoundResult(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
-    @Body() body: { winner: 'RED' | 'BLUE'; expectedUpdatedAt?: string },
+    @Body() body: unknown,
   ) {
     const auth = req.auth!;
+    const parsed = parseBody(roundResultSchema, body);
     try {
       const result = await this.fights.recordRoundResult({
         organisationId: auth.organisationId,
         fightId: id,
         actorUserId: auth.sub,
-        winner: body.winner,
-        expectedUpdatedAt: body.expectedUpdatedAt ?? null,
+        winner: parsed.winner,
+        expectedUpdatedAt: parsed.expectedUpdatedAt ?? null,
       });
 
-      this.gateway.emitFightUpdate(result.fight.eventId, result.fight.matId, result.fight);
+      this.gateway.emitFightUpdate(
+        result.fight.eventId,
+        result.fight.matId,
+        result.fight,
+      );
       this.gateway.emitTimerUpdate(result.fight.eventId, result.fight.matId, {
         fightId: result.fight.id,
         timer: result.timer ?? null,
@@ -370,30 +423,29 @@ export class FightsController {
     }
   }
 
+  // POST /api/fights/:id/result — record a CONFIRMED result. Unlike /finish
+  // this is the post-confirmation save (e.g. judge correcting after a manual
+  // review). Uses RESULT_ALREADY_RECORDED + RESULT_CORRECTION_BLOCKED to
+  // prevent re-writing finalized results without override+reason.
   @Post(':id/result')
   async setResult(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
-    @Body()
-    body: {
-      winner: 'RED' | 'BLUE';
-      method: string;
-      notes?: string;
-      override?: boolean;
-      reason?: string;
-    },
+    @Body() body: unknown,
   ) {
     const auth = req.auth!;
+    const parsed = parseBody(fightResultSchema, body);
     try {
       const { fight: updated, advanced } = await this.fights.setResult({
         organisationId: auth.organisationId,
         fightId: id,
         actorUserId: auth.sub,
-        winner: body.winner,
-        method: body.method as WinMethod,
-        notes: body.notes ?? null,
-        override: body.override ?? false,
-        reason: body.reason ?? null,
+        winner: parsed.winner,
+        method: parsed.method as WinMethod,
+        notes: parsed.notes ?? null,
+        override: parsed.override ?? false,
+        reason: parsed.reason ?? null,
+        expectedUpdatedAt: parsed.expectedUpdatedAt ?? null,
       });
       this.gateway.emitFightUpdate(updated.eventId, updated.matId, updated);
       this.gateway.emitScheduleUpdate(updated.eventId, {
@@ -416,6 +468,8 @@ export class FightsController {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'FIGHT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      if (msg === 'FIGHT_STALE_UPDATE')
+        throw new HttpException(msg, HttpStatus.CONFLICT);
       if (
         msg === 'RESULT_ALREADY_RECORDED' ||
         msg === 'OVERRIDE_REASON_REQUIRED' ||

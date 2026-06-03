@@ -2,6 +2,9 @@ import { HttpException } from '@nestjs/common';
 import type { Athlete, AthleteSex } from '@prisma/client';
 import { AthletesService } from './athletes.service';
 
+// Unit tests for AthletesService. Same mock pattern as users.service.spec.ts:
+// $transaction is stubbed to invoke its callback with `prisma` as `tx`, so
+// writes inside the transaction land on the mock the tests inspect.
 const createPrismaMock = () => {
   const prisma: any = {
     club: {
@@ -39,6 +42,8 @@ describe('AthletesService', () => {
   const organisationId = 'org_123';
   const actorUserId = 'user_123';
 
+  // Tenant-isolation guard: a clubId that exists in another org (or not at
+  // all) must surface as INVALID_CLUB, not bleed across organisations.
   it('throws INVALID_CLUB when clubId does not exist for organisation', async () => {
     const prisma = createPrismaMock();
     prisma.club.findFirst.mockResolvedValue(null);
@@ -70,6 +75,9 @@ describe('AthletesService', () => {
     }
   });
 
+  // Happy-path sanity check: when club validation passes, create() returns
+  // the inserted athlete. Mostly here to guard against future refactors
+  // that accidentally narrow the return shape.
   it('creates athlete successfully when clubId is valid', async () => {
     const prisma = createPrismaMock();
     prisma.club.findFirst.mockResolvedValue({
@@ -115,6 +123,8 @@ describe('AthletesService', () => {
     expect(result.athlete.id).toBe('athlete_1');
   });
 
+  // Coach-scope guard for merge(): a coach can only merge two athletes that
+  // BOTH belong to their own club. Mixed-club merges → ATHLETE_NOT_IN_COACH_CLUB.
   it('blocks coach merge when either athlete is outside the coach club', async () => {
     const prisma = createPrismaMock();
     prisma.athlete.findFirst

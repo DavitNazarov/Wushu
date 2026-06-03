@@ -18,6 +18,10 @@ import {
   type WeightCategoryBounds,
 } from './weighin.logic';
 
+// Heavy include shape for the record() path — pulls everything we need to
+// drive the weigh-in decision: event policy, prior attempts, current weight
+// category bounds, AND the full age-group's weight categories (so MOVE_UP
+// decisions know what the next-class-up actually is).
 type RegistrationWithWeighInContext = Registration & {
   event: {
     id: string;
@@ -57,6 +61,11 @@ type RegistrationWithWeighInContext = Registration & {
   } | null;
 };
 
+// Weigh-in workflow. Heart of the day-of-event flow: record a weight,
+// resolve the decision under the event's policy (IWUF strict, manual admin,
+// direct move-up, etc.), and update the registration accordingly. Triggers
+// a stage-automation check on every write so the event can auto-progress
+// to WEIGH_IN_COMPLETED once everyone has a final status.
 @Injectable()
 export class WeighinService {
   constructor(
@@ -65,6 +74,9 @@ export class WeighinService {
     private readonly eventStageAutomation: EventStageAutomationService,
   ) {}
 
+  // Project the joined eventWeightCategory shape into the simple bounds list
+  // weighin.logic expects: id/name + min/max + sortOrder for every weight
+  // class in the athlete's age group. Returns [] when no category is set.
   private toBounds(
     cat: RegistrationWithWeighInContext['eventWeightCategory'],
   ): WeightCategoryBounds[] {
@@ -78,6 +90,9 @@ export class WeighinService {
     }));
   }
 
+  // Internal: load a registration with every relation record() needs in one
+  // round trip. Throws REGISTRATION_NOT_FOUND when missing — controller maps
+  // it to 404. weighIns sorted attemptNo desc so the latest attempt is index 0.
   private async getRegistrationForRecord(
     registrationId: string,
     organisationId: string,
@@ -137,6 +152,9 @@ export class WeighinService {
     return registration;
   }
 
+  // Look up a target category for a MOVE_UP decision, scoped to this event.
+  // The eventAgeGroup→eventId filter prevents accidentally moving to a
+  // category from another event. Throws INVALID_MOVE_UP_CATEGORY otherwise.
   private async resolveMoveToCategory(input: {
     eventId: string;
     moveToCategoryId: string;
@@ -154,6 +172,10 @@ export class WeighinService {
     return targetCategory;
   }
 
+  // Map an override-driven decision to the WeighInStatus enum stored on the
+  // registration. The "OVERRIDE_APPROVED" status is used for PASS/MOVED_UP
+  // outcomes that came from a manual decision (not automatic policy
+  // evaluation), so the UI can tell the two apart.
   private statusForOverrideOutcome(
     outcome: PolicyWeighInOutcome,
   ): WeighInStatus {
@@ -165,6 +187,9 @@ export class WeighinService {
     return 'OVERRIDE_APPROVED';
   }
 
+  // Same UTC age math used by RegistrationsService — duplicated here rather
+  // than imported to keep this service standalone for tests. If you change
+  // one, change both (or extract to a shared helper).
   private computeAgeOnDate(dateOfBirth: Date, onDate: Date): number {
     let age = onDate.getUTCFullYear() - dateOfBirth.getUTCFullYear();
     const monthDiff = onDate.getUTCMonth() - dateOfBirth.getUTCMonth();
@@ -175,6 +200,10 @@ export class WeighinService {
     return age;
   }
 
+  // Eligibility helper used by reconcileCategoryMapping to filter
+  // categoryCode candidates down to ones the athlete actually qualifies for.
+  // Unlike RegistrationsService.assertAthleteEligibleForCategory this returns
+  // a boolean rather than throwing — reconcile uses it as a filter predicate.
   private athleteMatchesAgeGroup(input: {
     athleteDob: Date;
     athleteSex: AthleteSex | null;
@@ -195,12 +224,26 @@ export class WeighinService {
     if (input.ageGroup.maxAge != null && age > input.ageGroup.maxAge) {
       return false;
     }
-    if (input.ageGroup.sex && input.athleteSex && input.ageGroup.sex !== input.athleteSex) {
+    if (
+      input.ageGroup.sex &&
+      input.athleteSex &&
+      input.ageGroup.sex !== input.athleteSex
+    ) {
       return false;
     }
     return true;
   }
 
+  // Weigh-in queue list. Powers the operator UI.
+  //   - Scopes to one event AND the org (no cross-event/tenant leak).
+  //   - `q` matches athlete first/last/document/id OR club name.
+  //   - Heavy include block returns everything the queue needs: athlete,
+  //     club, prior attempts (with operator), weight category + entire age
+  //     group's class list (for MOVE_UP display), and event policy.
+  // Self-healing: if any rows have a categoryCode but no joined categories
+  // (template drift), we kick off reconcileCategoryMapping per row, then
+  // re-fetch when anything was repaired. actorUserId gates this so anonymous
+  // / system callers don't trigger writes.
   async search(params: {
     organisationId: string;
     actorUserId?: string;
@@ -209,7 +252,13 @@ export class WeighinService {
   }) {
     const { organisationId, actorUserId, eventId, q } = params;
 
-    const where: Prisma.RegistrationWhereInput = { organisationId, eventId };
+    // BF-6: the weigh-in queue is APPROVED-only. Without this filter, PENDING/
+    // REJECTED/WITHDRAWN athletes show up and could be weighed.
+    const where: Prisma.RegistrationWhereInput = {
+      organisationId,
+      eventId,
+      status: 'APPROVED',
+    };
 
     if (q?.trim()) {
       const search = q.trim();
@@ -362,6 +411,9 @@ export class WeighinService {
     return fetchRows();
   }
 
+  // Fetch the category context a UI needs to render the weigh-in form
+  // (current category, full age-group class ladder, event policy). Returns
+  // null on miss — caller is expected to 404.
   async getCategoryInfo(registrationId: string, organisationId: string) {
     const reg = await this.prisma.registration.findFirst({
       where: { id: registrationId, organisationId },
@@ -401,6 +453,27 @@ export class WeighinService {
     return reg;
   }
 
+  // Record one weigh-in attempt. The control flow has three branches:
+  //   1. Admin override (override=true): decision + reason MUST be provided;
+  //      computeManualDecisionOutcome computes the resulting bounds/move.
+  //   2. Event policy is MANUAL_ADMIN_DECISION: same shape as override —
+  //      the operator picks the decision because the event has opted out
+  //      of auto-rules.
+  //   3. Otherwise: computePolicyWeighInOutcome derives the decision from
+  //      the weight + history under IWUF_STRICT_ONE_HOUR /
+  //      MOVE_UP_AFTER_FAILED_REWEIGH / DIRECT_MOVE_UP rules. If that fn
+  //      returns MANUAL_DECISION_REQUIRED, we throw — UI re-prompts with a
+  //      manual override flow.
+  // After deciding:
+  //   - Look up the move-to category if the outcome requires one.
+  //   - In a transaction: insert WeighInAttempt, update Registration's
+  //     status + weighInStatus + (possibly) category, write two audit rows
+  //     (one for the attempt, one for the decision).
+  //   - Trigger event stage auto-advance — completing the last weigh-in
+  //     transitions WEIGHIN → WEIGH_IN_COMPLETED.
+  // Throws INVALID_WEIGHT on non-positive/non-finite input,
+  // EVENT_NOT_IN_WEIGHIN if event isn't in that stage (override bypasses),
+  // REGISTRATION_CATEGORY_NOT_SET if there's nothing to bound against.
   async record(input: {
     organisationId: string;
     actorUserId: string;
@@ -420,6 +493,13 @@ export class WeighinService {
       input.organisationId,
     );
 
+    // BF-6: only APPROVED registrations belong in the weigh-in flow. A
+    // PENDING/SUBMITTED/REJECTED/WITHDRAWN athlete must not be weighed (admins
+    // can still override with a reason for genuine edge corrections).
+    if (registration.status !== 'APPROVED' && !input.override) {
+      throw new Error('REGISTRATION_NOT_APPROVED');
+    }
+
     if (!isWeighInStage(registration.event.lifecycle) && !input.override) {
       throw new Error('EVENT_NOT_IN_WEIGHIN');
     }
@@ -435,9 +515,12 @@ export class WeighinService {
         registration.eventWeightCategory.categoryTemplateWeight.minWeightKgExcl,
       maxWeightKgIncl:
         registration.eventWeightCategory.categoryTemplateWeight.maxWeightKgIncl,
-      sortOrder: registration.eventWeightCategory.categoryTemplateWeight.sortOrder,
+      sortOrder:
+        registration.eventWeightCategory.categoryTemplateWeight.sortOrder,
     };
-    const categoriesInAgeGroup = this.toBounds(registration.eventWeightCategory);
+    const categoriesInAgeGroup = this.toBounds(
+      registration.eventWeightCategory,
+    );
 
     let outcome: PolicyWeighInOutcome;
     if (input.override) {
@@ -452,7 +535,9 @@ export class WeighinService {
         reweighWindowMinutes: registration.event.reweighWindowMinutes,
         nextEventWeightCategoryId: input.nextEventWeightCategoryId ?? null,
       });
-    } else if (registration.event.weighInPolicyCode === 'MANUAL_ADMIN_DECISION') {
+    } else if (
+      registration.event.weighInPolicyCode === 'MANUAL_ADMIN_DECISION'
+    ) {
       if (!input.decision) throw new Error('MANUAL_DECISION_REQUIRED');
       if (!input.reason) throw new Error('MANUAL_DECISION_REASON_REQUIRED');
       outcome = computeManualDecisionOutcome({
@@ -479,12 +564,10 @@ export class WeighinService {
       }
     }
 
-    let moveToCategory:
-      | {
-          id: string;
-          categoryTemplateWeight: { name: string };
-        }
-      | null = null;
+    let moveToCategory: {
+      id: string;
+      categoryTemplateWeight: { name: string };
+    } | null = null;
 
     if (outcome.moveToCategoryId) {
       moveToCategory = await this.resolveMoveToCategory({
@@ -493,10 +576,18 @@ export class WeighinService {
       });
     }
 
-    const lastAttemptNo = registration.weighIns[0]?.attemptNo ?? 0;
-    const attemptNo = lastAttemptNo + 1;
-
     const result = await this.prisma.$transaction(async (tx) => {
+      // BF-15: allocate attemptNo inside the transaction against the latest row
+      // (not the value read at the top of record()) to shrink the race window.
+      // The @@unique([registrationId, attemptNo]) constraint is the hard backstop
+      // that makes a concurrent collision fail loudly instead of duplicating.
+      const lastAttempt = await tx.weighInAttempt.findFirst({
+        where: { registrationId: input.registrationId },
+        orderBy: { attemptNo: 'desc' },
+        select: { attemptNo: true },
+      });
+      const attemptNo = (lastAttempt?.attemptNo ?? 0) + 1;
+
       const attempt = await tx.weighInAttempt.create({
         data: {
           organisationId: input.organisationId,
@@ -524,7 +615,8 @@ export class WeighinService {
         registrationUpdate.eventWeightCategory = {
           connect: { id: moveToCategory.id },
         };
-        registrationUpdate.categoryCode = moveToCategory.categoryTemplateWeight.name;
+        registrationUpdate.categoryCode =
+          moveToCategory.categoryTemplateWeight.name;
       }
       if (outcome.decision === 'DISQUALIFIED') {
         registrationUpdate.status = 'REJECTED';
@@ -606,6 +698,21 @@ export class WeighinService {
     return result;
   }
 
+  // Settle a pending "ONE_HOUR" attempt (IWUF strict policy). After a fail,
+  // the athlete gets one hour to either reweigh successfully OR be moved up
+  // to the next class — this endpoint records the final disposition.
+  //
+  // For MOVE_UP, three ways to pick the target category, in priority order:
+  //   - explicit nextEventWeightCategoryId — validated against the event.
+  //   - default to the next-higher class in the same age group
+  //     (sortOrder + 1). Throws NO_HIGHER_CATEGORY_AVAILABLE at the ceiling.
+  //   - free-text newCategoryCode (legacy, only when there's no eventWeightCategory).
+  //
+  // For DQ, just mark the registration as REJECTED + DISQUALIFIED.
+  //
+  // Transactional: updates the attempt (resolvedAt + resolvedAction), updates
+  // the registration, inserts an audit row, AND for MOVE_UP creates a follow-up
+  // attempt with decision=MOVED_UP so the attempt history reads cleanly.
   async resolveOneHour(input: {
     organisationId: string;
     actorUserId: string;
@@ -660,9 +767,11 @@ export class WeighinService {
         newCategoryCode = targetCat.categoryTemplateWeight.name;
       } else if (attempt.registration.eventWeightCategory) {
         const currentSortOrder =
-          attempt.registration.eventWeightCategory.categoryTemplateWeight.sortOrder;
+          attempt.registration.eventWeightCategory.categoryTemplateWeight
+            .sortOrder;
         const candidates =
-          attempt.registration.eventWeightCategory.eventAgeGroup.weightCategories;
+          attempt.registration.eventWeightCategory.eventAgeGroup
+            .weightCategories;
         const next = candidates.find(
           (wc) => wc.categoryTemplateWeight.sortOrder > currentSortOrder,
         );
@@ -740,6 +849,17 @@ export class WeighinService {
     return result;
   }
 
+  // Heal a registration whose categoryCode (string) no longer points at any
+  // EventWeightCategory row. Happens when an admin edits the category template
+  // after registration. Strategy:
+  //   1. If both eventWeightCategoryId AND registeredEventWeightCategoryId
+  //      are already set, nothing to do.
+  //   2. Find ALL categories on this event whose name matches the code.
+  //   3. Filter to those whose age-group the athlete actually qualifies for.
+  //   4. Exactly one match → use it. Zero → NO_MATCHING_EVENT_CATEGORY.
+  //      Multiple → AMBIGUOUS_EVENT_CATEGORY_MATCH (caller must pick).
+  // Always preserves the original registeredEventWeightCategoryId if it was
+  // set, otherwise sets it to the same target so future "moved up?" logic works.
   async reconcileCategoryMapping(input: {
     organisationId: string;
     actorUserId: string;
@@ -768,7 +888,10 @@ export class WeighinService {
     });
     if (!registration) throw new Error('REGISTRATION_NOT_FOUND');
 
-    if (registration.eventWeightCategoryId && registration.registeredEventWeightCategoryId) {
+    if (
+      registration.eventWeightCategoryId &&
+      registration.registeredEventWeightCategoryId
+    ) {
       return registration;
     }
     const normalizedCategoryCode = registration.categoryCode?.trim();
@@ -837,12 +960,14 @@ export class WeighinService {
       entityId: registration.id,
       before: {
         eventWeightCategoryId: registration.eventWeightCategoryId,
-        registeredEventWeightCategoryId: registration.registeredEventWeightCategoryId,
+        registeredEventWeightCategoryId:
+          registration.registeredEventWeightCategoryId,
         categoryCode: registration.categoryCode,
       } as unknown as Prisma.JsonValue,
       after: {
         eventWeightCategoryId: updated.eventWeightCategoryId,
-        registeredEventWeightCategoryId: updated.registeredEventWeightCategoryId,
+        registeredEventWeightCategoryId:
+          updated.registeredEventWeightCategoryId,
         categoryCode: updated.categoryCode,
       } as unknown as Prisma.JsonValue,
       reason: input.reason ?? 'Auto-reconciled from categoryCode',

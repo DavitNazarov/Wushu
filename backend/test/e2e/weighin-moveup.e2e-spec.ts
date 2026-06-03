@@ -104,7 +104,10 @@ describeIfDb('Weigh-in move-up and override (e2e)', () => {
     );
     const eventCategoryByName = new Map<string, string>(
       categories.body.ageGroups[0].weightCategories.map(
-        (category: { id: string; name: string }) => [category.name, category.id],
+        (category: { id: string; name: string }) => [
+          category.name,
+          category.id,
+        ],
       ),
     );
 
@@ -239,10 +242,12 @@ describeIfDb('Weigh-in move-up and override (e2e)', () => {
     expect(fights).toHaveLength(2);
 
     const lightFight = fights.find(
-      (fight) => fight.eventWeightCategoryId === eventCategoryByName.get('65kg'),
+      (fight) =>
+        fight.eventWeightCategoryId === eventCategoryByName.get('65kg'),
     );
     const heavyFight = fights.find(
-      (fight) => fight.eventWeightCategoryId === eventCategoryByName.get('70kg'),
+      (fight) =>
+        fight.eventWeightCategoryId === eventCategoryByName.get('70kg'),
     );
     expect(lightFight).toBeDefined();
     expect(heavyFight).toBeDefined();

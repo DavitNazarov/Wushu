@@ -12,7 +12,11 @@ import {
   Logger,
 } from '@nestjs/common';
 import { timingSafeEqual } from 'crypto';
-import { loginSchema, signupSchema, bootstrapAdminSchema } from './auth.schemas';
+import {
+  loginSchema,
+  signupSchema,
+  bootstrapAdminSchema,
+} from './auth.schemas';
 import Express from 'express';
 import { Throttle, ThrottlerGuard, SkipThrottle } from '@nestjs/throttler';
 import {
@@ -32,6 +36,7 @@ import {
   getAuthCookieOptions,
   getAuthCookieClearOptions,
 } from './auth-cookie.config';
+import { THROTTLE } from '../config/throttle-config';
 
 @Controller('auth')
 export class AuthController {
@@ -44,7 +49,7 @@ export class AuthController {
 
   @Post('login')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: THROTTLE.loginLimit, ttl: THROTTLE.loginTtl } })
   async login(
     @Body() body: unknown,
     @Res({ passthrough: true }) res: Express.Response,
@@ -97,7 +102,9 @@ export class AuthController {
 
   @Post('refresh')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({
+    default: { limit: THROTTLE.refreshLimit, ttl: THROTTLE.refreshTtl },
+  })
   async refresh(
     @Req() req: Express.Request,
     @Res({ passthrough: true }) res: Express.Response,
@@ -163,7 +170,12 @@ export class AuthController {
   }
 
   @Get('me')
-  @SkipThrottle()
+  // Skip BOTH throttler buckets. Bare @SkipThrottle() defaults to
+  // { default: true }, which only exempts the 'default' (120/min) bucket and
+  // leaves the 'short' (10 req/10s) bucket active — so a burst of /me calls
+  // (e.g. rapid locale switches: client useAuthRole + SSR getAuthContext +
+  // prefetches all hit /me) would 429 and get mistaken for a logout.
+  @SkipThrottle({ default: true, short: true })
   async me(
     @Req() req: Express.Request,
     @Res({ passthrough: true }) res: Express.Response,
@@ -223,10 +235,7 @@ export class AuthController {
   @Post('signup')
   @UseGuards(AuthGuard, CapabilityGuard)
   @RequireCapability(CAPABILITIES.EVENTS_MANAGE)
-  async signup(
-    @Req() req: AuthenticatedRequest,
-    @Body() body: unknown,
-  ) {
+  async signup(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
     const auth = req.auth;
     if (!auth)
       throw new HttpException('UNAUTHENTICATED', HttpStatus.UNAUTHORIZED);
@@ -292,10 +301,10 @@ export class AuthController {
 
   @Post('bootstrap-admin')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 3, ttl: 60_000 } })
-  async bootstrapAdmin(
-    @Body() body: unknown,
-  ) {
+  @Throttle({
+    default: { limit: THROTTLE.bootstrapLimit, ttl: THROTTLE.bootstrapTtl },
+  })
+  async bootstrapAdmin(@Body() body: unknown) {
     const parsed = bootstrapAdminSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException({
@@ -324,11 +333,13 @@ export class AuthController {
       }
     }
 
-    // Refuse the endpoint entirely in production when no secret is configured —
-    // the bootstrap should always be a deliberate, secret-guarded action.
-    if (process.env.NODE_ENV === 'production' && !requiredSecret) {
+    // SEC-7: refuse the endpoint in EVERY non-development environment (incl.
+    // staging/test) when no secret is configured — the bootstrap must always be
+    // a deliberate, secret-guarded action outside local dev. Previously this
+    // only guarded NODE_ENV==='production', leaving staging open to the first caller.
+    if (process.env.NODE_ENV !== 'development' && !requiredSecret) {
       this.logger.error(
-        '[auth] bootstrap-admin called in production without BOOTSTRAP_SECRET — refusing',
+        '[auth] bootstrap-admin called without BOOTSTRAP_SECRET outside development — refusing',
       );
       throw new HttpException('FORBIDDEN', HttpStatus.FORBIDDEN);
     }
