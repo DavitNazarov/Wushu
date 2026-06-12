@@ -9,6 +9,7 @@ import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { apiGet } from '@/lib/api/client';
+import { useToast } from '@/components/ui/Toast';
 import type { ScheduleFightRow, ScheduleSessionRow } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { EventPhaseGate } from '@/components/admin/EventPhaseGate';
@@ -24,6 +25,7 @@ import {
   type SessionFormState,
 } from './schedule.types';
 import { isoToLocalInput } from './schedule.utils';
+import { openSchedulePrint } from './schedule.print';
 import { useScheduleMutations } from './hooks/useScheduleMutations';
 import { useFightDragDrop } from './hooks/useFightDragDrop';
 import { useSessionDragDrop } from './hooks/useSessionDragDrop';
@@ -41,6 +43,7 @@ export function SchedulePageClient({ eventId }: Props) {
   const tGate = useTranslations('eventPhaseGate');
   const tEvents = useTranslations('admin.events');
   const locale = useLocale();
+  const { toast } = useToast();
 
   // Session form
   const [addSessionOpen, setAddSessionOpen] = useState(false);
@@ -161,6 +164,15 @@ export function SchedulePageClient({ eventId }: Props) {
   const totalScheduled = (fights ?? []).filter((f) => f.isScheduled).length;
   const totalPlayable = (fights ?? []).filter((f) => f.isPlayable).length;
 
+  function handlePrint() {
+    const items = sortedSessions.map((session) => ({
+      session,
+      fights: fightsBySession.map.get(session.id) ?? [],
+    }));
+    const opened = openSchedulePrint(selectedEvent, items);
+    if (!opened) toast(t('printPopupBlocked'), 'error');
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -175,6 +187,9 @@ export function SchedulePageClient({ eventId }: Props) {
               onValueChange={setSelectedEventId}
               className="min-w-[14rem]"
             />
+            {showContent && hasSessions && (
+              <SecondaryButton onClick={handlePrint}>{t('printSchedule')}</SecondaryButton>
+            )}
             {isEditable && (
               <>
                 <SecondaryButton onClick={openAddSession}>{t('addSession')}</SecondaryButton>

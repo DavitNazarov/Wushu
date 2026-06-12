@@ -7,20 +7,16 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
-import { useToast } from '@/components/ui/Toast';
-import { apiGet, apiPost } from '@/lib/api/client';
-import { getCompactErrorMessage } from '@/lib/api/error';
+import { apiGet } from '@/lib/api/client';
 import type { ResultsSummaryResponse } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { AdminEventSelect } from '@/components/admin/AdminEventSelect';
 import { useAdminEventRoute } from '@/features/admin-events/hooks/useAdminEventRoute';
-import { ResultsExportDrawer, type ResultsExportType } from './ResultsExportDrawer';
+import { ResultsExportDrawer } from './ResultsExportDrawer';
 import { ResultsSummaryCards } from './ResultsSummaryCards';
 
 const SEL =
   'h-10 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
-
-const EXPORT_TYPES: ResultsExportType[] = ['registrations', 'brackets', 'schedule', 'results'];
 
 type Props = { eventId: string };
 
@@ -28,17 +24,8 @@ export function ResultsPageClient({ eventId }: Props) {
   const t = useTranslations('results');
   const tCommon = useTranslations('common');
   const tBrackets = useTranslations('brackets');
-  const { toast } = useToast();
   const [tab, setTab] = useState<'categories' | 'medal'>('categories');
   const [exportOpen, setExportOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [exportLinks, setExportLinks] = useState<Array<{ type: ResultsExportType; url: string; id: string }>>([]);
-  const [exportTypes, setExportTypes] = useState<Record<ResultsExportType, boolean>>({
-    registrations: false,
-    brackets: false,
-    schedule: false,
-    results: true,
-  });
 
   const { events, setSelectedEventId } = useAdminEventRoute({ eventId, page: 'results' });
   const eid = eventId;
@@ -60,26 +47,6 @@ export function ResultsPageClient({ eventId }: Props) {
     }),
     [categories],
   );
-
-  async function onGenerateExports() {
-    const selectedTypes = EXPORT_TYPES.filter((type) => exportTypes[type]);
-    if (!eid || selectedTypes.length === 0) return;
-    setIsGenerating(true);
-    try {
-      const res = await apiPost<{
-        links: Array<{ type: ResultsExportType; url: string; id: string }>;
-      }>('/api/exports', {
-        eventId: eid,
-        types: selectedTypes,
-      });
-      setExportLinks(res.links ?? []);
-      toast(tCommon('saveSuccess'));
-    } catch (e) {
-      toast(getCompactErrorMessage(e, tCommon('error')), 'error');
-    } finally {
-      setIsGenerating(false);
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -312,14 +279,7 @@ export function ResultsPageClient({ eventId }: Props) {
       <ResultsExportDrawer
         open={exportOpen}
         eventId={eid}
-        exportTypes={exportTypes}
-        exportLinks={exportLinks}
-        isGenerating={isGenerating}
         onClose={() => setExportOpen(false)}
-        onGenerate={onGenerateExports}
-        onExportTypeChange={(type, checked) =>
-          setExportTypes((prev) => ({ ...prev, [type]: checked }))
-        }
         t={(key) => t(key as Parameters<typeof t>[0])}
         tCommon={(key) => tCommon(key as Parameters<typeof tCommon>[0])}
       />

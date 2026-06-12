@@ -32,13 +32,13 @@ export const DEFAULT_EVENT_POLICIES: ResolvedEventPolicies = {
   reweighWindowMinutes: 60,
 };
 
-export type PolicyFamilyCode =
+type PolicyFamilyCode =
   | 'WEIGH_IN'
   | 'BRONZE'
   | 'MIN_REST'
   | 'PUBLISH_TIMING';
 
-export type PolicyOptionMeta = {
+type PolicyOptionMeta = {
   code: string;
   labelKey: string;
   descriptionKey: string;

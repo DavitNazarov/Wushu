@@ -15,3 +15,6 @@ backend/tmp/
 # Claude Code local tooling / worktrees — not part of the app
 .claude/
 .agents/
+.DS_Store
+**/.DS_Store
+backups/

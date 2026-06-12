@@ -70,26 +70,3 @@ export function TableSection({
   );
 }
 
-/**
- * Table row that animates in sequence within a stagger container
- */
-export function AnimatedTableRow({
-  children,
-  className = '',
-  onClick,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  onClick?: () => void;
-}) {
-  return (
-    <motion.tr
-      variants={adminVariants.staggerChild}
-      className={`cursor-pointer transition ${className}`}
-      onClick={onClick}
-      whileHover={{ backgroundColor: 'var(--color-surface-alt)' }}
-    >
-      {children}
-    </motion.tr>
-  );
-}

@@ -222,11 +222,17 @@ export class EventStageAutomationService {
 
       if (event.lifecycle === 'WEIGH_IN_COMPLETED') {
         if (!event.autoAdvanceStage) return false;
+        // DRAWN means "brackets exist" — never auto-advance an event that has
+        // no brackets yet, or downstream surfaces render an empty draw.
+        const bracketCount = await this.prisma.bracket.count({
+          where: { eventId: event.id },
+        });
+        if (bracketCount === 0) return false;
         return this.advanceLifecycle({
           event,
           from: 'WEIGH_IN_COMPLETED',
           to: 'DRAWN',
-          reason: 'Auto-advance: weigh-in completed',
+          reason: 'Auto-advance: weigh-in completed and brackets drawn',
         });
       }
 

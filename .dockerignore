@@ -1,0 +1,44 @@
+# Build context hygiene for deploy/hetzner/Dockerfile (context = repo root).
+# Without this file `COPY . .` shipped host node_modules (clobbering the
+# image's own npm ci output), .git history, DB dumps, and editor/AI tooling.
+
+.git
+.github
+
+# Dependencies are installed inside the image — never copy host trees.
+node_modules
+**/node_modules
+
+# Build outputs regenerated inside the image.
+frontend/.next
+frontend/tsconfig.tsbuildinfo
+backend/dist
+
+# Local data, dumps, backups.
+backend/tmp
+backups
+*.sql.gz
+*.dump
+
+# Dev/ops tooling not needed at runtime or build.
+load-test
+docs
+tasks
+deploy/hetzner/certs
+deploy/hetzner/.env.prod
+
+# Editor / AI-assistant config.
+.claude
+.cursor
+.agents
+.husky
+.vscode
+
+# OS noise.
+.DS_Store
+**/.DS_Store
+
+# Env files must come from the deploy environment, never the build context.
+**/.env
+**/.env.local
+**/.env.prod

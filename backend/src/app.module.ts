@@ -12,6 +12,7 @@ import { PublicModule } from './public/public.module';
 import { FormsModule } from './forms/forms.module';
 import { AthletesModule } from './athletes/athletes.module';
 import { ClubsModule } from './clubs/clubs.module';
+import { GeographyModule } from './geography/geography.module';
 import { RegistrationsModule } from './registrations/registrations.module';
 import { WeighinModule } from './weighin/weighin.module';
 import { IntegrityModule } from './integrity/integrity.module';
@@ -21,7 +22,9 @@ import { FightsModule } from './fights/fights.module';
 import { UsersModule } from './users/users.module';
 import { ResultsModule } from './results/results.module';
 import { ExportsModule } from './exports/exports.module';
+import { SignatureTemplatesModule } from './signature-templates/signature-templates.module';
 import { RequestLoggerMiddleware } from './common/request-logger.middleware';
+import { OriginCheckMiddleware } from './common/origin-check.middleware';
 import { EventPoliciesModule } from './event-policies/event-policies.module';
 import { HealthController } from './health.controller';
 import { THROTTLE } from './config/throttle-config';
@@ -59,6 +62,7 @@ import { THROTTLE } from './config/throttle-config';
     FormsModule,
     AthletesModule,
     ClubsModule,
+    GeographyModule,
     RegistrationsModule,
     WeighinModule,
     IntegrityModule,
@@ -68,6 +72,7 @@ import { THROTTLE } from './config/throttle-config';
     UsersModule,
     ResultsModule,
     ExportsModule,
+    SignatureTemplatesModule,
     EventPoliciesModule,
   ],
   controllers: [HealthController],
@@ -83,8 +88,11 @@ import { THROTTLE } from './config/throttle-config';
 export class AppModule implements NestModule {
   // configure() is called once at startup by Nest. We attach the request logger
   // middleware to every route ('*') so every inbound HTTP request gets a structured
-  // pino log line with method, path, status, and duration.
+  // pino log line with method, path, status, and duration. OriginCheckMiddleware
+  // runs after it as a CSRF defense-in-depth layer on state-changing requests.
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+    consumer
+      .apply(RequestLoggerMiddleware, OriginCheckMiddleware)
+      .forRoutes('*');
   }
 }

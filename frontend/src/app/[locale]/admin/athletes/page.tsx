@@ -15,7 +15,7 @@ import { useToast } from '@/components/ui/Toast';
 import { Input } from '@/components/ui/primitives/input';
 import { ApiError, apiGet, apiPost } from '@/lib/api/client';
 import { localizedName } from '@/lib/bilingual';
-import type { AthleteRow, ClubRow } from '@/types/api';
+import type { AthleteRow, ClubRow, CountryRow, RegionRow } from '@/types/api';
 
 import {
   ATHLETES_CARD_CLASS,
@@ -67,6 +67,14 @@ export default function AthletesPage() {
     queryKey: ['clubs'],
     queryFn: () => apiGet<ClubRow[]>('/api/clubs'),
   });
+  const { data: countries } = useQuery({
+    queryKey: ['countries'],
+    queryFn: () => apiGet<CountryRow[]>('/api/countries'),
+  });
+  const { data: regions } = useQuery({
+    queryKey: ['regions'],
+    queryFn: () => apiGet<RegionRow[]>('/api/regions'),
+  });
 
   const clubMap = useMemo(() => new Map((clubs ?? []).map((c) => [c.id, c])), [clubs]);
   const formClub = form.clubId ? (clubMap.get(form.clubId) ?? null) : null;
@@ -107,6 +115,8 @@ export default function AthletesPage() {
       documentId: a.documentId ?? '',
       sex: a.sex ?? '',
       clubId: a.clubId ?? '',
+      countryId: a.countryId ?? '',
+      regionId: a.regionId ?? '',
     });
     setDocIdError(null);
     setModalOpen(true);
@@ -138,6 +148,9 @@ export default function AthletesPage() {
       documentId: form.documentId.trim(),
       sex: form.sex || undefined,
       clubId: form.clubId || undefined,
+      // Region only matters for club-less athletes — when a club is set the
+      // server derives region/country from it and ignores this.
+      regionId: form.clubId ? undefined : form.regionId || null,
     };
 
     if (editingAthlete) body.id = editingAthlete.id;
@@ -282,6 +295,8 @@ export default function AthletesPage() {
         form={form}
         setForm={setForm}
         clubs={clubs ?? []}
+        countries={countries ?? []}
+        regions={regions ?? []}
         showKaFields={showKaFields}
         docIdError={docIdError}
         setDocIdError={setDocIdError}

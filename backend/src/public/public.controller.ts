@@ -9,6 +9,7 @@ import {
 import type { Event } from '@prisma/client';
 import { EventsService } from '../events/events.service';
 import { ClubsService } from '../clubs/clubs.service';
+import { CountriesService } from '../geography/countries.service';
 import { EventCategoriesService } from '../events/event-categories.service';
 import { getRegistrationStatus } from '../events/event-dates.helper';
 import { PrismaService } from '../prisma/prisma.service';
@@ -34,6 +35,7 @@ export class PublicController {
     private readonly prisma: PrismaService,
     private readonly events: EventsService,
     private readonly clubs: ClubsService,
+    private readonly countries: CountriesService,
     private readonly eventCategories: EventCategoriesService,
     private readonly athleteProfiles: AthleteProfileService,
   ) {}
@@ -109,6 +111,20 @@ export class PublicController {
     return post;
   }
 
+  @Get('countries')
+  @Header('Cache-Control', CACHE_LONG)
+  async listPublicCountries() {
+    return this.countries.listPublic();
+  }
+
+  @Get('countries/:id')
+  @Header('Cache-Control', CACHE_LONG)
+  async getPublicCountry(@Param('id') id: string) {
+    const country = await this.countries.getPublicById(id);
+    if (!country) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    return country;
+  }
+
   @Get('clubs')
   @Header('Cache-Control', CACHE_LONG)
   async listPublicClubs() {
@@ -166,7 +182,7 @@ export class PublicController {
           name: true,
           nameKa: true,
           city: true,
-          country: true,
+          country: { select: { name: true } },
           _count: { select: { athletes: true } },
         },
       });
@@ -182,7 +198,7 @@ export class PublicController {
             name: c.name,
             nameKa: c.nameKa,
             city: c.city,
-            country: c.country,
+            country: c.country.name,
             athletes: c._count.athletes,
             wins,
             losses: lossesByClub.get(id) ?? 0,
@@ -200,7 +216,7 @@ export class PublicController {
         name: true,
         nameKa: true,
         city: true,
-        country: true,
+        country: { select: { name: true } },
         _count: { select: { athletes: true } },
       },
     });
@@ -210,7 +226,7 @@ export class PublicController {
       name: c.name,
       nameKa: c.nameKa,
       city: c.city,
-      country: c.country,
+      country: c.country.name,
       athletes: c._count.athletes,
       wins: 0,
       losses: 0,
@@ -237,9 +253,28 @@ export class PublicController {
       lastNameKa: true,
       sex: true,
       club: {
-        select: { id: true, name: true, nameKa: true, country: true },
+        select: {
+          id: true,
+          name: true,
+          nameKa: true,
+          country: { select: { name: true } },
+        },
       },
     } as const;
+
+    // Flatten the club's Country relation back to a plain country-name string
+    // for the public payload shape.
+    const toPublicClub = (
+      c: {
+        id: string;
+        name: string;
+        nameKa: string | null;
+        country: { name: string } | null;
+      } | null,
+    ) =>
+      c
+        ? { id: c.id, name: c.name, nameKa: c.nameKa, country: c.country?.name ?? null }
+        : null;
 
     const grouped = await this.prisma.fight.groupBy({
       by: ['winnerAthleteId'],
@@ -294,7 +329,7 @@ export class PublicController {
             lastName: a.lastName,
             lastNameKa: a.lastNameKa,
             sex: a.sex,
-            club: a.club,
+            club: toPublicClub(a.club),
             wins: g._count.winnerAthleteId,
             losses: lossesById.get(a.id) ?? 0,
           };
@@ -319,7 +354,7 @@ export class PublicController {
       lastName: a.lastName,
       lastNameKa: a.lastNameKa,
       sex: a.sex,
-      club: a.club,
+      club: toPublicClub(a.club),
       wins: 0,
       losses: 0,
     }));

@@ -11,6 +11,7 @@ type Props = {
   footer: ReactNode;
   children: ReactNode;
   contentClassName?: string;
+  closeOnBackdrop?: boolean;
 };
 
 export function EventFormDialog({
@@ -21,6 +22,7 @@ export function EventFormDialog({
   footer,
   children,
   contentClassName,
+  closeOnBackdrop,
 }: Props) {
   return (
     <Modal
@@ -30,6 +32,7 @@ export function EventFormDialog({
       description={description}
       footer={footer}
       widthClassName={contentClassName ?? 'max-w-3xl'}
+      closeOnBackdrop={closeOnBackdrop}
     >
       {children}
     </Modal>

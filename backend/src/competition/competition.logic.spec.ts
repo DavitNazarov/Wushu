@@ -87,6 +87,110 @@ describe('competition.logic', () => {
     });
     expect(results.format).toBe('ROUND_ROBIN');
     expect(results.placements.map((row) => row.rank)).toEqual([1, 2, 3]);
+    expect(results.tieUnresolved).toBe(false);
+  });
+
+  it('flags the 3-way round-robin cycle and still assigns one medal each', () => {
+    // a1 beats a2, a2 beats a3, a3 beats a1 — everyone finishes 1-1, so W-L
+    // and head-to-head cannot separate them. Medals must be deterministic
+    // (one gold, one silver, one bronze — never three golds) and the category
+    // must be flagged for a manual federation decision.
+    const fights: CompetitionFight[] = [
+      {
+        id: 'f1',
+        round: 1,
+        boutNo: 1,
+        status: 'CONFIRMED',
+        redAthleteId: 'a1',
+        blueAthleteId: 'a2',
+        winnerAthleteId: 'a1',
+      },
+      {
+        id: 'f2',
+        round: 2,
+        boutNo: 2,
+        status: 'CONFIRMED',
+        redAthleteId: 'a2',
+        blueAthleteId: 'a3',
+        winnerAthleteId: 'a2',
+      },
+      {
+        id: 'f3',
+        round: 3,
+        boutNo: 3,
+        status: 'CONFIRMED',
+        redAthleteId: 'a3',
+        blueAthleteId: 'a1',
+        winnerAthleteId: 'a3',
+      },
+    ];
+
+    const results = computeCategoryResults({
+      fights,
+      athletes: [
+        { athleteId: 'a1', athleteName: 'A One' },
+        { athleteId: 'a2', athleteName: 'A Two' },
+        { athleteId: 'a3', athleteName: 'A Three' },
+      ],
+    });
+
+    expect(results.format).toBe('ROUND_ROBIN');
+    expect(results.tieUnresolved).toBe(true);
+    // Shared rank survives in the standings…
+    expect(results.placements.map((row) => row.rank)).toEqual([1, 1, 1]);
+    // …but exactly one of each medal is handed out, deterministically.
+    expect(results.placements.map((row) => row.medal)).toEqual([
+      'GOLD',
+      'SILVER',
+      'BRONZE',
+    ]);
+    expect(results.medalists.gold).not.toBeNull();
+    expect(results.medalists.silver).not.toBeNull();
+    expect(results.medalists.bronze).toHaveLength(1);
+  });
+
+  it('does not flag an incomplete round-robin pool as a tie', () => {
+    const fights: CompetitionFight[] = [
+      {
+        id: 'f1',
+        round: 1,
+        boutNo: 1,
+        status: 'CONFIRMED',
+        redAthleteId: 'a1',
+        blueAthleteId: 'a2',
+        winnerAthleteId: 'a1',
+      },
+      {
+        id: 'f2',
+        round: 2,
+        boutNo: 2,
+        status: 'QUEUED',
+        redAthleteId: 'a2',
+        blueAthleteId: 'a3',
+        winnerAthleteId: null,
+      },
+      {
+        id: 'f3',
+        round: 3,
+        boutNo: 3,
+        status: 'QUEUED',
+        redAthleteId: 'a3',
+        blueAthleteId: 'a1',
+        winnerAthleteId: null,
+      },
+    ];
+
+    const results = computeCategoryResults({
+      fights,
+      athletes: [
+        { athleteId: 'a1', athleteName: 'A One' },
+        { athleteId: 'a2', athleteName: 'A Two' },
+        { athleteId: 'a3', athleteName: 'A Three' },
+      ],
+    });
+
+    expect(results.isComplete).toBe(false);
+    expect(results.tieUnresolved).toBe(false);
   });
 
   it('shows winner placeholders for unresolved elimination final slots', () => {

@@ -10,7 +10,7 @@ import type {
 // changing one breaks the frontend.
 
 // CRITICAL blocks the draw; WARNING just shows a yellow banner.
-export type DrawIssueSeverity = 'CRITICAL' | 'WARNING';
+type DrawIssueSeverity = 'CRITICAL' | 'WARNING';
 
 // Top-level draw status pill at the header. See deriveDrawOverallStatus for
 // the precise mapping.
@@ -18,14 +18,16 @@ export type DrawOverallStatus = 'NOT_GENERATED' | 'GENERATED' | 'PUBLISHED';
 
 // Per-category "has the bracket been drawn?" — separate from the readinessStatus
 // because a DRAWN category can still have issues (we just don't surface them).
-export type DrawBracketStatus = 'NOT_DRAWN' | 'DRAWN';
+type DrawBracketStatus = 'NOT_DRAWN' | 'DRAWN';
 
 // Per-category readiness pill. See deriveCategoryStatus for the precedence.
+// SOLO = exactly one eligible athlete (its own pill, not lumped under review).
 export type DrawCategoryStatus =
   | 'READY'
   | 'BLOCKED'
   | 'DRAWN'
   | 'EMPTY'
+  | 'SOLO'
   | 'NEEDS_REVIEW';
 
 // One validation issue. `count` may exceed `sampleIds.length` because we cap
@@ -55,7 +57,7 @@ export type DrawActionAvailability = {
 };
 
 // Slim audit log projection for the "Recent activity" panel.
-export type DrawAuditSummaryItem = {
+type DrawAuditSummaryItem = {
   id: string;
   action: string;
   createdAt: Date;
@@ -75,9 +77,15 @@ export type DrawAthletePoolRow = {
   athleteCode: string;
   registrationStatus: RegistrationStatus;
   weighInStatus: WeighInStatus;
+  // Latest weigh-in attempt weight (kg) for this registration, null if never
+  // weighed. Surfaced on the Weigh-In Results page.
+  weighInWeightKg: number | null;
   originalCategory: string | null;
   finalCategory: string | null;
   movedUp: boolean;
+  // movedUp AND the final category sits in a different age group than the
+  // registered one. This (not plain movedUp) is what flags a category for review.
+  crossesAgeGroup: boolean;
   overrideUsed: boolean;
   eligibilityState: 'ELIGIBLE' | 'EXCLUDED';
   exclusionReasonCode: string | null;
@@ -85,7 +93,7 @@ export type DrawAthletePoolRow = {
 
 // One row in the per-category overview table. Carries pre-computed counters
 // + an inline issues list so the UI can render without re-deriving anything.
-export type DrawCategoryOverviewRow = {
+type DrawCategoryOverviewRow = {
   id: string;
   ageGroupCode: string;
   ageGroupName: string;
@@ -100,7 +108,15 @@ export type DrawCategoryOverviewRow = {
   warningIssueCount: number;
   issueCount: number;
   hasMovedUpAthletes: boolean;
-  hasOverrideAthletes: boolean;
+  // True when at least one eligible athlete crosses age groups — the move-up
+  // signal that actually drives review (a same-age-group bump does not).
+  hasAgeGroupMove: boolean;
+  // Set by the "Mark as reviewed" workflow (Part B). `reviewed` is the EFFECTIVE
+  // state — a stored review whose signature still matches the current pool. When
+  // true, a SOLO/NEEDS_REVIEW category is treated as READY.
+  reviewed: boolean;
+  reviewedAt: Date | null;
+  reviewedByName: string | null;
   issues: DrawValidationIssue[];
 };
 
@@ -113,13 +129,14 @@ export type DrawCategoryDetailsResponse = {
 };
 
 // Header summary numbers for the readiness page cards.
-export type DrawOverviewSummary = {
+type DrawOverviewSummary = {
   totalCategories: number;
   readyCategoriesCount: number;
   blockedCategoriesCount: number;
   drawnCategoriesCount: number;
   emptyCategoriesCount: number;
   needsReviewCategoriesCount: number;
+  soloCategoriesCount: number;
   eligibleAthletesCount: number;
   movedUpAthletesCount: number;
   outstandingIssuesCount: number;
@@ -137,6 +154,7 @@ export type DrawOverviewResponse = {
     publishTimingPolicyCode: PublishTimingPolicyCode;
     drawStatus: DrawOverallStatus;
     registrationLocked: boolean;
+    weighInResultsPublic: boolean;
   };
   summary: DrawOverviewSummary;
   validation: DrawValidationSummary;

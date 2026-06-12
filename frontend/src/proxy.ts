@@ -31,7 +31,7 @@ function isLoginRoute(pathname: string): boolean {
   return LOGIN_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
 }
 
-const SENTRY_PATH_PREFIXES = ['/sentry-example-page', '/sentry-tunnel'];
+const SENTRY_PATH_PREFIXES = ['/sentry-tunnel'];
 
 function isSentryRoute(pathname: string): boolean {
   return SENTRY_PATH_PREFIXES.some(
@@ -54,10 +54,6 @@ export function proxy(request: NextRequest) {
   const hasAnyToken = hasAccessToken || hasRefreshToken;
 
   if (isProtectedRoute(pathname) && !hasAnyToken) {
-    // [LOG] temporary observability
-    console.debug(
-      `[middleware] REDIRECT to login | path=${pathname} | access=${hasAccessToken} | refresh=${hasRefreshToken}`,
-    );
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = `/${locale}/login`;
     loginUrl.searchParams.set('next', pathname);
@@ -68,7 +64,6 @@ export function proxy(request: NextRequest) {
     // Only a live access token should block the login page.
     // A lone refresh cookie may be stale or the API may be unreachable, so
     // forcing a dashboard hop here can trap the user in a refresh loop.
-    console.debug(`[middleware] REDIRECT logged-in user away from login | path=${pathname}`);
     const dashboardUrl = request.nextUrl.clone();
     dashboardUrl.pathname = `/${locale}/dashboard`;
     dashboardUrl.searchParams.delete('next');

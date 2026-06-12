@@ -42,6 +42,12 @@
   --color-accent-violet: #8b5cf6;
   --color-accent-pink: #ec4899;
   --color-accent-cyan: #06b6d4;
+  --color-medal-gold: #fbbf24;
+  --color-medal-gold-subtle: rgba(251, 191, 36, 0.14);
+  --color-medal-silver: #cbd5e1;
+  --color-medal-silver-subtle: rgba(203, 213, 225, 0.14);
+  --color-medal-bronze: #e08a5a;
+  --color-medal-bronze-subtle: rgba(224, 138, 90, 0.14);
   --color-inverse-surface: #020817;
   --color-inverse-surface-2: #0f1929;
 }
@@ -67,6 +73,12 @@
   --color-accent-violet: #7c3aed;
   --color-accent-pink: #db2777;
   --color-accent-cyan: #0891b2;
+  --color-medal-gold: #ca8a04;
+  --color-medal-gold-subtle: rgba(202, 138, 4, 0.12);
+  --color-medal-silver: #64748b;
+  --color-medal-silver-subtle: rgba(100, 116, 139, 0.12);
+  --color-medal-bronze: #b45309;
+  --color-medal-bronze-subtle: rgba(180, 83, 9, 0.12);
   --color-inverse-surface: #0f172a;
   --color-inverse-surface-2: #1e293b;
 }

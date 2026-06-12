@@ -40,16 +40,21 @@ export class AuthUserService {
       throw new Error('USER_ROLE_CLUB_INVALID');
     }
 
+    // A coach inherits their club's region + country (denormalised copy).
+    let regionId: string | null = null;
+    let countryId: string | null = null;
     if (clubId) {
       const club = await this.prisma.club.findFirst({
         where: { id: clubId, organisationId },
-        select: { id: true },
+        select: { id: true, regionId: true, countryId: true },
       });
 
       if (!club) throw new Error('INVALID_CLUB');
+      regionId = club.regionId;
+      countryId = club.countryId;
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
 
     try {
       const user = await this.prisma.user.create({
@@ -60,6 +65,8 @@ export class AuthUserService {
           displayName: displayName.trim(),
           role: role as DbUserRole,
           clubId: clubId ?? null,
+          regionId,
+          countryId,
           nationality: nationality?.trim() || null,
           isActive: true,
         },
@@ -104,7 +111,7 @@ export class AuthUserService {
         data: { name: 'Default Organisation', slug: 'default' },
       }));
 
-    const passwordHash = await bcrypt.hash(params.password, 10);
+    const passwordHash = await bcrypt.hash(params.password, 12);
 
     const user = await this.prisma.user.create({
       data: {

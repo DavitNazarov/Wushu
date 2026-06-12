@@ -64,7 +64,7 @@ export default function AdminDashboardPage() {
 
   const quickActions = [
     { key: 'events',     href: `/${locale}/admin/events`,             icon: Calendar, label: tNav('events'),             desc: t('linkEventsDescription'),    accent: '#3b82f6' },
-    { key: 'draw',       href: `/${locale}/admin/draw`,               icon: Shuffle,  label: tNav('draw'),               desc: t('linkDrawDescription'),      accent: '#8b5cf6' },
+    { key: 'draw',       href: `/${locale}/admin/weighin-results`,    icon: Shuffle,  label: tNav('draw'),               desc: t('linkDrawDescription'),      accent: '#8b5cf6' },
     { key: 'weighin',    href: `/${locale}/admin/weighin`,            icon: Scale,    label: tNav('weighin'),            desc: t('linkWeighInDescription'),   accent: '#f59e0b' },
     { key: 'brackets',   href: `/${locale}/admin/brackets`,           icon: GitBranch,label: tNav('brackets'),           desc: t('linkBracketsDescription'),  accent: '#22c55e' },
     { key: 'athletes',   href: `/${locale}/admin/athletes`,           icon: Users,    label: tNav('athletes'),           desc: t('linkAthletesDescription'),  accent: '#ec4899' },

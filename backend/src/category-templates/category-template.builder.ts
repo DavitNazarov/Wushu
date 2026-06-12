@@ -4,7 +4,7 @@ import type {
   CategoryOptionGroup,
 } from '@prisma/client';
 
-export type CategoryTemplateWeightInput = {
+type CategoryTemplateWeightInput = {
   code: string;
   name: string;
   minWeightKgExcl: number | null;
@@ -15,6 +15,7 @@ export type CategoryTemplateWeightInput = {
 export type CategoryTemplateGroupInput = {
   code: string;
   name: string;
+  nameKa?: string | null;
   sex: AthleteSex | null;
   minAge: number | null;
   maxAge: number | null;
@@ -50,6 +51,7 @@ export function buildCategoryTemplateStructure(
     groups.set(groupKey, {
       code: option.group.code,
       name: option.group.name,
+      nameKa: option.group.nameKa,
       sex: option.group.sex,
       minAge: option.group.minAge,
       maxAge: option.group.maxAge,

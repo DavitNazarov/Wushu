@@ -43,10 +43,9 @@ type WeightNumpadProps = {
   disabled?: boolean;
   value: string;
   onChange: (value: string) => void;
-  onEnter?: () => void;
 };
 
-function WeightNumpad({ disabled, value, onChange, onEnter }: WeightNumpadProps) {
+function WeightNumpad({ disabled, value, onChange }: WeightNumpadProps) {
   const clearTimeoutRef = useRef<number | null>(null);
   const clearTriggeredRef = useRef(false);
   const hasDecimal = value.includes('.');
@@ -118,16 +117,6 @@ function WeightNumpad({ disabled, value, onChange, onEnter }: WeightNumpadProps)
       >
         ⌫
       </button>
-      {onEnter && (
-        <button
-          type="button"
-          disabled={disabled || !value}
-          onClick={onEnter}
-          className={`col-span-2 flex h-[58px] items-center justify-center rounded-[var(--radius-input)] border border-[var(--color-primary)]/50 bg-[var(--color-primary)]/10 text-[14px] font-semibold text-[var(--color-primary)] transition active:scale-95 hover:bg-[var(--color-primary)]/15 disabled:cursor-not-allowed disabled:opacity-40 select-none touch-manipulation`}
-        >
-          ✓ Confirm
-        </button>
-      )}
     </div>
   );
 }
@@ -216,12 +205,7 @@ export function WeighInWeightInputCard({
             {t('weightValidation')}
           </p>
         )}
-        <WeightNumpad
-          disabled={disabled}
-          value={value}
-          onChange={onChange}
-          onEnter={onEnter}
-        />
+        <WeightNumpad disabled={disabled} value={value} onChange={onChange} />
       </div>
     </div>
   );

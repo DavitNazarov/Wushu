@@ -5,8 +5,8 @@ import { motion } from 'framer-motion';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SkeletonKpiRow, SkeletonRows } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { publicVariants } from '@/lib/animations/variants';
+import { CoachPrimaryAction } from './CoachPrimaryAction';
 import { CoachDashboardPendingActions } from './CoachDashboardPendingActions';
 import { CoachDashboardRecentUpdates } from './CoachDashboardRecentUpdates';
 import { CoachDashboardSidebar } from './CoachDashboardSidebar';
@@ -34,7 +34,10 @@ export function CoachDashboardClient({ context }: Props) {
       animate="animate"
     >
       <motion.div variants={publicVariants.staggerItem}>
-        <PageHeader title={t('title')} subtitle={t('subtitle')} />
+        <PageHeader
+          title={context.displayName ? t('greeting', { name: context.displayName }) : t('title')}
+          subtitle={t('greetingSubtitle')}
+        />
       </motion.div>
 
       {baseError && (
@@ -62,32 +65,38 @@ export function CoachDashboardClient({ context }: Props) {
             <SkeletonRows rows={4} cols={1} />
           </div>
         </div>
-      ) : model.summary.totalAthletes === 0 && model.upcomingEvents.length === 0 ? (
-        <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
       ) : (
         <>
           <motion.div variants={publicVariants.staggerItem}>
-            <CoachDashboardSummaryCards summary={model.summary} />
+            <CoachPrimaryAction events={model.upcomingEvents} totalAthletes={model.summary.totalAthletes} />
           </motion.div>
 
-          <motion.div
-            className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_360px]"
-            variants={publicVariants.staggerItem}
-          >
-            <div className="space-y-6">
-              <CoachDashboardPendingActions actions={model.pendingActions} />
-              <CoachDashboardUpcomingEvents events={model.upcomingEvents} />
-              <CoachDashboardRecentUpdates
-                updates={model.recentUpdates}
-                hasExactTimestamps={model.hasExactUpdateTimestamps}
-              />
-            </div>
-            <CoachDashboardSidebar
-              context={context}
-              athleteCount={model.summary.totalAthletes}
-              quickActions={model.quickActions}
-            />
-          </motion.div>
+          {!(model.summary.totalAthletes === 0 && model.upcomingEvents.length === 0) && (
+            <>
+              <motion.div variants={publicVariants.staggerItem}>
+                <CoachDashboardSummaryCards summary={model.summary} />
+              </motion.div>
+
+              <motion.div
+                className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_360px]"
+                variants={publicVariants.staggerItem}
+              >
+                <div className="space-y-6">
+                  <CoachDashboardPendingActions actions={model.pendingActions} />
+                  <CoachDashboardUpcomingEvents events={model.upcomingEvents} />
+                  <CoachDashboardRecentUpdates
+                    updates={model.recentUpdates}
+                    hasExactTimestamps={model.hasExactUpdateTimestamps}
+                  />
+                </div>
+                <CoachDashboardSidebar
+                  context={context}
+                  athleteCount={model.summary.totalAthletes}
+                  quickActions={model.quickActions}
+                />
+              </motion.div>
+            </>
+          )}
         </>
       )}
     </motion.div>

@@ -13,6 +13,15 @@ const createPrismaMock = () => {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      // finalizeFightResult counts remaining playable fights to decide LIVE →
+      // COMPLETED auto-complete; default 1 = "fights remain" so result tests
+      // don't accidentally drive event completion.
+      count: jest.fn().mockResolvedValue(1),
+    },
+    scheduleSession: {
+      // computeLiveQueueBoard reads sessions to order the queue; default to none
+      // so the board derives order from global fight order.
+      findMany: jest.fn().mockResolvedValue([]),
     },
     timerState: {
       upsert: jest.fn().mockResolvedValue({

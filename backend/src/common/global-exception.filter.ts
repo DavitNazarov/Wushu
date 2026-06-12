@@ -8,11 +8,16 @@ import {
 import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
+import * as Sentry from '@sentry/node';
 import pino from 'pino';
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? 'info',
 });
+
+// Error aggregation is env-gated: without SENTRY_DSN the SDK is never
+// initialised and captureException is a no-op-safe call we skip entirely.
+const SENTRY_ENABLED = Boolean(process.env.SENTRY_DSN?.trim());
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -126,6 +131,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       'Unhandled exception',
     );
 
+    // Only genuinely unhandled errors reach Sentry — expected error paths
+    // above (validation, HTTP exceptions, mapped Prisma codes) stay out so the
+    // signal is real bugs, not user input. No request body/PII is attached.
+    if (SENTRY_ENABLED) {
+      Sentry.captureException(exception, {
+        tags: { path: request.url, method: request.method },
+      });
+    }
+
     return response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       code: 'INTERNAL_ERROR',
       message: 'Internal Server Error',
@@ -191,7 +205,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           body: {
             code: 'DATABASE_SCHEMA_OUT_OF_DATE',
             message:
-              'Database schema is out of date. Run Prisma migrations (e.g. `npx prisma migrate deploy`).',
+              'The app was recently updated and the database needs a quick update to match. ' +
+              'Apply the latest database migration, then reload this page. ' +
+              '(In development run “npm run prisma:migrate”; in production run “npx prisma migrate deploy”.)',
           },
         };
       }

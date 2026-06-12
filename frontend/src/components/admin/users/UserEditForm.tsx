@@ -57,6 +57,20 @@ export function UserEditForm({
 
   const showClubField = role === 'coach';
 
+  // Region + country are derived from the selected club (server-side); show
+  // them read-only so the admin sees where this coach lands in the hierarchy.
+  const selectedClub = (clubs ?? []).find((c) => c.id === clubId) ?? null;
+  const clubRegionLabel = selectedClub
+    ? [
+        selectedClub.regionName
+          ? localizedName(selectedClub.regionName, selectedClub.regionNameKa, locale)
+          : null,
+        selectedClub.country,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
+
   function handleSubmit() {
     setClubError(null);
     if (showClubField && !clubId) {
@@ -161,6 +175,11 @@ export function UserEditForm({
           </select>
           {clubError && (
             <p className="mt-1 text-[12px] text-[var(--color-danger)]">{clubError}</p>
+          )}
+          {clubRegionLabel && (
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+              {t('coachRegionHint', { location: clubRegionLabel })}
+            </p>
           )}
         </div>
       )}

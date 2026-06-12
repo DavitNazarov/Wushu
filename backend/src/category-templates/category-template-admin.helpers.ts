@@ -4,7 +4,7 @@ import {
   getTemplateSourceLabel,
 } from './category-template.definition';
 
-export type UsageEvent = {
+type UsageEvent = {
   id: string;
   name: string;
   lifecycle: string;

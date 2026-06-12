@@ -122,6 +122,16 @@ enum AthleteSex {
   FEMALE
 }
 
+// How a category's bracket is fought. Decided at draw time by athlete count
+// (resolveCompetitionFormat): <=2 DIRECT_FINAL, 3 ROUND_ROBIN, 4+ SINGLE_ELIMINATION.
+// Results placement logic branches on this — RR medals come from standings,
+// not from a "final fight".
+enum BracketFormat {
+  DIRECT_FINAL
+  ROUND_ROBIN
+  SINGLE_ELIMINATION
+}
+
 model Organisation {
   id        String   @id @default(cuid())
   name      String
@@ -146,6 +156,26 @@ model Organisation {
   fights           Fight[]
   timerStates      TimerState[]
   scheduleSessions ScheduleSession[]
+  countries        Country[]
+  regions          Region[]
+  protocolSignatureTemplates ProtocolSignatureTemplate[]
+}
+
+// Reusable head-judge signature block selected when exporting the results
+// protocols PDF. Org-scoped; the signature image is stored inline as a base64
+// data: URL (kept small by client-side downscaling).
+model ProtocolSignatureTemplate {
+  id             String   @id @default(cuid())
+  organisationId String
+  judgeNameEn    String
+  judgeNameKa    String?
+  signature      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@index([organisationId])
 }
 
 model User {
@@ -156,6 +186,8 @@ model User {
   displayName    String
   role           UserRole @default(athlete)
   clubId         String?
+  regionId       String?
+  countryId      String?
   nationality    String?
   isActive       Boolean  @default(true)
   deletedAt      DateTime?
@@ -168,16 +200,21 @@ model User {
 
   organisation   Organisation     @relation(fields: [organisationId], references: [id])
   club           Club?            @relation(fields: [clubId], references: [id])
+  region         Region?          @relation(fields: [regionId], references: [id])
+  country        Country?         @relation(fields: [countryId], references: [id])
   capabilities   UserCapability[]
   auditLogs      AuditLog[]       @relation("AuditActor")
   weighIns       WeighInAttempt[] @relation("WeighInOperator")
   fightConfirms  Fight[]          @relation("FightConfirmedBy")
   timerUpdates   TimerState[]     @relation("TimerUpdatedBy")
   refreshTokens  RefreshToken[]
+  drawCategoryReviews EventWeightCategory[] @relation("DrawCategoryReviewedBy")
 
   @@unique([organisationId, email])
   @@index([email])
   @@index([organisationId, deletedAt])
+  @@index([regionId])
+  @@index([countryId])
 }
 
 model RefreshToken {
@@ -225,6 +262,9 @@ model Event {
   lifecycle      EventLifecycle @default(REG_OPEN)
   published           Boolean        @default(false)
   autoAdvanceStage    Boolean        @default(false)
+  // When true, the confirmed weigh-in weights for this event are exposed on the
+  // public site (/events/:slug/weights). Toggled from the Weigh-In Results page.
+  weighInResultsPublic Boolean       @default(false)
   weighInPolicyCode   WeighInPolicyCode      @default(IWUF_STRICT_ONE_HOUR)
   bronzePolicyCode    BronzePolicyCode       @default(TWO_BRONZES)
   restPolicyCode      RestPolicyCode         @default(MIN_15_MINUTES)
@@ -295,6 +335,7 @@ model CategoryTemplateAgeGroup {
   categoryTemplateId   String     @map("rulesetId")
   code                 String
   name                 String
+  nameKa               String?
   sex                  AthleteSex?
   minAge               Int?
   maxAge               Int?
@@ -327,6 +368,7 @@ model CategoryOptionGroup {
   id                   String     @id @default(cuid())
   code                 String     @unique
   name                 String
+  nameKa               String?
   sex                  AthleteSex?
   minAge               Int?
   maxAge               Int?
@@ -381,6 +423,14 @@ model EventWeightCategory {
   registrations         Registration[]          @relation("RegistrationFinalWeightCategory")
   initialRegistrations  Registration[]          @relation("RegistrationInitialWeightCategory")
   fights                Fight[]
+
+  // Pre-draw "Mark as reviewed" sign-off. drawReviewSignature is a hash of the
+  // flagged athlete pool at sign-off time; if the pool changes the signature no
+  // longer matches and the review auto-expires (category returns to SOLO/REVIEW).
+  drawReviewedAt      DateTime?
+  drawReviewedById    String?
+  drawReviewedBy      User?     @relation("DrawCategoryReviewedBy", fields: [drawReviewedById], references: [id])
+  drawReviewSignature String?
 
   @@unique([eventAgeGroupId, categoryTemplateWeightId])
   @@index([eventAgeGroupId])
@@ -461,23 +511,71 @@ model DocumentLink {
   @@index([organisationId])
 }
 
-model Club {
+// A country is the top of the geography hierarchy (Country → Region → Club).
+// Org-scoped like everything else. `code` is ISO-3166 alpha-2 (e.g. "GE") and
+// drives Georgian-only UI behaviour (bilingual names, 11-digit national IDs).
+model Country {
   id             String   @id @default(cuid())
   organisationId String
   name           String
   nameKa         String?
+  code           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  regions      Region[]
+  clubs        Club[]
+  coaches      User[]
+  athletes     Athlete[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId])
+}
+
+// A region belongs to a country and groups clubs (e.g. Georgian mkhare).
+model Region {
+  id             String   @id @default(cuid())
+  organisationId String
+  countryId      String
+  name           String
+  nameKa         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  country      Country      @relation(fields: [countryId], references: [id])
+  clubs        Club[]
+  coaches      User[]
+  athletes     Athlete[]
+
+  @@unique([organisationId, countryId, name])
+  @@index([organisationId])
+  @@index([countryId])
+}
+
+model Club {
+  id             String   @id @default(cuid())
+  organisationId String
+  regionId       String
+  countryId      String
+  name           String
+  nameKa         String?
   city           String?
-  country        String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   organisation  Organisation   @relation(fields: [organisationId], references: [id])
+  region        Region         @relation(fields: [regionId], references: [id])
+  country       Country        @relation(fields: [countryId], references: [id])
   coaches       User[]
   athletes      Athlete[]
   registrations Registration[]
 
   // DB-1: FK column was unindexed.
   @@index([organisationId])
+  @@index([regionId])
+  @@index([countryId])
 }
 
 model ContactSubmission {
@@ -502,6 +600,8 @@ model Athlete {
   id             String      @id @default(cuid())
   organisationId String
   clubId         String?
+  regionId       String?
+  countryId      String?
   firstName      String
   firstNameKa    String?
   lastName       String
@@ -514,6 +614,8 @@ model Athlete {
 
   organisation   Organisation   @relation(fields: [organisationId], references: [id])
   club           Club?          @relation(fields: [clubId], references: [id])
+  region         Region?        @relation(fields: [regionId], references: [id])
+  country        Country?       @relation(fields: [countryId], references: [id])
   registrations  Registration[]
   redFights      Fight[]        @relation("FightRedAthlete")
   blueFights     Fight[]        @relation("FightBlueAthlete")
@@ -525,6 +627,8 @@ model Athlete {
   @@unique([organisationId, documentId])
   @@index([organisationId, lastName, firstName])
   @@index([organisationId, dateOfBirth, documentId])
+  @@index([regionId])
+  @@index([countryId])
 }
 
 model AthleteMerge {
@@ -640,6 +744,7 @@ model Bracket {
   eventId        String
   categoryCode   String
   seed           Int?
+  format         BracketFormat @default(SINGLE_ELIMINATION)
   createdAt      DateTime @default(now())
 
   organisation Organisation @relation(fields: [organisationId], references: [id])

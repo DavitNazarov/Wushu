@@ -5,10 +5,18 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from '@/i18n/navigation';
 
-type TabId = 'overview' | 'brackets' | 'schedule' | 'live' | 'results' | 'faq';
+type TabId =
+  | 'overview'
+  | 'weights'
+  | 'brackets'
+  | 'schedule'
+  | 'live'
+  | 'results'
+  | 'faq';
 
 type EventTabsProps = {
   overview: React.ReactNode;
+  weights: React.ReactNode;
   brackets: React.ReactNode;
   schedule: React.ReactNode;
   live: React.ReactNode;
@@ -16,13 +24,21 @@ type EventTabsProps = {
   faq: React.ReactNode;
 };
 
-const TAB_IDS: TabId[] = ['overview', 'brackets', 'schedule', 'live', 'results', 'faq'];
+const TAB_IDS: TabId[] = [
+  'overview',
+  'weights',
+  'brackets',
+  'schedule',
+  'live',
+  'results',
+  'faq',
+];
 
 function isTabId(value: string | null): value is TabId {
   return TAB_IDS.includes((value ?? '') as TabId);
 }
 
-export function EventTabs({ overview, brackets, schedule, live, results, faq }: EventTabsProps) {
+export function EventTabs({ overview, weights, brackets, schedule, live, results, faq }: EventTabsProps) {
   const tPublic = useTranslations('public');
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -44,6 +60,7 @@ export function EventTabs({ overview, brackets, schedule, live, results, faq }: 
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'overview', label: tPublic('overview') },
+    { id: 'weights', label: tPublic('weights') },
     { id: 'brackets', label: tPublic('brackets') },
     { id: 'schedule', label: tPublic('schedule') },
     { id: 'live', label: tPublic('live') },
@@ -79,6 +96,7 @@ export function EventTabs({ overview, brackets, schedule, live, results, faq }: 
 
       {/* Tab content */}
       {active === 'overview' && overview}
+      {active === 'weights' && weights}
       {active === 'brackets' && brackets}
       {active === 'schedule' && schedule}
       {active === 'live' && live}

@@ -11,11 +11,13 @@ This document lists all public routes and what appears on each page.
 | `/{locale}/about` | No | About page |
 | `/{locale}/rules` | No | Rules overview |
 | `/{locale}/events` | No | Events list |
-| `/{locale}/events/:id` | No | Event details |
-| `/{locale}/events/:id/brackets` | No | Brackets (published only) |
-| `/{locale}/events/:id/schedule` | No | Schedule (published only) |
-| `/{locale}/events/:id/results` | No | Results (published only) |
-| `/{locale}/login` | No | Single login form (admin/coach/athlete) |
+| `/{locale}/events/:slug` | No | Event details |
+| `/{locale}/events/:slug/brackets` | No | Brackets (published only) |
+| `/{locale}/events/:slug/schedule` | No | Schedule (published only) |
+| `/{locale}/events/:slug/results` | No | Results (published only) |
+| `/{locale}/events/:slug/live` | No | **Live competition** — current bout, on-deck, next, sessions |
+| `/{locale}/mat/:eventSlug/:matName` | No | **Venue TV scoreboard** for one mat (full-screen) |
+| `/{locale}/login` | No | Single login form (all roles) |
 
 ## Page Contents
 
@@ -35,7 +37,7 @@ This document lists all public routes and what appears on each page.
 
 ### Rules (`/{locale}/rules`)
 
-- Event lifecycle (7 steps): Registration open → Weigh-in → Locked → Draw → Published → Live → Completed
+- Event lifecycle (8 stages): Registration open → Locked → Weigh-in → Weigh-in completed → Draw → Published → Live → Completed
 - Publishing concept: public sees only published content
 
 ### Events list (`/{locale}/events`)
@@ -48,10 +50,29 @@ This document lists all public routes and what appears on each page.
 - Event details
 - Links to brackets, schedule, results
 
-### Brackets / Schedule / Results (`/{locale}/events/:id/brackets|schedule|results`)
+### Brackets / Schedule / Results (`/{locale}/events/:slug/brackets|schedule|results`)
 
 - "Not published yet" when content is not published
-- Actual content when published (to be implemented)
+- Actual content when published
+
+### Live (`/{locale}/events/:slug/live`)
+
+The spectator-facing live page — **the flagship public feature**. Read-only, auto-refreshing. Solves the core problem: *nobody has to ask "what fight is on now / when is mine?"*
+
+- **Current fight** card: category + bout #, red vs blue athlete (bilingual), round/phase status (e.g. "Round 2" / "Rest"), round-wins summary (red X – blue Y). No ticking clock — coarse status only.
+- **Result banner** when the bout is decided (winner + method: points / KO / DQ / walkover).
+- **Latest result** banner (the bout that just finished).
+- **On Deck** + **Next** cards — what's coming up.
+- **Sessions** list — full running order grouped by session, with "Winner of N" / "TBD" placeholders for undecided slots.
+
+### Mat / TV screen (`/{locale}/mat/:eventSlug/:matName`)
+
+Full-screen dark scoreboard for one physical mat — meant for a TV/projector in the hall. Anonymous (no login), updates live:
+
+- Big **"NOW"** row: red athlete name | large running timer | blue athlete name, with category + bout #.
+- **On Deck** and **Next** lists below.
+- "No active fight" state still shows On Deck + Next.
+- "Reconnecting…" overlay if the connection drops (keeps the last data on screen).
 
 ### Login (`/{locale}/login`)
 

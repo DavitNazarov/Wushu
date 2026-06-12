@@ -15,8 +15,14 @@ import {
   SelectValue,
 } from '@/components/ui/primitives/select';
 import { localizedFullName, localizedName } from '@/lib/bilingual';
-import type { AthleteRow, ClubRow } from '@/types/api';
-import { EMPTY_CLUB, EMPTY_SEX, type AthleteFormState } from '../athletes.types';
+import type { AthleteRow, ClubRow, CountryRow, RegionRow } from '@/types/api';
+import {
+  EMPTY_CLUB,
+  EMPTY_COUNTRY,
+  EMPTY_REGION,
+  EMPTY_SEX,
+  type AthleteFormState,
+} from '../athletes.types';
 
 type Props = {
   open: boolean;
@@ -25,6 +31,8 @@ type Props = {
   form: AthleteFormState;
   setForm: React.Dispatch<React.SetStateAction<AthleteFormState>>;
   clubs: ClubRow[];
+  countries: CountryRow[];
+  regions: RegionRow[];
   showKaFields: boolean;
   docIdError: string | null;
   setDocIdError: (v: string | null) => void;
@@ -41,6 +49,8 @@ export function AthleteFormModal({
   form,
   setForm,
   clubs,
+  countries,
+  regions,
   showKaFields,
   docIdError,
   setDocIdError,
@@ -50,6 +60,7 @@ export function AthleteFormModal({
   locale,
 }: Props) {
   const t = useTranslations('athletes');
+  const tClubs = useTranslations('clubs');
   const tCommon = useTranslations('common');
 
   return (
@@ -176,6 +187,69 @@ export function AthleteFormModal({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Region/country: derived from the club when set; chosen directly for
+            a club-less athlete. */}
+        {form.clubId ? (
+          (() => {
+            const selectedClub = clubs.find((c) => c.id === form.clubId);
+            const region = selectedClub?.regionName
+              ? localizedName(selectedClub.regionName, selectedClub.regionNameKa, locale)
+              : null;
+            const label = [region, selectedClub?.country].filter(Boolean).join(' · ');
+            return label ? (
+              <p className="text-[12px] text-[var(--color-text-muted)]">{label}</p>
+            ) : null;
+          })()
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>{tClubs('fields.country')}</Label>
+              <Select
+                value={form.countryId || EMPTY_COUNTRY}
+                onValueChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    countryId: v === EMPTY_COUNTRY ? '' : v,
+                    regionId: '',
+                  }))
+                }
+              >
+                <SelectTrigger className="h-10 w-full">
+                  <SelectValue placeholder={tClubs('fields.selectCountry')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={EMPTY_COUNTRY}>—</SelectItem>
+                  {countries.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{localizedName(c.name, c.nameKa, locale)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{tClubs('fields.region')}</Label>
+              <Select
+                value={form.regionId || EMPTY_REGION}
+                disabled={!form.countryId}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, regionId: v === EMPTY_REGION ? '' : v }))
+                }
+              >
+                <SelectTrigger className="h-10 w-full">
+                  <SelectValue placeholder={tClubs('fields.selectRegion')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={EMPTY_REGION}>—</SelectItem>
+                  {regions
+                    .filter((r) => r.countryId === form.countryId)
+                    .map((r) => (
+                      <SelectItem key={r.id} value={r.id}>{localizedName(r.name, r.nameKa, locale)}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <Label>{t('fields.documentId')} *</Label>

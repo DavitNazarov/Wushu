@@ -12,15 +12,36 @@ export type AthleteFilters = {
   clubId?: string;
   dateOfBirth?: Date;
   documentId?: string;
+  limit?: number;
+  offset?: number;
 };
+
+// Hard server-side row cap for the athlete list. The registry grows year over
+// year; without a cap one request pulls the whole table through Node and the
+// duplicate-count pass below walks every row. Clients can page with
+// limit/offset; absent params they get the first MAX_LIST_ROWS.
+const MAX_LIST_ROWS = 500;
 
 // Row shape returned to the admin/coach UI. `duplicateCount` is computed at
 // query time so the UI can show a "looks like a duplicate" pill without a
 // second roundtrip.
 export type AthleteWithDuplicates = Athlete & {
   duplicateCount: number;
-  club: Pick<Club, 'id' | 'name' | 'city' | 'country'> | null;
+  // `country` is the derived country NAME (Club no longer stores a free-text
+  // country — it comes from the club's Country relation).
+  club:
+    | (Pick<Club, 'id' | 'name' | 'city'> & { country: string | null })
+    | null;
 };
+
+// Minimal projection returned as `possibleDuplicates` after a create/update.
+// Deliberately excludes documentId and dateOfBirth: candidates can match
+// org-wide, and leaking another club's national IDs to the submitting coach
+// would be a cross-club PII disclosure.
+export type PossibleDuplicate = Pick<
+  Athlete,
+  'id' | 'firstName' | 'firstNameKa' | 'lastName' | 'lastNameKa' | 'clubId'
+>;
 
 // Admin + coach writes for the Athlete table. The athlete profile page (read)
 // lives in AthleteProfileService — this service is intentionally mutation-only.
@@ -55,6 +76,12 @@ export class AthletesService {
       ];
     }
 
+    const take = Math.min(
+      Math.max(filters.limit ?? MAX_LIST_ROWS, 1),
+      MAX_LIST_ROWS,
+    );
+    const skip = Math.max(filters.offset ?? 0, 0);
+
     const athletes = await this.prisma.athlete.findMany({
       where,
       include: {
@@ -63,7 +90,7 @@ export class AthletesService {
             id: true,
             name: true,
             city: true,
-            country: true,
+            country: { select: { name: true } },
           },
         },
       },
@@ -72,6 +99,8 @@ export class AthletesService {
         { firstName: 'asc' },
         { dateOfBirth: 'asc' },
       ],
+      take,
+      skip,
     });
 
     if (athletes.length === 0) return [];
@@ -82,10 +111,21 @@ export class AthletesService {
       duplicateMap.set(key, (duplicateMap.get(key) ?? 0) + 1);
     }
 
-    return athletes.map((a) => ({
-      ...a,
-      duplicateCount: duplicateMap.get(this.getDuplicateKey(a)) ?? 0,
-    }));
+    return athletes.map((a) => {
+      const { club, ...rest } = a;
+      return {
+        ...rest,
+        club: club
+          ? {
+              id: club.id,
+              name: club.name,
+              city: club.city,
+              country: club.country.name,
+            }
+          : null,
+        duplicateCount: duplicateMap.get(this.getDuplicateKey(a)) ?? 0,
+      };
+    });
   }
 
   // Upsert (id present → update, missing → create) with these checks, in order:
@@ -103,6 +143,9 @@ export class AthletesService {
     actorUserId: string;
     id?: string;
     clubId?: string | null;
+    // Only used when the athlete has no club (club-less athlete still has a
+    // region). When clubId is set, region/country are derived from the club.
+    regionId?: string | null;
     actorClubId?: string | null;
     firstName: string;
     firstNameKa?: string | null;
@@ -111,10 +154,16 @@ export class AthletesService {
     dateOfBirth: Date;
     documentId: string;
     sex?: AthleteSex | null;
-  }): Promise<{ athlete: Athlete; possibleDuplicates: Athlete[] }> {
+  }): Promise<{ athlete: Athlete; possibleDuplicates: PossibleDuplicate[] }> {
+    // Resolve the athlete's denormalised region/country. With a club, both are
+    // derived from the club (single source of truth). Without a club, an
+    // explicit region may be supplied; its country is derived from the region.
+    let derivedRegionId: string | null = null;
+    let derivedCountryId: string | null = null;
     if (input.clubId) {
       const club = await this.prisma.club.findFirst({
         where: { id: input.clubId, organisationId: input.organisationId },
+        select: { id: true, regionId: true, countryId: true },
       });
 
       if (!club) {
@@ -126,6 +175,21 @@ export class AthletesService {
           HttpStatus.BAD_REQUEST,
         );
       }
+      derivedRegionId = club.regionId;
+      derivedCountryId = club.countryId;
+    } else if (input.regionId) {
+      const region = await this.prisma.region.findFirst({
+        where: { id: input.regionId, organisationId: input.organisationId },
+        select: { id: true, countryId: true },
+      });
+      if (!region) {
+        throw new HttpException(
+          { code: 'REGION_NOT_FOUND', message: 'Region not found' },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      derivedRegionId = region.id;
+      derivedCountryId = region.countryId;
     }
 
     const existing = input.id
@@ -161,6 +225,8 @@ export class AthletesService {
     const data: Prisma.AthleteUncheckedCreateInput = {
       organisationId: input.organisationId,
       clubId: input.clubId ?? null,
+      regionId: derivedRegionId,
+      countryId: derivedCountryId,
       firstName: input.firstName.trim(),
       firstNameKa: input.firstNameKa?.trim() || null,
       lastName: input.lastName.trim(),
@@ -172,6 +238,7 @@ export class AthletesService {
 
     const possibleDuplicates = await this.findPossibleDuplicates({
       organisationId: input.organisationId,
+      actorClubId: input.actorClubId ?? null,
       firstName: data.firstName,
       lastName: data.lastName,
       dateOfBirth: data.dateOfBirth,
@@ -325,19 +392,25 @@ export class AthletesService {
   //   - same DOB AND documentId case-insensitive match
   // The DOB filter is intentional — without it we'd surface every "John Smith"
   // in the system, which is noise.
+  // Coaches must never see candidates from other clubs here: the match keys
+  // (documentId / name+DOB) hit org-wide, so without the actorClubId filter a
+  // coach could probe another club's roster. The projection is minimal for the
+  // same reason — see PossibleDuplicate.
   private async findPossibleDuplicates(input: {
     organisationId: string;
+    actorClubId?: string | null;
     firstName: string;
     lastName: string;
     dateOfBirth: Date | string;
     documentId: string;
     excludeId?: string;
-  }): Promise<Athlete[]> {
+  }): Promise<PossibleDuplicate[]> {
     const andConditions: Prisma.AthleteWhereInput[] = [];
     if (input.excludeId) andConditions.push({ id: { not: input.excludeId } });
 
     const where: Prisma.AthleteWhereInput = {
       organisationId: input.organisationId,
+      ...(input.actorClubId ? { clubId: input.actorClubId } : {}),
       dateOfBirth: input.dateOfBirth,
       AND: andConditions.length > 0 ? andConditions : undefined,
       OR: [
@@ -351,6 +424,14 @@ export class AthletesService {
 
     return this.prisma.athlete.findMany({
       where,
+      select: {
+        id: true,
+        firstName: true,
+        firstNameKa: true,
+        lastName: true,
+        lastNameKa: true,
+        clubId: true,
+      },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     });
   }

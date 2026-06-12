@@ -16,6 +16,7 @@ import { WeighInWeightInputCard } from './WeighInWeightInputCard';
 import { WeighInDecisionPreview } from './WeighInDecisionPreview';
 import { WeighInActionBar } from './WeighInActionBar';
 import { WeighInHistoryCard } from './WeighInHistoryCard';
+import { WeighInPriorAttemptStrip } from './WeighInPriorAttemptStrip';
 
 function toCategoryList(entry: WeighInListEntry | null): WeighInCategory[] {
   return toWeighInCategoryList(entry);
@@ -115,10 +116,10 @@ export function WeighInDetailsPanel({
       )}
 
       {/* Unified detail card */}
-      <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)]">
 
         {/* 1 — Athlete header */}
-        <div className="border-b border-[var(--color-border)] p-4">
+        <div className="rounded-t-[var(--radius-card)] border-b border-[var(--color-border)] px-4 pb-[19px] pt-[60px]">
           <WeighInAthleteSummaryCard entry={selected} t={t} />
         </div>
 
@@ -130,6 +131,11 @@ export function WeighInDetailsPanel({
             weightInput={weightInput}
             t={t}
           />
+        </div>
+
+        {/* 2.5 — Prior weigh-in glance (always visible) */}
+        <div className="border-b border-[var(--color-border)] px-4 py-3">
+          <WeighInPriorAttemptStrip attempts={selected.weighIns} t={t} />
         </div>
 
         {/* 3 — Weight input (hero) */}
@@ -169,7 +175,7 @@ export function WeighInDetailsPanel({
         )}
 
         {/* 6 — Attempt history */}
-        <div className="px-4 py-3">
+        <div className="rounded-b-[var(--radius-card)] px-4 py-3">
           <WeighInHistoryCard attempts={selected.weighIns} t={t} />
         </div>
       </div>

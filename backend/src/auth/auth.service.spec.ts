@@ -84,6 +84,9 @@ describe('AuthService refresh token storage fallback', () => {
       payload: {
         ...payload,
         capabilities: getCapabilitiesForRole('admin'),
+        // Access tokens carry a `type: 'access'` discriminator (auth.service.ts);
+        // verifyToken rejects any token whose type !== 'access'.
+        type: 'access',
       },
     });
     expect(storeSpy).toHaveBeenCalledWith('user_1', 'refresh_2');

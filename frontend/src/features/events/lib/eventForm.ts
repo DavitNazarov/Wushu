@@ -18,7 +18,7 @@ export function addDays(dateString: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function isoToDate(iso: string | null | undefined): string {
+function isoToDate(iso: string | null | undefined): string {
   if (!iso) return '';
   return iso.slice(0, 10);
 }

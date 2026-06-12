@@ -14,7 +14,7 @@ const textareaCls =
 
 const labelCls = 'block text-[12px] font-semibold text-[var(--color-text)]';
 
-export type ContactFormField = {
+type ContactFormField = {
   name: 'name' | 'email' | 'clubName' | 'message';
   label: string;
   type?: string;

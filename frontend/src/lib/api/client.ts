@@ -68,15 +68,20 @@ async function handleResponse<T>(res: Response): Promise<T> {
     res.status,
     (body.code as string) ?? (body.error as string) ?? `HTTP_${res.status}`,
     (body.message as string) ?? rawBody ?? `Request failed with status ${res.status}`,
-    body.issues ?? body.details ?? rawBody,
+    // Only carry STRUCTURED validation issues here. Never fall back to the raw
+    // response body — otherwise error UIs print the whole JSON payload as a
+    // bogus "issue" line.
+    body.issues ?? body.details ?? undefined,
   );
 }
 
-export async function api<T = unknown>(
+// Fetch with cookie auth; on a 401 from a non-auth endpoint, refresh the session
+// once (de-duped across concurrent callers) and retry the same request. Throws
+// ApiError + redirects to login when the refresh itself fails.
+async function fetchWithRefresh(
   path: string,
-  init?: RequestInit & { signal?: AbortSignal },
-): Promise<T> {
-  const opts: RequestInit = { ...init, credentials: 'include' };
+  opts: RequestInit,
+): Promise<Response> {
   let res = await fetch(path, opts);
 
   if (res.status === 401 && !isAuthEndpoint(path)) {
@@ -93,6 +98,15 @@ export async function api<T = unknown>(
     res = await fetch(path, opts);
   }
 
+  return res;
+}
+
+async function api<T = unknown>(
+  path: string,
+  init?: RequestInit & { signal?: AbortSignal },
+): Promise<T> {
+  const res = await fetchWithRefresh(path, { ...init, credentials: 'include' });
+
   if (res.status === 403) {
     throw new ApiError(403, 'FORBIDDEN', 'Access denied');
   }
@@ -102,6 +116,31 @@ export async function api<T = unknown>(
 
 export function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   return api<T>(path, { method: 'GET', signal });
+}
+
+// Fetch a binary response (e.g. a generated PDF) as a Blob, with the same
+// cookie auth + 401-refresh behaviour as api(). Throws ApiError on failure.
+export async function apiBlob(path: string): Promise<Blob> {
+  const res = await fetchWithRefresh(path, {
+    method: 'GET',
+    credentials: 'include',
+  });
+
+  // handleResponse throws a parsed ApiError for any non-ok status.
+  if (!res.ok) return handleResponse<Blob>(res);
+  return res.blob();
+}
+
+// Save a Blob to the user's machine via a transient object URL.
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function apiPost<T>(path: string, body?: unknown): Promise<T> {

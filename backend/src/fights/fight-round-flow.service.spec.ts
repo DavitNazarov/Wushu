@@ -6,6 +6,10 @@ function createPrismaMock() {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      // finalizeFightResult counts remaining playable fights to decide LIVE →
+      // COMPLETED auto-complete; default to 1 so a fight finishing never trips
+      // event completion in these round-flow unit tests.
+      count: jest.fn().mockResolvedValue(1),
     },
     timerState: {
       findUnique: jest.fn(),

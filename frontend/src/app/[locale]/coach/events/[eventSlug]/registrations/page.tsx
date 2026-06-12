@@ -10,6 +10,7 @@ import { InlineAlert } from '@/components/ui/InlineAlert';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { ApiError, apiGet, apiPost } from '@/lib/api/client';
+import { localizedFullName } from '@/lib/bilingual';
 import { publicVariants } from '@/lib/animations/variants';
 import type { EventRow, RegistrationRow, AthleteRow } from '@/types/api';
 
@@ -38,6 +39,9 @@ export default function CoachRegistrationsPage({ params }: Props) {
   const [eventWeightCategoryId, setEventWeightCategoryId] = useState('');
   const [notes, setNotes] = useState('');
   const [regClosedError, setRegClosedError] = useState(false);
+  // When set, the Add modal shows a success screen instead of the form
+  // (mirrors the admin "Add athlete to event" flow).
+  const [addSuccess, setAddSuccess] = useState<{ name: string; allRegistered: boolean } | null>(null);
 
   // Edit state
   const [editReg, setEditReg] = useState<RegistrationRow | null>(null);
@@ -78,8 +82,8 @@ export default function CoachRegistrationsPage({ params }: Props) {
       apiPost<RegistrationRow>('/api/registrations', body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['registrations', eventId] });
-      closeAdd();
-      toast(tC('saveSuccess'));
+      // The per-call onSuccess in handleAdd swaps the modal to its success
+      // screen; we keep it open instead of closing + toasting here.
     },
     onError: (e: unknown) => {
       if (e instanceof ApiError && e.status === 403) {
@@ -127,6 +131,15 @@ export default function CoachRegistrationsPage({ params }: Props) {
   const alreadyRegistered = !!selectedAthleteId &&
     allRows.some((r) => r.athleteId === selectedAthleteId && r.status !== 'WITHDRAWN');
 
+  // Athletes the coach can still register (not already in a non-withdrawn
+  // registration for this event). When none remain, the Add modal shows an
+  // informational state with only a Close action instead of the form.
+  const availableAthleteCount = (athletes ?? []).filter(
+    (a) => !allRows.some((r) => r.athleteId === a.id && r.status !== 'WITHDRAWN'),
+  ).length;
+  const noAthletesAvailable = athletes !== undefined && availableAthleteCount === 0;
+  const hasAnyAthletes = (athletes?.length ?? 0) > 0;
+
   function handleAthleteChange(id: string) {
     setSelectedAthleteId(id);
     setSelectedAgeGroupId('');
@@ -140,6 +153,17 @@ export default function CoachRegistrationsPage({ params }: Props) {
     setEventWeightCategoryId('');
     setNotes('');
     setRegClosedError(false);
+    setAddSuccess(null);
+  }
+
+  // Reset just the athlete/category fields and return to the form so the coach
+  // can register another athlete without closing the modal.
+  function addAnother() {
+    setAddSuccess(null);
+    setSelectedAthleteId('');
+    setSelectedAgeGroupId('');
+    setEventWeightCategoryId('');
+    setNotes('');
   }
 
   function openEdit(reg: RegistrationRow) {
@@ -156,7 +180,23 @@ export default function CoachRegistrationsPage({ params }: Props) {
 
   function handleAdd() {
     if (!eventId || !selectedAthleteId || !eventWeightCategoryId || alreadyRegistered) return;
-    createMut.mutate({ eventId, athleteId: selectedAthleteId, eventWeightCategoryId, notes: notes.trim() || undefined });
+    const name = selectedAthlete
+      ? localizedFullName(
+          selectedAthlete.firstName,
+          selectedAthlete.lastName,
+          selectedAthlete.firstNameKa,
+          selectedAthlete.lastNameKa,
+          locale,
+        )
+      : '';
+    // After this registration, will any of the coach's athletes remain
+    // unregistered? The selected athlete is currently unregistered (the guard
+    // above blocks already-registered ones), so it is counted here.
+    const allRegistered = availableAthleteCount <= 1;
+    createMut.mutate(
+      { eventId, athleteId: selectedAthleteId, eventWeightCategoryId, notes: notes.trim() || undefined },
+      { onSuccess: () => setAddSuccess({ name, allRegistered }) },
+    );
   }
 
   function handleEditSave() {
@@ -267,6 +307,10 @@ export default function CoachRegistrationsPage({ params }: Props) {
         onWeightCategoryChange={setEventWeightCategoryId}
         onNotesChange={setNotes}
         onSave={handleAdd}
+        success={addSuccess}
+        onAddAnother={addAnother}
+        noAthletesAvailable={noAthletesAvailable}
+        hasAnyAthletes={hasAnyAthletes}
       />
 
       <EditRegistrationModal

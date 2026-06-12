@@ -6,7 +6,7 @@ import { roundStageLabel } from '../draw/brackets.helpers';
 const COMPLETED_STATUSES = new Set<FightStatus>(['COMPLETE', 'CONFIRMED']);
 const ACTIVE_STATUSES = new Set<FightStatus>(['IN_PROGRESS', 'PAUSED']);
 
-export type CompetitionValidationIssueSeverity = 'CRITICAL' | 'WARNING';
+type CompetitionValidationIssueSeverity = 'CRITICAL' | 'WARNING';
 
 export type CompetitionValidationIssue = {
   code: string;
@@ -30,14 +30,14 @@ export type CompetitionAthlete = {
   athleteName: string;
 };
 
-export type CompetitionFightParticipantView = {
+type CompetitionFightParticipantView = {
   athleteId: string | null;
   name: string;
   kind: 'ATHLETE' | 'WINNER_PLACEHOLDER' | 'BYE' | 'TBD';
   sourceBoutNo: number | null;
 };
 
-export type CompetitionFightView = {
+type CompetitionFightView = {
   id: string;
   round: number;
   boutNo: number;
@@ -93,6 +93,11 @@ export type CategoryResults = {
     bronze: CategoryPlacementRow[];
   };
   standings: RoundRobinStandingRow[] | null;
+  // ROUND_ROBIN only: true when the completed pool ends in a rank tie inside
+  // the medal positions (e.g. the 3-way 1-1-1 cycle, where W-L and head-to-head
+  // cannot separate the athletes). Medals are then assigned deterministically
+  // (standings order) but the category needs a manual federation decision.
+  tieUnresolved: boolean;
 };
 
 function sortFights(fights: CompetitionFight[]): CompetitionFight[] {
@@ -464,7 +469,7 @@ export function validateCompetitionStructure(input: {
   };
 }
 
-export function getNextAvailableFight(input: {
+function getNextAvailableFight(input: {
   fights: CompetitionFight[];
   format: CompetitionFormat;
 }): CompetitionFight | null {
@@ -719,12 +724,22 @@ export function computeCategoryResults(input: {
       athletes: input.athletes,
       ruleset: input.ruleset,
     });
-    const placements: CategoryPlacementRow[] = standings.map((row) => ({
+    // Rank ties inside the medal positions (the 3-way 1-1-1 cycle is the real
+    // case for 3-athlete pools) cannot be broken from fight data alone. The
+    // rank-based mapping used to hand out THREE golds here — instead assign
+    // medals positionally from the deterministic standings order and flag the
+    // category for manual review.
+    const medalRanks = standings.slice(0, 3).map((row) => row.rank);
+    const tieUnresolved =
+      isComplete && new Set(medalRanks).size !== medalRanks.length;
+    const MEDAL_BY_POSITION = ['GOLD', 'SILVER', 'BRONZE'] as const;
+    const placements: CategoryPlacementRow[] = standings.map((row, index) => ({
       rank: row.rank,
       athleteId: row.athleteId,
       athleteName: row.athleteName,
-      medal:
-        row.rank === 1
+      medal: tieUnresolved
+        ? (MEDAL_BY_POSITION[index] ?? null)
+        : row.rank === 1
           ? 'GOLD'
           : row.rank === 2
             ? 'SILVER'
@@ -744,6 +759,7 @@ export function computeCategoryResults(input: {
         bronze: placements.filter((row) => row.medal === 'BRONZE'),
       },
       standings,
+      tieUnresolved,
     };
   }
 
@@ -806,5 +822,6 @@ export function computeCategoryResults(input: {
       bronze: placements.filter((row) => row.medal === 'BRONZE'),
     },
     standings: null,
+    tieUnresolved: false,
   };
 }

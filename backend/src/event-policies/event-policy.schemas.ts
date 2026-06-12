@@ -24,4 +24,3 @@ export const EventPolicyInputSchema = z
   })
   .strict();
 
-export type EventPolicyInputDto = z.infer<typeof EventPolicyInputSchema>;

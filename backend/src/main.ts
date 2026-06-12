@@ -1,4 +1,18 @@
 import 'dotenv/config';
+import * as Sentry from '@sentry/node';
+
+// Backend error aggregation (H5): initialise as early as possible, gated on
+// SENTRY_DSN — without the var this whole block is a no-op and the SDK stays
+// dormant (same pattern as the frontend's NEXT_PUBLIC_SENTRY_DSN gate).
+if (process.env.SENTRY_DSN?.trim()) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV ?? 'development',
+    // Errors only — no performance tracing on the single-instance server.
+    tracesSampleRate: 0,
+  });
+}
+
 import { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AbstractHttpAdapter } from '@nestjs/core/adapters/http-adapter';

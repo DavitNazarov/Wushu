@@ -13,7 +13,7 @@ import type { PrismaService } from '../prisma/prisma.service';
  * deterministic but order-dependent — if a second org is ever created the
  * wrong federation can surface. Setting the slug pins the canonical org.
  */
-export const PUBLIC_ORG_SLUG = process.env.PUBLIC_ORG_SLUG?.trim() || null;
+const PUBLIC_ORG_SLUG = process.env.PUBLIC_ORG_SLUG?.trim() || null;
 
 /** Canonical org for all public, unauthenticated reads. */
 export async function resolvePublicOrg(

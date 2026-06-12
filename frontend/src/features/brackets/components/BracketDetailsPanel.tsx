@@ -18,7 +18,6 @@ import {
   issueSeverityClass,
 } from '@/features/brackets/lib/bracketDisplayMapper';
 import { BracketFightList } from './BracketFightList';
-import { BracketAthleteList } from './BracketAthleteList';
 import { useBracketSwap } from '@/features/brackets/lib/useBracketSwap';
 
 type DragInfo = { fightId: string; side: 'a' | 'b'; athleteId: string };
@@ -101,6 +100,7 @@ export function BracketDetailsPanel({ details, isLoading, t, tFightStatus }: Pro
         : 'info';
   const rendererData = mapRoundsToBracketRendererData(details.rounds);
   const isRoundRobin = details.category.competitionFormat === 'ROUND_ROBIN';
+  const hasFights = details.summary.totalFights > 0;
 
   return (
     <Card className="space-y-4 p-4 sm:p-5">
@@ -162,23 +162,28 @@ export function BracketDetailsPanel({ details, isLoading, t, tFightStatus }: Pro
         <Metric label={t('metricAthletes')} value={details.summary.totalAthletes} />
         <Metric label={t('metricFights')} value={details.summary.totalFights} />
         <Metric label={t('metricByes')} value={details.summary.byesCount} />
-        <Metric label={t('metricInProgress')} value={details.summary.inProgressFights} />
         <Metric label={t('metricCompleted')} value={details.summary.completedFights} />
-        <Metric label={t('metricSemifinals')} value={details.summary.semifinalCount} />
-        <Metric label={t('metricFinals')} value={details.summary.finalCount} />
-        <Metric label={t('metricBronzePolicy')} value={t('bronzePolicyTwoBronzes')} />
       </div>
 
+      {/* 1. Fight List */}
+      {hasFights && (
+        <div className="space-y-2">
+          <h3 className="text-[13px] font-semibold text-[var(--color-text)]">{t('fightListTitle')}</h3>
+          <BracketFightList fights={details.fights} t={t} tFightStatus={tFightStatus} />
+        </div>
+      )}
+
+      {/* 2. Bracket Viewer */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-[13px] font-semibold text-[var(--color-text)]">
             {isRoundRobin ? t('roundRobinTitle') : t('bracketViewerTitle')}
           </h3>
-          {!isRoundRobin && (
+          {hasFights && !isRoundRobin && (
             <button
               type="button"
               onClick={() => setEditMode((v) => !v)}
-              title={editMode ? 'Exit edit mode' : 'Edit bracket (drag to swap athletes)'}
+              title={editMode ? t('editExit') : t('editEnter')}
               className={`flex h-7 w-7 items-center justify-center rounded-md transition ${
                 editMode
                   ? 'bg-[var(--color-primary)] text-white'
@@ -191,11 +196,17 @@ export function BracketDetailsPanel({ details, isLoading, t, tFightStatus }: Pro
         </div>
         {editMode && (
           <p className="text-[12px] text-[var(--color-text-muted)]">
-            Drag an athlete slot onto another to swap their bracket positions.
-            {swapMut.isPending && ' Saving…'}
+            {t('editDragHint')}
+            {swapMut.isPending && ` ${t('editSaving')}`}
           </p>
         )}
-        {isRoundRobin ? (
+        {!hasFights ? (
+          <div className="rounded-[var(--radius-card)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-alt)] p-8 text-center">
+            <p className="text-[13px] text-[var(--color-text-muted)]">
+              {t('viewerEmptyPlaceholder')}
+            </p>
+          </div>
+        ) : isRoundRobin ? (
           <RoundRobinPanel
             fights={details.fights}
             tBracket={t}
@@ -213,20 +224,6 @@ export function BracketDetailsPanel({ details, isLoading, t, tFightStatus }: Pro
             onDrop={handleDrop}
           />
         )}
-      </div>
-
-      <div className="space-y-2">
-        <h3 className="text-[13px] font-semibold text-[var(--color-text)]">{t('fightListTitle')}</h3>
-        <BracketFightList fights={details.fights} t={t} tFightStatus={tFightStatus} />
-      </div>
-
-      <div className="space-y-2">
-        <h3 className="text-[13px] font-semibold text-[var(--color-text)]">{t('athletePoolTitle')}</h3>
-        <BracketAthleteList
-          eligible={details.athletes.eligible}
-          excluded={details.athletes.excluded}
-          t={t}
-        />
       </div>
     </Card>
   );

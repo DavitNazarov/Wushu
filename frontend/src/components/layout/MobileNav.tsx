@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Menu, Users, Newspaper, CalendarDays, Info, BookOpen, Mail } from 'lucide-react';
+import { Menu, Globe, Users, Newspaper, CalendarDays, Info, BookOpen, Mail } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { NavItem } from './NavItem';
 import { Link } from '@/i18n/navigation';
@@ -10,6 +10,7 @@ import { LanguageToggle } from './LanguageToggle';
 import { MobileDrawer } from './MobileDrawer';
 
 const PRIMARY_LINKS = [
+  { href: '/countries', key: 'countries', exact: true, icon: Globe },
   { href: '/clubs', key: 'clubs', exact: true, icon: Users },
   { href: '/news', key: 'news', exact: true, icon: Newspaper },
   { href: '/events', key: 'viewEvents', exact: false, icon: CalendarDays },

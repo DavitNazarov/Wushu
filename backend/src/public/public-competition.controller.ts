@@ -41,7 +41,7 @@ export class PublicCompetitionController {
 
   private async getAccessibleCompetitionEvent(eventSlug: string) {
     if (!eventSlug) {
-      throw new HttpException('eventSlug_REQUIRED', HttpStatus.BAD_REQUEST);
+      throw new HttpException('EVENT_SLUG_REQUIRED', HttpStatus.BAD_REQUEST);
     }
 
     const org = await resolvePublicOrg(this.prisma);
@@ -201,6 +201,150 @@ export class PublicCompetitionController {
     });
   }
 
+  // GET /api/public/weighin-results?eventSlug= — confirmed weigh-in weights
+  // grouped by category. Gated on the dedicated Event.weighInResultsPublic flag
+  // (NOT the general published gate): an organiser may publish weights before
+  // brackets go public. Document IDs are never exposed here (privacy) — only
+  // name, club, category and weight.
+  @Get('weighin-results')
+  @Header('Cache-Control', CACHE_SHORT)
+  async getPublicWeighInResults(@Query('eventSlug') eventSlug: string) {
+    if (!eventSlug) {
+      throw new HttpException('EVENT_SLUG_REQUIRED', HttpStatus.BAD_REQUEST);
+    }
+
+    const org = await resolvePublicOrg(this.prisma);
+    if (!org) throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+
+    const event = await this.events.getPublicOrRegistrableBySlug(
+      eventSlug,
+      org.id,
+    );
+    if (!event || !event.weighInResultsPublic) {
+      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    }
+
+    const registrations = await this.prisma.registration.findMany({
+      where: {
+        organisationId: event.organisationId,
+        eventId: event.id,
+        status: 'APPROVED',
+        weighInStatus: { in: ['PASSED', 'MOVED_UP', 'OVERRIDE_APPROVED'] },
+        eventWeightCategoryId: { not: null },
+      },
+      select: {
+        athleteId: true,
+        athlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
+        club: { select: { name: true, nameKa: true } },
+        eventWeightCategory: {
+          select: {
+            id: true,
+            categoryTemplateWeight: { select: { name: true, sortOrder: true } },
+            eventAgeGroup: {
+              select: {
+                categoryTemplateAgeGroup: {
+                  select: { name: true, sex: true, sortOrder: true },
+                },
+              },
+            },
+          },
+        },
+        weighIns: {
+          select: { weightKg: true },
+          orderBy: { attemptNo: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    type WeighInCategoryBucket = {
+      id: string;
+      categoryName: string;
+      ageGroupName: string;
+      division: string | null;
+      weightSortOrder: number;
+      ageGroupSortOrder: number;
+      athletes: Array<{
+        athleteId: string;
+        firstName: string;
+        lastName: string;
+        firstNameKa: string | null;
+        lastNameKa: string | null;
+        clubName: string | null;
+        clubNameKa: string | null;
+        weightKg: number | null;
+      }>;
+    };
+
+    const buckets = new Map<string, WeighInCategoryBucket>();
+    for (const reg of registrations) {
+      const cat = reg.eventWeightCategory;
+      if (!cat) continue;
+      const ageGroup = cat.eventAgeGroup.categoryTemplateAgeGroup;
+      let bucket = buckets.get(cat.id);
+      if (!bucket) {
+        bucket = {
+          id: cat.id,
+          categoryName: cat.categoryTemplateWeight.name,
+          ageGroupName: ageGroup.name,
+          division: ageGroup.sex,
+          weightSortOrder: cat.categoryTemplateWeight.sortOrder,
+          ageGroupSortOrder: ageGroup.sortOrder,
+          athletes: [],
+        };
+        buckets.set(cat.id, bucket);
+      }
+      bucket.athletes.push({
+        athleteId: reg.athlete.id,
+        firstName: reg.athlete.firstName,
+        lastName: reg.athlete.lastName,
+        firstNameKa: reg.athlete.firstNameKa,
+        lastNameKa: reg.athlete.lastNameKa,
+        clubName: reg.club?.name ?? null,
+        clubNameKa: reg.club?.nameKa ?? null,
+        weightKg: reg.weighIns[0]?.weightKg ?? null,
+      });
+    }
+
+    const categories = [...buckets.values()]
+      .sort(
+        (a, b) =>
+          a.ageGroupSortOrder - b.ageGroupSortOrder ||
+          a.weightSortOrder - b.weightSortOrder ||
+          a.categoryName.localeCompare(b.categoryName),
+      )
+      .map((bucket) => ({
+        id: bucket.id,
+        categoryName: bucket.categoryName,
+        ageGroupName: bucket.ageGroupName,
+        division: bucket.division,
+        athletes: bucket.athletes.sort(
+          (a, b) =>
+            (a.weightKg ?? Number.POSITIVE_INFINITY) -
+              (b.weightKg ?? Number.POSITIVE_INFINITY) ||
+            a.lastName.localeCompare(b.lastName),
+        ),
+      }));
+
+    return {
+      event: {
+        id: event.id,
+        name: event.name,
+        nameKa: event.nameKa,
+        slug: event.slug,
+      },
+      categories,
+    };
+  }
+
   @Get('schedule')
   @Header('Cache-Control', CACHE_SHORT)
   async getPublicSchedule(@Query('eventSlug') eventSlug: string) {
@@ -231,7 +375,7 @@ export class PublicCompetitionController {
   }
 
   @Get('live')
-  @Header('Cache-Control', CACHE_NONE)
+  @Header('Cache-Control', CACHE_SHORT)
   async getPublicLive(@Query('eventSlug') eventSlug: string) {
     const event = await this.getAccessibleCompetitionEvent(eventSlug);
     const board = await this.fights.getLiveQueueBoard({

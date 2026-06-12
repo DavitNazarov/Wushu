@@ -15,10 +15,6 @@ function normalizeIssue(issue: unknown): string | null {
   return null;
 }
 
-export function isApiError(error: unknown): error is ApiError {
-  return error instanceof ApiError;
-}
-
 export function getErrorCode(error: unknown): string | null {
   if (error instanceof ApiError) return error.code;
   if (error instanceof Error && error.name) return error.name;

@@ -42,20 +42,24 @@ export function buildPublicPlacements(input: {
     };
   };
 
+  // Select by MEDAL, not rank: medals are the authoritative output of
+  // computeCategoryResults. In a tied round-robin pool (1-1-1 cycle) all
+  // three athletes share rank 1 while medals stay distinct — rank-based
+  // selection used to drop silver/bronze entirely there.
   const first = input.placements
-    .filter((placement) => placement.rank === 1)
+    .filter((placement) => placement.medal === 'GOLD')
     .map((placement) => toPlacement(placement))
     .filter(
       (placement): placement is PublicResultPlacement => placement != null,
     );
   const second = input.placements
-    .filter((placement) => placement.rank === 2)
+    .filter((placement) => placement.medal === 'SILVER')
     .map((placement) => toPlacement(placement))
     .filter(
       (placement): placement is PublicResultPlacement => placement != null,
     );
   const third = input.placements
-    .filter((placement) => placement.rank === 3)
+    .filter((placement) => placement.medal === 'BRONZE')
     .map((placement) => toPlacement(placement))
     .filter(
       (placement): placement is PublicResultPlacement => placement != null,

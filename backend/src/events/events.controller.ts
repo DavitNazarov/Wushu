@@ -302,6 +302,10 @@ export class EventsController {
       const msg = e instanceof Error ? e.message : 'Unknown';
       if (msg === 'EVENT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      // Concurrent transition (another admin / the cron) won the race — the
+      // client should refetch the event and re-evaluate.
+      if (msg === 'EVENT_LIFECYCLE_CONFLICT')
+        throw new HttpException(msg, HttpStatus.CONFLICT);
       if (
         msg === 'INVALID_EVENT_TRANSITION' ||
         msg === 'OVERRIDE_REASON_REQUIRED' ||
@@ -336,6 +340,27 @@ export class EventsController {
     if (!event)
       throw new HttpException('EVENT_NOT_FOUND', HttpStatus.NOT_FOUND);
     return event;
+  }
+
+  // POST /api/events/:id/weighin-results-visibility — toggle whether the
+  // confirmed weigh-in weights are exposed on the public site
+  // (/events/:slug/weights). Controlled from the Weigh-In Results page.
+  @Post(':id/weighin-results-visibility')
+  async setWeighInResultsVisibility(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { public: boolean },
+  ) {
+    const auth = req.auth!;
+    const event = await this.eventOps.setWeighInResultsPublic(
+      id,
+      auth.organisationId,
+      Boolean(body.public),
+      auth.sub,
+    );
+    if (!event)
+      throw new HttpException('EVENT_NOT_FOUND', HttpStatus.NOT_FOUND);
+    return { weighInResultsPublic: event.weighInResultsPublic };
   }
 
   // GET /api/events/:id/categories — return the category selection (weight

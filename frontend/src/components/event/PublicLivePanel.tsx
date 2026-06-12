@@ -7,31 +7,31 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { useFightTimerDisplay } from '@/hooks/useFightTimerDisplay';
-import { usePublicLive } from '@/hooks/usePublicApi';
-import { useRealtimeQuerySync } from '@/hooks/useRealtimeQuerySync';
+import { PublicLiveSessions } from '@/components/event/PublicLiveSessions';
+import {
+  usePublicLive,
+  usePublicSchedule,
+  usePublicScheduleSessions,
+} from '@/hooks/usePublicApi';
 import { getFightDisplayTone, getFightWinnerCorner } from '@/lib/live/fightPresentation';
 import type { PublicLiveFeed } from '@/lib/api/public';
 import { useLocale, useTranslations } from 'next-intl';
 import { localizedName } from '@/lib/bilingual';
 
+/** Coarse round/phase status — no ticking clock on the public page. */
+function roundHeadline(
+  timerState: NonNullable<PublicLiveFeed['current']>['timerState'],
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
+  if (!timerState) return t('phaseWaiting');
+  if (timerState.phase === 'FINISHED') return t('phaseFinished');
+  if (timerState.phase === 'REST') return t('phaseRest', { round: timerState.currentRound });
+  return t('liveRoundRunning', { round: timerState.currentRound });
+}
+
 type Props = {
   eventSlug: string;
 };
-
-function phaseLabel(
-  timerState: NonNullable<PublicLiveFeed['current']>['timerState'],
-  t: (key: 'phaseRest' | 'phaseFinished' | 'phaseRound', values?: Record<string, string | number>) => string,
-) {
-  if (!timerState) return null;
-  if (timerState.phase === 'REST') {
-    return t('phaseRest', { round: timerState.currentRound });
-  }
-  if (timerState.phase === 'FINISHED') {
-    return t('phaseFinished');
-  }
-  return t('phaseRound', { round: timerState.currentRound });
-}
 
 function UpcomingCard({
   label,
@@ -77,15 +77,10 @@ export function PublicLivePanel({ eventSlug }: Props) {
     values?: Record<string, string | number>,
   ) => string;
   const { data, isLoading, error, refetch } = usePublicLive(eventSlug);
-
-  useRealtimeQuerySync({
-    scope: 'public-live',
-    eventId: data?.eventId ?? null,
-    enabled: !!data?.eventId,
-    queryKeys: [['public', 'live', eventSlug]],
-  });
-
-  const timerDisplay = useFightTimerDisplay(data?.current?.timerState ?? null);
+  // Section list comes from the cached schedule endpoints. No socket, no poll —
+  // fetched once and refreshed on mount/refocus, edge-cached server-side.
+  const { data: scheduleFights } = usePublicSchedule(eventSlug);
+  const { data: scheduleSessions } = usePublicScheduleSessions(eventSlug);
 
   if (error) {
     return (
@@ -163,9 +158,7 @@ export function PublicLivePanel({ eventSlug }: Props) {
 
             <LivePhaseBanner
               eyebrow={translateLive('currentPhase')}
-              headline={phaseLabel(currentFight.timerState, translateLive) ?? translateLive('phaseWaiting')}
-              timerDisplay={timerDisplay.display}
-              timerLabel={tPublic('liveTimer')}
+              headline={roundHeadline(currentFight.timerState, translateLive)}
               detail={translateLive('roundWinsSummary', {
                 red: currentFight.timerState?.redRoundWins ?? 0,
                 blue: currentFight.timerState?.blueRoundWins ?? 0,
@@ -258,6 +251,13 @@ export function PublicLivePanel({ eventSlug }: Props) {
           </div>
         </Card>
       </div>
+
+      <PublicLiveSessions
+        fights={scheduleFights ?? []}
+        sessions={scheduleSessions ?? []}
+        heading={translateLive('sessionsHeading')}
+        t={translateLive}
+      />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { usePublicSchedule, usePublicScheduleSessions } from '@/hooks/usePublicApi';
 import { useRealtimeQuerySync } from '@/hooks/useRealtimeQuerySync';
+import { useCanUseLiveSocket } from '@/hooks/useAuthRole';
 import { usePublicEvent } from '@/hooks/usePublicApi';
 import type { ScheduleFight, PublicScheduleSession } from '@/lib/api/public';
 
@@ -90,11 +91,15 @@ export function ScheduleTab({ eventSlug }: { eventSlug: string }) {
   const eventQuery = usePublicEvent(eventSlug);
   const { data: fights, isLoading: fightsLoading, error, refetch } = usePublicSchedule(eventSlug);
   const { data: sessions, isLoading: sessionsLoading } = usePublicScheduleSessions(eventSlug);
+  // C1: anonymous viewers have no LIVE_RUN — the gateway would reject the
+  // handshake and socket.io would retry forever. They poll instead (see
+  // usePublicSchedule's refetchInterval).
+  const canUseLiveSocket = useCanUseLiveSocket();
 
   useRealtimeQuerySync({
     scope: 'public-schedule',
     eventId: eventQuery.data?.id ?? null,
-    enabled: !!eventSlug && !!eventQuery.data?.id,
+    enabled: canUseLiveSocket && !!eventSlug && !!eventQuery.data?.id,
     queryKeys: [['public', 'schedule', eventSlug], ['public', 'schedule-sessions', eventSlug]],
   });
 

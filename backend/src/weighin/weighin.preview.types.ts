@@ -20,7 +20,7 @@ export type WeighInDecisionState =
 
 // Stable string codes for buttons. The UI keys i18n / icon / handler
 // dispatch on these codes — changing one means changing the frontend too.
-export type WeighInAllowedActionCode =
+type WeighInAllowedActionCode =
   | 'RECORD_WEIGH_IN'
   | 'RECORD_REWEIGH'
   | 'MOVE_UP'
@@ -30,7 +30,7 @@ export type WeighInAllowedActionCode =
   | 'MANUAL_OVERRIDE';
 
 // Severity hint used by the UI button system.
-export type WeighInAllowedActionLevel = 'PRIMARY' | 'SECONDARY' | 'DANGER';
+type WeighInAllowedActionLevel = 'PRIMARY' | 'SECONDARY' | 'DANGER';
 
 // Slim category projection sent for currentCategory / registeredCategory /
 // finalCategory / nextCategory fields in the preview response.
@@ -57,7 +57,7 @@ export type WeighInAllowedAction = {
 
 // Open ONE_HOUR reweigh window snapshot. isExpired is precomputed so the
 // frontend doesn't need to re-do the time comparison locally.
-export type WeighInOpenWindowSummary = {
+type WeighInOpenWindowSummary = {
   attemptId: string;
   deadlineAt: Date;
   isExpired: boolean;
@@ -65,7 +65,7 @@ export type WeighInOpenWindowSummary = {
 
 // Slim summary of the most recent committed attempt — shown in the preview
 // "last attempt" panel so operators can see when/who recorded what.
-export type WeighInLatestRecordSummary = {
+type WeighInLatestRecordSummary = {
   attemptId: string;
   attemptNo: number;
   decision: WeighInDecision;

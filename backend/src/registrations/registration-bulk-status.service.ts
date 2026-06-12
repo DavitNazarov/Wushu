@@ -18,7 +18,7 @@ const ADMIN_BULK_STATUSES: RegistrationStatus[] = [
 // Per-row outcome row in the bulk response — lets the UI render a partial-
 // success table ("23 updated, 4 skipped, 1 failed"). Mutually exclusive
 // outcome enum with an optional errorCode for the SKIPPED/FAILED rows.
-export interface BulkStatusResultRow {
+interface BulkStatusResultRow {
   registrationId: string;
   outcome: 'UPDATED' | 'SKIPPED' | 'FAILED';
   errorCode?: string;

@@ -99,6 +99,13 @@ export function buildScheduleRows(
       orderInSession:
         (candidate.fight as { orderInSession?: number | null })
           .orderInSession ?? null,
+      winnerCorner: candidate.fight.winnerAthleteId
+        ? candidate.fight.winnerAthleteId === candidate.fight.redAthleteId
+          ? 'RED'
+          : candidate.fight.winnerAthleteId === candidate.fight.blueAthleteId
+            ? 'BLUE'
+            : null
+        : null,
     };
   });
 }

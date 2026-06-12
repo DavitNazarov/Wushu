@@ -209,6 +209,82 @@ export class DrawController {
     }
   }
 
+  // POST /api/draw/category/review — mark a SOLO / NEEDS_REVIEW category as
+  // reviewed. Clears its flag (green "Reviewed by …") until the eligible pool
+  // changes, at which point the sign-off auto-expires.
+  //   EVENT_NOT_FOUND / CATEGORY_NOT_FOUND → 404 ; EVENT_READ_ONLY → 400
+  @Post('draw/category/review')
+  @RequireCapability(CAPABILITIES.DRAW_RUN)
+  async reviewCategory(
+    @Req() req: AuthenticatedRequest,
+    @Body()
+    body: { eventId: string; eventWeightCategoryId: string; reason?: string },
+  ) {
+    const auth = req.auth!;
+    if (!body.eventId || !body.eventWeightCategoryId) {
+      throw new HttpException(
+        'eventId_and_eventWeightCategoryId_REQUIRED',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    try {
+      return await this.draw.reviewCategory({
+        organisationId: auth.organisationId,
+        eventId: body.eventId,
+        eventWeightCategoryId: body.eventWeightCategoryId,
+        actorUserId: auth.sub,
+        reason: body.reason ?? null,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'EVENT_NOT_FOUND' || msg === 'CATEGORY_NOT_FOUND') {
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      }
+      if (msg === 'EVENT_READ_ONLY') {
+        throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      }
+      throw new HttpException(
+        'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  // POST /api/draw/category/unreview — clear a category's review sign-off so it
+  // shows its raw SOLO / NEEDS_REVIEW status again.
+  //   EVENT_NOT_FOUND / CATEGORY_NOT_FOUND → 404
+  @Post('draw/category/unreview')
+  @RequireCapability(CAPABILITIES.DRAW_RUN)
+  async unreviewCategory(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { eventId: string; eventWeightCategoryId: string },
+  ) {
+    const auth = req.auth!;
+    if (!body.eventId || !body.eventWeightCategoryId) {
+      throw new HttpException(
+        'eventId_and_eventWeightCategoryId_REQUIRED',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    try {
+      return await this.draw.unreviewCategory({
+        organisationId: auth.organisationId,
+        eventId: body.eventId,
+        eventWeightCategoryId: body.eventWeightCategoryId,
+        actorUserId: auth.sub,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'UNKNOWN';
+      if (msg === 'EVENT_NOT_FOUND' || msg === 'CATEGORY_NOT_FOUND') {
+        throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException(
+        'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   // GET /api/brackets?eventId=... — list every drawn bracket for an event.
   // Slim shape; the per-bracket full structure lives at GET /brackets/:id.
   @Get('brackets')
@@ -321,6 +397,7 @@ export class DrawController {
       await this.brackets.swapParticipants({
         organisationId: auth.organisationId,
         eventId: body.eventId,
+        actorUserId: auth.sub,
         fightId1: body.fightId1,
         side1: body.side1,
         fightId2: body.fightId2,

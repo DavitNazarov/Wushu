@@ -51,6 +51,3 @@ export const suspendUserSchema = z.object({
 });
 
 // Inferred TypeScript types for the controller to use without redeclaring.
-export type CreateUserInput = z.infer<typeof createUserSchema>;
-export type UpdateUserInput = z.infer<typeof updateUserSchema>;
-export type SuspendUserInput = z.infer<typeof suspendUserSchema>;

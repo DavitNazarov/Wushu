@@ -34,6 +34,9 @@ function createPrismaMock() {
 function createController(prisma: ReturnType<typeof createPrismaMock>) {
   const events = {} as never;
   const clubs = {} as never;
+  // The geography feature added `countries` as the 4th constructor param —
+  // without it here every later argument shifts one slot left.
+  const countries = {} as never;
   const eventCategories = {} as never;
   const athleteProfiles = {
     getPublicProfile: jest.fn(),
@@ -42,6 +45,7 @@ function createController(prisma: ReturnType<typeof createPrismaMock>) {
     prisma as never,
     events,
     clubs,
+    countries,
     eventCategories,
     athleteProfiles as never,
   );

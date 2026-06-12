@@ -12,6 +12,8 @@ export type ModalProps = {
   children: ReactNode;
   footer?: ReactNode;
   widthClassName?: string;
+  /** When false, clicking the backdrop does not close the modal (Esc + X still do). */
+  closeOnBackdrop?: boolean;
 };
 
 export function Modal({
@@ -22,6 +24,7 @@ export function Modal({
   children,
   footer,
   widthClassName = 'max-w-md',
+  closeOnBackdrop = true,
 }: ModalProps) {
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
@@ -52,7 +55,7 @@ export function Modal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2, ease: 'easeInOut' }}
-            onClick={onClose}
+            onClick={closeOnBackdrop ? onClose : undefined}
           />
 
           {/* Panel — 3D perspective flip from animate-ui */}

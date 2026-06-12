@@ -1,4 +1,4 @@
-export type BracketRendererParticipant = {
+type BracketRendererParticipant = {
   athleteId: string;
   name: string;
   club: string | null;

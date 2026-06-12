@@ -21,10 +21,3 @@ export function nextEventLifecycle(
   return EVENT_LIFECYCLE_ORDER[currentIndex + 1];
 }
 
-export function previousEventLifecycle(
-  current: EventLifecycle,
-): EventLifecycle | null {
-  const currentIndex = EVENT_LIFECYCLE_ORDER.indexOf(current);
-  if (currentIndex <= 0) return null;
-  return EVENT_LIFECYCLE_ORDER[currentIndex - 1];
-}

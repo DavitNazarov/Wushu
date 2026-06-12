@@ -35,3 +35,15 @@ export function useRegenerateBrackets() {
       }),
   });
 }
+
+// First-time draw, run from the Brackets page (no override — the lifecycle /
+// readiness rules must pass). Regeneration keeps using override + reason above.
+export function useGenerateBrackets() {
+  return useMutation({
+    mutationFn: (input: { eventId: string; sameClubSeparation: boolean }) =>
+      apiPost('/api/draw', {
+        eventId: input.eventId,
+        sameClubSeparation: input.sameClubSeparation,
+      }),
+  });
+}

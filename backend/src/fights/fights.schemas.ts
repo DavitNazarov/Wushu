@@ -26,7 +26,7 @@ export const fightStateSchema = z.object({
 export const fightResultSchema = z.object({
   winner: z.enum(['RED', 'BLUE']),
   method: z.enum(['POINTS', 'KO', 'DQ', 'WO']),
-  notes: z.string().trim().max(2000).optional(),
+  notes: z.string().trim().max(2000).nullish(),
   override: z.boolean().optional(),
   reason: optionalReason,
   // BF-2 optimistic-concurrency token: client echoes the fight.updatedAt it saw.

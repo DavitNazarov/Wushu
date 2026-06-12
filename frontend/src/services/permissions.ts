@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { getServerApiUrl } from '@/lib/api';
-import type { CapabilityCode, UserRole } from '@/domain/auth/capabilities';
+import type { UserRole } from '@/domain/auth/capabilities';
 
 const AUTH_COOKIE_NAME = 'gw_auth';
 
@@ -148,23 +148,4 @@ export function canAccessCoach(role: UserRole | null): boolean {
 
 export function canAccessAthlete(role: UserRole | null): boolean {
   return role === 'admin' || role === 'coach' || role === 'athlete';
-}
-
-export async function requireCapability(
-  required: CapabilityCode,
-): Promise<{ userId: string; organisationId: string }> {
-  const auth = await getAuthContext();
-
-  if (!auth.userId || !auth.organisationId) {
-    throw new Error('UNAUTHENTICATED');
-  }
-
-  if (!auth.capabilities.includes(required)) {
-    throw new Error('FORBIDDEN');
-  }
-
-  return {
-    userId: auth.userId,
-    organisationId: auth.organisationId,
-  };
 }

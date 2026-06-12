@@ -22,7 +22,7 @@ type SourceFightRef = {
 
 // Bracket math: red comes from odd-indexed source bout, blue from even.
 // For bout #3 → red slot's source bout is 5, blue's is 6 (one level deeper).
-export function sourceBoutNoForSide(input: {
+function sourceBoutNoForSide(input: {
   fight: Pick<FightSlotSource, 'boutNo'>;
   side: 'red' | 'blue';
 }): number {

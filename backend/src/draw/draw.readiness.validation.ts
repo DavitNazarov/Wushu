@@ -17,6 +17,7 @@ export type DrawValidationBuildResult = {
     drawnCategoriesCount: number;
     blockedCategoriesCount: number;
     needsReviewCategoriesCount: number;
+    soloCategoriesCount: number;
     readyCategoriesCount: number;
     emptyCategoriesCount: number;
     eligibleAthletesCount: number;
@@ -35,8 +36,7 @@ export type DrawValidationBuildResult = {
 //   BLOCKED_CATEGORIES_PRESENT | NO_READY_CATEGORIES
 // WARNING set:
 //   DRAW_ALREADY_GENERATED | NEEDS_REVIEW_CATEGORIES_PRESENT |
-//   MOVED_UP_ATHLETES_PRESENT | OVERRIDE_RECORDS_PRESENT |
-//   ONE_ATHLETE_POOLS_PRESENT
+//   AGE_GROUP_MOVE_ATHLETES_PRESENT | ONE_ATHLETE_POOLS_PRESENT
 // `sampleIds` is always capped at 5 (UI shows "+N more").
 export function buildValidationAndSummary(input: {
   categoriesComputed: DrawCategoryComputedRow[];
@@ -55,9 +55,7 @@ export function buildValidationAndSummary(input: {
   weighInCompletedForDraw: boolean;
   missingFinalCategoryIds: string[];
   invalidFinalCategoryIds: string[];
-  movedUpAthletesCount: number;
-  overrideAthletesCount: number;
-  oneAthletePoolsCount: number;
+  ageGroupMoveAthletesCount: number;
   bracketCount: number;
 }): DrawValidationBuildResult {
   const drawnCategoriesCount = input.categoriesComputed.filter(
@@ -69,9 +67,16 @@ export function buildValidationAndSummary(input: {
   const needsReviewCategoriesCount = input.categoriesComputed.filter(
     (row) => row.readinessStatus === 'NEEDS_REVIEW',
   ).length;
+  const soloCategoriesCount = input.categoriesComputed.filter(
+    (row) => row.readinessStatus === 'SOLO',
+  ).length;
+  // SOLO and NEEDS_REVIEW are still drawable (a reviewed/solo category can run),
+  // so they count toward "ready" for the NO_READY_CATEGORIES guard + summary.
   const readyCategoriesCount = input.categoriesComputed.filter(
     (row) =>
-      row.readinessStatus === 'READY' || row.readinessStatus === 'NEEDS_REVIEW',
+      row.readinessStatus === 'READY' ||
+      row.readinessStatus === 'NEEDS_REVIEW' ||
+      row.readinessStatus === 'SOLO',
   ).length;
   const emptyCategoriesCount = input.categoriesComputed.filter(
     (row) => row.readinessStatus === 'EMPTY',
@@ -174,37 +179,25 @@ export function buildValidationAndSummary(input: {
     });
   }
 
-  if (input.movedUpAthletesCount > 0) {
+  if (input.ageGroupMoveAthletesCount > 0) {
     warnings.push({
-      code: 'MOVED_UP_ATHLETES_PRESENT',
+      code: 'AGE_GROUP_MOVE_ATHLETES_PRESENT',
       severity: 'WARNING',
-      count: input.movedUpAthletesCount,
+      count: input.ageGroupMoveAthletesCount,
       sampleIds: input.categoriesComputed
-        .filter((row) => row.hasMovedUpAthletes)
+        .filter((row) => row.hasAgeGroupMove)
         .slice(0, 5)
         .map((row) => row.id),
     });
   }
 
-  if (input.overrideAthletesCount > 0) {
-    warnings.push({
-      code: 'OVERRIDE_RECORDS_PRESENT',
-      severity: 'WARNING',
-      count: input.overrideAthletesCount,
-      sampleIds: input.categoriesComputed
-        .filter((row) => row.hasOverrideAthletes)
-        .slice(0, 5)
-        .map((row) => row.id),
-    });
-  }
-
-  if (input.oneAthletePoolsCount > 0) {
+  if (soloCategoriesCount > 0) {
     warnings.push({
       code: 'ONE_ATHLETE_POOLS_PRESENT',
       severity: 'WARNING',
-      count: input.oneAthletePoolsCount,
+      count: soloCategoriesCount,
       sampleIds: input.categoriesComputed
-        .filter((row) => row.eligibleAthletesCount === 1)
+        .filter((row) => row.readinessStatus === 'SOLO')
         .slice(0, 5)
         .map((row) => row.id),
     });
@@ -226,6 +219,7 @@ export function buildValidationAndSummary(input: {
       drawnCategoriesCount,
       blockedCategoriesCount,
       needsReviewCategoriesCount,
+      soloCategoriesCount,
       readyCategoriesCount,
       emptyCategoriesCount,
       eligibleAthletesCount,

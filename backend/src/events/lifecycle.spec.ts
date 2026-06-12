@@ -14,6 +14,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 
 const FUTURE = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+const PAST = (days: number) =>
+  new Date(Date.now() - 1000 * 60 * 60 * 24 * days);
 
 function makeEvent(overrides: Record<string, unknown> = {}) {
   return {
@@ -21,6 +23,10 @@ function makeEvent(overrides: Record<string, unknown> = {}) {
     organisationId: 'org-1',
     lifecycle: 'REG_OPEN',
     competitionStartDate: new Date(FUTURE),
+    // Registration window CLOSED by default so REG_OPEN → LOCKED is allowed
+    // (event-ops guards LOCKED behind getRegistrationStatus === 'CLOSED').
+    registrationOpensAt: PAST(60),
+    registrationClosesAt: PAST(30),
     ...overrides,
   };
 }
@@ -29,6 +35,10 @@ const mockPrisma = {
   event: {
     findFirst: jest.fn(),
     update: jest.fn(),
+    // transitionLifecycle uses a compare-and-swap: updateMany (guarded by the
+    // lifecycle we read) + findUniqueOrThrow to return the fresh row.
+    updateMany: jest.fn(),
+    findUniqueOrThrow: jest.fn(),
   },
   $transaction: jest.fn((fn: (tx: unknown) => unknown) => fn(mockPrisma)),
 };
@@ -58,7 +68,8 @@ describe('EventOpsService – transitionLifecycle', () => {
     const event = makeEvent({ lifecycle: 'REG_OPEN' });
     const updated = { ...event, lifecycle: 'LOCKED' };
     mockPrisma.event.findFirst.mockResolvedValue(event);
-    mockPrisma.event.update.mockResolvedValue(updated);
+    mockPrisma.event.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.event.findUniqueOrThrow.mockResolvedValue(updated);
 
     const result = await service.transitionLifecycle({
       eventId: 'evt-1',
@@ -94,7 +105,8 @@ describe('EventOpsService – transitionLifecycle', () => {
     const event = makeEvent({ lifecycle: 'REG_OPEN' });
     const updated = { ...event, lifecycle: 'DRAWN' };
     mockPrisma.event.findFirst.mockResolvedValue(event);
-    mockPrisma.event.update.mockResolvedValue(updated);
+    mockPrisma.event.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.event.findUniqueOrThrow.mockResolvedValue(updated);
 
     const result = await service.transitionLifecycle({
       eventId: 'evt-1',
@@ -112,6 +124,22 @@ describe('EventOpsService – transitionLifecycle', () => {
         override: true,
       }),
     );
+  });
+
+  it('throws EVENT_LIFECYCLE_CONFLICT when another transition won the race', async () => {
+    const event = makeEvent({ lifecycle: 'REG_OPEN' });
+    mockPrisma.event.findFirst.mockResolvedValue(event);
+    // CAS finds zero rows still in the lifecycle we validated against.
+    mockPrisma.event.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.transitionLifecycle({
+        eventId: 'evt-1',
+        organisationId: 'org-1',
+        actorUserId: 'user-1',
+        targetState: 'LOCKED',
+      }),
+    ).rejects.toThrow('EVENT_LIFECYCLE_CONFLICT');
   });
 
   it('rejects override without reason', async () => {
@@ -178,7 +206,8 @@ describe('EventOpsService – transitionLifecycle', () => {
       });
       const updated = { ...event, lifecycle: to };
       mockPrisma.event.findFirst.mockResolvedValue(event);
-      mockPrisma.event.update.mockResolvedValue(updated);
+      mockPrisma.event.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.event.findUniqueOrThrow.mockResolvedValue(updated);
 
       const result = await service.transitionLifecycle({
         eventId: 'evt-1',

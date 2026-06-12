@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const CategoryTemplateStatusSchema = z.enum(['DRAFT', 'ACTIVE']);
-export const CategoryTemplateTypeSchema = z.enum([
+const CategoryTemplateStatusSchema = z.enum(['DRAFT', 'ACTIVE']);
+const CategoryTemplateTypeSchema = z.enum([
   'SYSTEM',
   'CUSTOM',
   'OFFICIAL',
@@ -40,9 +40,6 @@ export const CategoryTemplateListQuerySchema = z
   })
   .strict();
 
-export type CreateCategoryTemplateDto = z.infer<
-  typeof CreateCategoryTemplateSchema
->;
 export type UpdateCategoryTemplateDto = z.infer<
   typeof UpdateCategoryTemplateSchema
 >;

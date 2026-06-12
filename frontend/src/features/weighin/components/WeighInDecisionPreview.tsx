@@ -43,38 +43,41 @@ const TONE_STYLES = {
 
 export function WeighInDecisionPreview({ preview, isLoading, t }: Props) {
   const locale = useLocale();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-4 py-3">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-primary)] border-t-transparent" />
-        <p className="text-[13px] text-[var(--color-text-muted)]">{t('decisionLoading')}</p>
-      </div>
-    );
-  }
-
-  if (!preview) {
-    return (
-      <div className="rounded-[var(--radius-input)] border border-dashed border-[var(--color-border)] px-4 py-3 text-center">
-        <p className="text-[13px] text-[var(--color-text-muted)]">{t('decisionEnterWeight')}</p>
-      </div>
-    );
-  }
-
-  const mapped = mapDecisionPreview({ locale, preview, t });
-  const tone = mapped.tone as keyof typeof TONE_STYLES;
+  const mapped = preview ? mapDecisionPreview({ locale, preview, t }) : null;
+  const tone = (mapped?.tone ?? 'default') as keyof typeof TONE_STYLES;
   const styles = TONE_STYLES[tone] ?? TONE_STYLES.default;
+  const hasPreview = !isLoading && preview != null;
 
   return (
-    <div className={`flex items-start gap-3 overflow-hidden rounded-[var(--radius-input)] border px-4 py-3 ${styles.wrap}`}>
-      {/* Color bar */}
-      <div className={`mt-0.5 h-5 w-1 shrink-0 rounded-full ${styles.bar}`} />
-      <div className="min-w-0">
-        <p className={`text-[14px] font-bold leading-snug ${styles.title}`}>{mapped.title}</p>
-        {mapped.description && (
-          <p className={`mt-0.5 text-[12px] leading-snug ${styles.desc}`}>{mapped.description}</p>
-        )}
-      </div>
+    <div
+      className={`flex min-h-[64px] gap-3 overflow-hidden rounded-[var(--radius-input)] border px-4 py-3 ${
+        hasPreview
+          ? `items-start ${styles.wrap}`
+          : isLoading
+            ? 'items-center border-[var(--color-border)] bg-[var(--color-surface-alt)]'
+            : 'items-center border-dashed border-[var(--color-border)]'
+      }`}
+    >
+      {isLoading ? (
+        <>
+          <div className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[var(--color-primary)] border-t-transparent" />
+          <p className="text-[13px] text-[var(--color-text-muted)]">{t('decisionLoading')}</p>
+        </>
+      ) : hasPreview ? (
+        <>
+          <div className={`mt-0.5 h-5 w-1 shrink-0 rounded-full ${styles.bar}`} />
+          <div className="min-w-0">
+            <p className={`text-[14px] font-bold leading-snug ${styles.title}`}>{mapped!.title}</p>
+            {mapped!.description && (
+              <p className={`mt-0.5 text-[12px] leading-snug ${styles.desc}`}>{mapped!.description}</p>
+            )}
+          </div>
+        </>
+      ) : (
+        <p className="w-full text-center text-[13px] text-[var(--color-text-muted)]">
+          {t('decisionEnterWeight')}
+        </p>
+      )}
     </div>
   );
 }

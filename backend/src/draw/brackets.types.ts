@@ -28,7 +28,7 @@ export type BracketViewStatus =
 export type BracketPublicationStatus = 'DRAFT' | 'PUBLISHED';
 
 // CRITICAL blocks publication; WARNING is a yellow-banner-only.
-export type BracketIssueSeverity = 'CRITICAL' | 'WARNING';
+type BracketIssueSeverity = 'CRITICAL' | 'WARNING';
 
 // One inline issue surfaced under a bracket row. Codes are i18n keys.
 export type BracketIssue = {
@@ -81,9 +81,11 @@ export type BracketsOverviewResponse = {
     needsReviewCategoriesCount: number;
   };
   actions: {
+    canGenerate: boolean;
     canPublish: boolean;
     canUnpublish: boolean;
     canExport: boolean;
+    generateBlockedReasonCode: string | null;
     publishBlockedReasonCode: string | null;
     unpublishBlockedReasonCode: string | null;
   };
@@ -135,7 +137,7 @@ export type BracketParticipantSlotView = {
 };
 
 // One fight in a round column of the bracket grid view.
-export type BracketRoundMatchup = {
+type BracketRoundMatchup = {
   fightId: string;
   boutNo: number;
   round: number;

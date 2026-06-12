@@ -205,6 +205,8 @@ export class RegistrationsService {
     q?: string;
     categoryCode?: string;
     actorClubId?: string | null;
+    limit?: number;
+    offset?: number;
   }) {
     const where: Prisma.RegistrationWhereInput = {
       organisationId: params.organisationId,
@@ -279,6 +281,11 @@ export class RegistrationsService {
         },
       },
       orderBy: [{ categoryCode: 'asc' }, { createdAt: 'asc' }],
+      // Hard row cap: one national-event registration list fits comfortably,
+      // but an unbounded org-wide query must not pull every season through
+      // Node. Clients can page with limit/offset.
+      take: Math.min(Math.max(params.limit ?? 1000, 1), 1000),
+      skip: Math.max(params.offset ?? 0, 0),
     });
   }
 

@@ -11,6 +11,14 @@ import {
 
 type QueryKey = readonly unknown[];
 
+// Coalesce window for socket-driven refetches. A single operator action emits a
+// burst of socket events (fight:update + schedule:update + timer:update, plus a
+// pair for any auto-advanced fight) within a few ms. Without coalescing, each
+// fired its own query refetch, and a busy live session blew past the API's
+// per-IP throttle bucket → HTTP 429. Debouncing collapses one burst into one
+// refetch; 250ms is imperceptible to operators but well above the fan-out.
+const REALTIME_INVALIDATE_DEBOUNCE_MS = 250;
+
 type UseRealtimeQuerySyncInput = {
   scope: string;
   eventId?: string | null;
@@ -106,6 +114,16 @@ export function useRealtimeQuerySync(input: UseRealtimeQuerySyncInput) {
       });
     };
 
+    // Trailing-debounce the refetch so a per-action burst of socket events
+    // collapses into a single invalidation (see REALTIME_INVALIDATE_DEBOUNCE_MS).
+    let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
+    const flushInvalidate = () => {
+      invalidateTimer = null;
+      for (const queryKey of input.queryKeys) {
+        void queryClient.invalidateQueries({ queryKey: [...queryKey] });
+      }
+    };
+
     const onUpdate = (eventName: string) => {
       setLastSyncAt(new Date().toISOString());
       logRealtime(input.scope, 'receive', {
@@ -114,9 +132,11 @@ export function useRealtimeQuerySync(input: UseRealtimeQuerySyncInput) {
         matId: input.matId ?? null,
       });
 
-      for (const queryKey of input.queryKeys) {
-        void queryClient.invalidateQueries({ queryKey: [...queryKey] });
-      }
+      if (invalidateTimer) clearTimeout(invalidateTimer);
+      invalidateTimer = setTimeout(
+        flushInvalidate,
+        REALTIME_INVALIDATE_DEBOUNCE_MS,
+      );
     };
 
     socket.on('connect', onConnect);
@@ -128,6 +148,7 @@ export function useRealtimeQuerySync(input: UseRealtimeQuerySyncInput) {
     socket.on('timer:update', () => onUpdate('timer:update'));
 
     return () => {
+      if (invalidateTimer) clearTimeout(invalidateTimer);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('connect_error', onConnectError);

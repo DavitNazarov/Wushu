@@ -5,7 +5,7 @@ import type {
 } from './api';
 export type { WeighInDecision } from './api';
 
-export type WeighInStatus =
+type WeighInStatus =
   | 'NOT_WEIGHED'
   | 'PASSED'
   | 'MOVED_UP'
@@ -14,7 +14,7 @@ export type WeighInStatus =
   | 'REWEIGH_ALLOWED'
   | 'DISQUALIFIED';
 
-export type WeighInDecisionState =
+type WeighInDecisionState =
   | 'AUTO_PASS'
   | 'REWEIGH_ALLOWED'
   | 'MOVE_UP_AVAILABLE'
@@ -22,7 +22,7 @@ export type WeighInDecisionState =
   | 'MANUAL_DECISION_REQUIRED'
   | 'ALREADY_RECORDED';
 
-export type WeighInAllowedActionCode =
+type WeighInAllowedActionCode =
   | 'RECORD_WEIGH_IN'
   | 'RECORD_REWEIGH'
   | 'MOVE_UP'
@@ -31,7 +31,7 @@ export type WeighInAllowedActionCode =
   | 'SUBMIT_MANUAL_DECISION'
   | 'MANUAL_OVERRIDE';
 
-export type WeighInAllowedActionLevel = 'PRIMARY' | 'SECONDARY' | 'DANGER';
+type WeighInAllowedActionLevel = 'PRIMARY' | 'SECONDARY' | 'DANGER';
 
 export type WeighInCategory = {
   id: string;
@@ -53,7 +53,7 @@ export type WeighInWeightCategoryRef = {
   rulesetWeightCategory?: WeighInWeightDefinition | null;
 };
 
-export type WeighInAgeGroupDefinition = {
+type WeighInAgeGroupDefinition = {
   code: string;
   name: string;
   sex: 'MALE' | 'FEMALE' | null;

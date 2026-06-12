@@ -1,6 +1,6 @@
 import type { WeighInStatus } from '@prisma/client';
 
-export const FINAL_WEIGH_IN_STATUSES: ReadonlySet<WeighInStatus> = new Set([
+const FINAL_WEIGH_IN_STATUSES: ReadonlySet<WeighInStatus> = new Set([
   'PASSED',
   'MOVED_UP',
   'FAILED',

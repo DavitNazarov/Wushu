@@ -1,6 +1,7 @@
 'use client';
 
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocale, useTranslations } from 'next-intl';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
@@ -23,6 +24,7 @@ type Props = {
 };
 
 const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+const POPOVER_WIDTH = 300;
 
 export function EventDateField({
   label,
@@ -42,13 +44,43 @@ export function EventDateField({
   const todayIso = toIsoDate(today);
   const [open, setOpen] = useState(false);
   const [cursorMonth, setCursorMonth] = useState(() => selectedDate ?? minDate ?? today);
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => setMounted(true), []);
+
+  // Anchor the floating calendar to the trigger with fixed positioning so it
+  // overlays everything — it never grows the modal or adds a scrollbar.
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const gap = 8;
+    // Never exceed the viewport — keeps the calendar fully on-screen on mobile.
+    const width = Math.min(POPOVER_WIDTH, window.innerWidth - 16);
+    let left = popoverAlign === 'end' ? rect.right - width : rect.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+    const popoverHeight = popoverRef.current?.offsetHeight ?? 380;
+    let top = rect.bottom + gap;
+    if (top + popoverHeight > window.innerHeight - 8 && rect.top - gap - popoverHeight > 8) {
+      top = rect.top - gap - popoverHeight;
+    }
+    top = Math.max(8, top);
+    setCoords({ top, left, width });
+  }, [popoverAlign]);
 
   useEffect(() => {
     if (!open) return;
 
+    updatePosition();
+
     function handlePointerDown(event: MouseEvent) {
-      if (containerRef.current?.contains(event.target as Node)) return;
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
       setOpen(false);
     }
 
@@ -58,11 +90,15 @@ export function EventDateField({
 
     window.addEventListener('mousedown', handlePointerDown);
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
     return () => {
       window.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
     };
-  }, [open]);
+  }, [open, updatePosition]);
 
   const days = useMemo(() => {
     const start = startOfCalendarGrid(cursorMonth);
@@ -99,6 +135,7 @@ export function EventDateField({
         {label}
       </label>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => {
           setCursorMonth(selectedDate ?? minDate ?? today);
@@ -125,19 +162,25 @@ export function EventDateField({
       </button>
       {hint ? <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">{hint}</p> : null}
 
-      {open ? (
-        <div
-          className={[
-            'absolute top-[calc(100%+0.5rem)] z-30 w-[320px] rounded-[22px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xl ring-1 ring-black/5 backdrop-blur dark:ring-white/5',
-            popoverAlign === 'end' ? 'right-0' : 'left-0',
-          ].join(' ')}
-        >
-          <div className="mb-4 flex items-start justify-between gap-3">
+      {mounted && open
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              style={{
+                position: 'fixed',
+                top: coords?.top ?? 0,
+                left: coords?.left ?? 0,
+                width: coords?.width ?? POPOVER_WIDTH,
+                visibility: coords ? 'visible' : 'hidden',
+              }}
+              className="z-[60] rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-xl ring-1 ring-black/5 backdrop-blur dark:ring-white/5"
+            >
+          <div className="mb-3 flex items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-muted)]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-muted)]">
                 {tEvents('datePicker.eyebrow')}
               </p>
-              <p className="mt-1 text-[16px] font-semibold text-[var(--color-text)]">
+              <p className="mt-0.5 text-[15px] font-semibold text-[var(--color-text)]">
                 {cursorMonth.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}
               </p>
             </div>
@@ -151,11 +194,11 @@ export function EventDateField({
             </div>
           </div>
 
-          <div className="mb-3 grid grid-cols-7 gap-1 text-center">
+          <div className="mb-2 grid grid-cols-7 gap-1 text-center">
             {WEEKDAY_KEYS.map((key) => (
               <span
                 key={key}
-                className="py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]"
+                className="py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]"
               >
                 {tEvents(`datePicker.weekdays.${key}`)}
               </span>
@@ -177,7 +220,7 @@ export function EventDateField({
                   disabled={disabled}
                   onClick={() => selectDate(day)}
                   className={[
-                    'relative flex aspect-square items-center justify-center rounded-[14px] text-[13px] font-semibold transition',
+                    'relative flex h-9 items-center justify-center rounded-[10px] text-[13px] font-semibold transition',
                     selected
                       ? 'bg-[linear-gradient(135deg,#2f7df6,#6db6ff)] text-white shadow-[0_10px_22px_rgba(47,125,246,0.35)]'
                       : disabled
@@ -194,7 +237,7 @@ export function EventDateField({
             })}
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <QuickButton onClick={() => quickSet(todayIso)}>{tEvents('datePicker.today')}</QuickButton>
             {value ? (
               <QuickButton onClick={() => onChange('')}>{tEvents('datePicker.clear')}</QuickButton>
@@ -202,8 +245,10 @@ export function EventDateField({
             {min ? <QuickButton onClick={() => quickSet(min)}>{tEvents('datePicker.min')}</QuickButton> : null}
             {max ? <QuickButton onClick={() => quickSet(max)}>{tEvents('datePicker.max')}</QuickButton> : null}
           </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -219,7 +264,7 @@ function IconButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex h-9 w-9 items-center justify-center rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-text-muted)] transition hover:border-[var(--color-primary)]/20 hover:text-[var(--color-text)]"
+      className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-text-muted)] transition hover:border-[var(--color-primary)]/20 hover:text-[var(--color-text)]"
     >
       {children}
     </button>
@@ -237,7 +282,7 @@ function QuickButton({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-primary)]/5 hover:text-[var(--color-text)]"
+      className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-1 text-[11px] font-semibold text-[var(--color-text-muted)] transition hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-primary)]/5 hover:text-[var(--color-text)]"
     >
       {children}
     </button>

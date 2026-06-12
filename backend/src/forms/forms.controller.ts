@@ -20,12 +20,14 @@ import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
 
 const contactSchema = z.object({
-  name: z.string().trim().min(1),
-  email: z.string().email(),
-  message: z.string().trim().min(1),
-  clubName: z.string().trim().min(1).nullable().optional(),
+  // Max caps keep a single spam submission bounded well below the global
+  // 100 KB body limit (ContactSubmission rows are kept indefinitely).
+  name: z.string().trim().min(1).max(200),
+  email: z.string().email().max(320),
+  message: z.string().trim().min(1).max(5_000),
+  clubName: z.string().trim().min(1).max(200).nullable().optional(),
   type: z.enum(['contact', 'membership']),
-  website: z.string().trim().nullable().optional(),
+  website: z.string().trim().max(500).nullable().optional(),
 });
 
 @Controller('forms')

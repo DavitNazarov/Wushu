@@ -42,21 +42,6 @@ export type PublicNewsPost = {
   event?: { id: string; name: string; slug: string; location: string | null } | null;
 };
 
-export type BracketFight = {
-  id: string;
-  round: number;
-  boutNo: number;
-  redAthlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null } | null;
-  blueAthlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null } | null;
-  winnerAthlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null } | null;
-};
-
-export type PublicBracket = {
-  id: string;
-  categoryCode: string;
-  fights?: BracketFight[];
-};
-
 export type PublicScheduleSession = {
   id: string;
   name: string;
@@ -85,6 +70,7 @@ export type ScheduleFight = {
   scheduledAt: string | null;
   sessionId: string | null;
   orderInSession: number | null;
+  winnerCorner: 'RED' | 'BLUE' | null;
   liveStatus?: 'PENDING' | 'UPCOMING' | 'RUNNING' | 'FINISHED';
 };
 
@@ -97,7 +83,7 @@ export type PublicLiveFeed = {
   latestResult: PublicLiveFight | null;
 };
 
-export type PublicLiveFight = {
+type PublicLiveFight = {
   id: string;
   categoryCode: string;
   categoryName: string;
@@ -119,25 +105,28 @@ export type PublicLiveFight = {
   timerState: TimerState | null;
 };
 
-export type MatFight = {
-  id: string;
-  categoryCode: string;
-  boutNo: number;
-  round: number;
-  status: string;
-  redAthlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null } | null;
-  blueAthlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null } | null;
-  winnerAthlete?: { id: string; firstName: string; firstNameKa?: string | null; lastName: string; lastNameKa?: string | null } | null;
-  timerState?: TimerState | null;
+type PublicWeighInAthlete = {
+  athleteId: string;
+  firstName: string;
+  lastName: string;
+  firstNameKa: string | null;
+  lastNameKa: string | null;
+  clubName: string | null;
+  clubNameKa: string | null;
+  weightKg: number | null;
 };
 
-export type MatFeed = {
-  eventId: string;
-  mat: { id: string; name: string };
-  now: MatFight | null;
-  onDeck: MatFight | null;
-  next: MatFight[];
-  fights: MatFight[];
+type PublicWeighInCategory = {
+  id: string;
+  categoryName: string;
+  ageGroupName: string;
+  division: 'MALE' | 'FEMALE' | null;
+  athletes: PublicWeighInAthlete[];
+};
+
+export type PublicWeighInResults = {
+  event: { id: string; name: string; nameKa: string | null; slug: string };
+  categories: PublicWeighInCategory[];
 };
 
 async function publicFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -147,10 +136,6 @@ async function publicFetch<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error((body as { message?: string }).message ?? `Request failed: ${res.status}`);
   }
   return res.json() as Promise<T>;
-}
-
-export async function fetchPublicEvents(): Promise<PublicEvent[]> {
-  return publicFetch<PublicEvent[]>('/api/public/events');
 }
 
 export async function fetchPublicEvent(slug: string): Promise<PublicEvent | null> {
@@ -175,12 +160,6 @@ export async function fetchPublicNewsPost(slug: string): Promise<PublicNewsPost 
   return res.json();
 }
 
-export async function fetchPublicBrackets(eventSlug: string): Promise<PublicBracket[]> {
-  return publicFetch<PublicBracket[]>(
-    `/api/public/brackets?eventSlug=${encodeURIComponent(eventSlug)}`,
-  );
-}
-
 export async function fetchPublicSchedule(eventSlug: string): Promise<ScheduleFight[]> {
   const res = await fetch(
     `/api/public/schedule?eventSlug=${encodeURIComponent(eventSlug)}`,
@@ -199,19 +178,6 @@ export async function fetchPublicScheduleSessions(eventSlug: string): Promise<Pu
     { credentials: 'include' },
   );
   if (res.status === 404) return [];
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-  return res.json();
-}
-
-export async function fetchPublicMat(
-  eventSlug: string,
-  matName: string,
-): Promise<MatFeed | null> {
-  const res = await fetch(
-    `/api/public/mat?eventSlug=${encodeURIComponent(eventSlug)}&mat=${encodeURIComponent(matName)}`,
-    { credentials: 'include' },
-  );
-  if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   return res.json();
 }
@@ -235,6 +201,20 @@ export async function fetchPublicResults(
   const res = await fetch(`/api/public/results?${query.toString()}`, {
     credentials: 'include',
   });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+}
+
+// 404 when weigh-in weights aren't public for this event (toggle off) —
+// callers treat null as "not available" and render the empty state.
+export async function fetchPublicWeighInResults(
+  eventSlug: string,
+): Promise<PublicWeighInResults | null> {
+  const res = await fetch(
+    `/api/public/weighin-results?eventSlug=${encodeURIComponent(eventSlug)}`,
+    { credentials: 'include' },
+  );
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   return res.json();

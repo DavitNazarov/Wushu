@@ -178,14 +178,25 @@ export function WeighInPageContainer({ eventId }: Props) {
     : '';
 
   const isMobileViewport = () => typeof window !== 'undefined' && window.innerWidth < 768;
-  const scrollToSectionTop = (section: HTMLElement | null, topOverride?: number) => {
+
+  // Land the panel with its top (sticky back bar + athlete header) pinned just under
+  // the app top bar, so the athlete card is fully visible — not tucked under the bar
+  // and not the page top. NOTE: offsetTop is relative to the offsetParent (the relative
+  // grid container), not the document, so use absolute geometry instead.
+  const scrollPanelIntoView = () => {
     if (typeof window === 'undefined') return;
-    const top = typeof topOverride === 'number' ? topOverride : (section?.offsetTop ?? 0);
-    window.scrollTo({ top, behavior: 'auto' });
+    const panel = panelSectionRef.current;
+    if (!panel) return;
+    const topbarPx =
+      parseInt(
+        getComputedStyle(document.documentElement).getPropertyValue('--topbar-height'),
+        10,
+      ) || 0;
+    const panelTop = panel.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({ top: Math.max(panelTop - topbarPx, 0), behavior: 'auto' });
   };
 
   const handleSelectAthlete = (id: string) => {
-    const nextEntry = orderedEntries.find((entry) => entry.id === id) ?? null;
     const shouldUseMobileNav = isMobileViewport();
 
     if (shouldUseMobileNav) {
@@ -196,19 +207,17 @@ export function WeighInPageContainer({ eventId }: Props) {
     setWeightDraft({ scopeKey: '', value: '' });
     setMobileView(shouldUseMobileNav ? 'panel' : 'queue');
 
-    if (shouldUseMobileNav && nextEntry) {
-      window.requestAnimationFrame(() => {
-        scrollToSectionTop(panelSectionRef.current);
-      });
+    if (shouldUseMobileNav) {
+      window.requestAnimationFrame(scrollPanelIntoView);
     }
   };
 
   const handleBackToQueue = () => {
     setMobileView('queue');
     if (!isMobileViewport()) return;
-
+    const restoreTop = queueScrollTopRef.current;
     window.requestAnimationFrame(() => {
-      scrollToSectionTop(queueSectionRef.current, queueScrollTopRef.current);
+      window.scrollTo({ top: restoreTop, behavior: 'auto' });
     });
   };
 

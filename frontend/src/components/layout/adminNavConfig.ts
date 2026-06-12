@@ -3,8 +3,11 @@ import {
   Calendar,
   ClipboardList,
   Clock,
+  Dumbbell,
+  FileSignature,
   FileText,
   GitBranch,
+  Globe,
   Inbox,
   LayoutDashboard,
   Monitor,
@@ -31,15 +34,18 @@ export type AdminNavItemKey =
   | 'live'
   | 'display'
   | 'results'
+  | 'countries'
   | 'clubs'
   | 'athletes'
   | 'users'
+  | 'categoryOptions'
   | 'categoryTemplates'
+  | 'signatures'
   | 'news'
   | 'inbox'
   | 'settings';
 
-export type NavItem = {
+type NavItem = {
   key: AdminNavItemKey;
   href: string;
   icon: typeof LayoutDashboard;
@@ -49,10 +55,6 @@ export type NavSection = {
   labelKey: string;
   items: NavItem[];
 };
-
-export const adminEventOpsShortcutKeys: Array<
-  'registrations' | 'weighin' | 'integrity' | 'draw' | 'schedule' | 'live'
-> = ['registrations', 'weighin', 'integrity', 'draw', 'schedule', 'live'];
 
 export const adminNavSections: NavSection[] = [
   {
@@ -68,7 +70,7 @@ export const adminNavSections: NavSection[] = [
       { key: 'registrations', href: '/admin/registrations', icon: ClipboardList },
       { key: 'weighin', href: '/admin/weighin', icon: Scale },
       { key: 'integrity', href: '/admin/integrity', icon: ShieldCheck },
-      { key: 'draw', href: '/admin/draw', icon: Shuffle },
+      { key: 'draw', href: '/admin/weighin-results', icon: Shuffle },
       { key: 'brackets', href: '/admin/brackets', icon: GitBranch },
       { key: 'schedule', href: '/admin/schedule', icon: Clock },
       { key: 'live', href: '/admin/live', icon: Radio },
@@ -79,18 +81,26 @@ export const adminNavSections: NavSection[] = [
   {
     labelKey: 'people',
     items: [
+      { key: 'countries', href: '/admin/countries', icon: Globe },
       { key: 'clubs', href: '/admin/clubs', icon: Building2 },
       { key: 'athletes', href: '/admin/athletes', icon: UserCircle2 },
+      { key: 'users', href: '/admin/users', icon: Users },
     ],
   },
   {
-    labelKey: 'admin',
+    labelKey: 'setup',
     items: [
-      { key: 'users', href: '/admin/users', icon: Users },
+      { key: 'categoryOptions', href: '/admin/category-options', icon: Dumbbell },
       { key: 'categoryTemplates', href: '/admin/category-templates', icon: FileText },
+      { key: 'signatures', href: '/admin/signatures', icon: FileSignature },
+      { key: 'settings', href: '/admin/settings', icon: Settings },
+    ],
+  },
+  {
+    labelKey: 'content',
+    items: [
       { key: 'news', href: '/admin/news', icon: Newspaper },
       { key: 'inbox', href: '/admin/inbox', icon: Inbox },
-      { key: 'settings', href: '/admin/settings', icon: Settings },
     ],
   },
 ];

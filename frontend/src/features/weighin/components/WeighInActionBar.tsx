@@ -58,33 +58,26 @@ export function WeighInActionBar({
       ) ?? null,
     [preview],
   );
-  const hasOverrideAction = preview?.allowedActions.some(
-    (action) => action.code === 'MANUAL_OVERRIDE',
-  );
-
-  if (!preview) {
-    return (
-      <Button className="h-[56px] w-full text-[15px] font-semibold" disabled>
-        {t('actionRecordWeighIn')}
-      </Button>
-    );
-  }
+  const showOverride =
+    preview?.allowedActions.some((action) => action.code === 'MANUAL_OVERRIDE') ?? false;
 
   const isManualPrimary = primaryAction?.code === 'SUBMIT_MANUAL_DECISION';
   const manualRequiresCategory = manualDecision === 'MOVED_UP';
   const manualBlocked =
     isPending ||
-    !preview.recordingAllowed ||
+    !preview?.recordingAllowed ||
     !manualReason.trim() ||
     (manualRequiresCategory && !manualMoveCategoryId);
 
-  const moveUpCandidates = categories.filter(
-    (category) => category.sortOrder > preview.currentCategory.sortOrder,
-  );
+  const moveUpCandidates = preview
+    ? categories.filter(
+        (category) => category.sortOrder > preview.currentCategory.sortOrder,
+      )
+    : [];
 
   const primaryDisabled = isManualPrimary
     ? manualBlocked
-    : isPending || !preview.recordingAllowed;
+    : isPending || !preview?.recordingAllowed;
 
   const isDanger = primaryAction?.level === 'DANGER';
 
@@ -163,42 +156,46 @@ export function WeighInActionBar({
         </div>
       )}
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        {primaryAction && (
-          <Button
-            className={`h-[56px] flex-1 text-[15px] font-semibold tracking-wide ${
-              isDanger
-                ? 'bg-[var(--color-danger)] hover:bg-[var(--color-danger)]/90 text-white'
-                : ''
-            }`}
-            disabled={primaryDisabled}
-            onClick={() =>
-              onRecord(
-                isManualPrimary
-                  ? {
-                      decision: manualDecision,
-                      reason: manualReason.trim(),
-                      nextEventWeightCategoryId:
-                        manualDecision === 'MOVED_UP' ? manualMoveCategoryId : undefined,
-                    }
-                  : {},
-              )
-            }
-          >
-            {isPending ? t('actionSaving') : actionLabel(primaryAction, t)}
-          </Button>
-        )}
+      <div className="flex min-h-[114px] flex-col gap-3">
+        <Button
+          className={`h-[58px] w-full px-4 text-[15px] font-semibold leading-snug touch-manipulation select-none ${
+            isDanger
+              ? 'bg-[var(--color-danger)] hover:bg-[var(--color-danger)]/90 text-white'
+              : ''
+          }`}
+          disabled={!preview || !primaryAction || primaryDisabled}
+          onClick={() => {
+            if (!preview || !primaryAction) return;
+            onRecord(
+              isManualPrimary
+                ? {
+                    decision: manualDecision,
+                    reason: manualReason.trim(),
+                    nextEventWeightCategoryId:
+                      manualDecision === 'MOVED_UP' ? manualMoveCategoryId : undefined,
+                  }
+                : {},
+            );
+          }}
+        >
+          {isPending
+            ? t('actionSaving')
+            : primaryAction
+              ? actionLabel(primaryAction, t)
+              : t('actionRecordWeighIn')}
+        </Button>
 
-        {hasOverrideAction && (
-          <Button
-            variant="secondary"
-            className="h-[56px] sm:min-w-[140px] text-[14px] font-semibold"
-            onClick={onOpenOverride}
-            disabled={isPending}
-          >
-            {t('actionManualOverride')}
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          className={`h-11 w-full text-[13px] font-medium text-[var(--color-text-muted)] touch-manipulation select-none hover:text-[var(--color-text)] ${
+            showOverride ? '' : 'invisible pointer-events-none'
+          }`}
+          onClick={onOpenOverride}
+          disabled={isPending || !showOverride}
+          aria-hidden={!showOverride}
+        >
+          {t('actionManualOverride')}
+        </Button>
       </div>
     </div>
   );

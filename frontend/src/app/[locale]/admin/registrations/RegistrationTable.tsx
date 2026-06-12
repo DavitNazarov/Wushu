@@ -23,7 +23,7 @@ function clubName(reg: RegistrationRow, locale: string): string {
   return localizedName(reg.club.name, reg.club.nameKa, locale);
 }
 
-export function formatRelative(dateStr: string): string {
+function formatRelative(dateStr: string): string {
   const d = new Date(dateStr);
   const now = new Date();
   const diffMins = Math.floor((now.getTime() - d.getTime()) / 60000);

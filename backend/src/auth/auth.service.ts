@@ -31,6 +31,13 @@ export type AuthTokenPayload = {
   type: 'access' | 'refresh';
 };
 
+// SEC: constant-time login. When the email doesn't resolve to a usable account
+// we still burn one bcrypt.compare against this throwaway hash so "unknown
+// email" and "wrong password" take the same time — otherwise the early return
+// is a timing oracle for valid staff emails. Generated once at module load
+// (one-time ~100ms boot cost) so it is always a well-formed cost-12 hash.
+const DUMMY_BCRYPT_HASH = bcrypt.hashSync('timing-equalizer-placeholder', 12);
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -305,6 +312,9 @@ export class AuthService {
     const validated = await this.validateAuthenticatedUser(userId);
     if (!validated.ok) return null;
 
+    // Single round-trip: /me is hot (every SSR navigation + client hydration
+    // hits it, and it skips the throttler), so club/org names ride the same
+    // query instead of two follow-ups.
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -313,18 +323,12 @@ export class AuthService {
         clubId: true,
         nationality: true,
         organisation: { select: { name: true } },
+        club: { select: { name: true } },
       },
     });
     if (!user) return null;
 
-    let clubName: string | null = null;
-    if (user.clubId) {
-      const club = await this.prisma.club.findUnique({
-        where: { id: user.clubId },
-        select: { name: true },
-      });
-      clubName = club?.name ?? null;
-    }
+    const clubName = user.club?.name ?? null;
 
     return {
       userId: validated.payload.sub,
@@ -389,13 +393,28 @@ export class AuthService {
       orderBy: { createdAt: 'asc' },
     });
 
-    if (!user) return { ok: false, error: 'INVALID_CREDENTIALS' };
-    if (!user.isActive) return { ok: false, error: 'INVALID_CREDENTIALS' };
-    if (isUserDqActive(user))
+    // Unknown/disabled/suspended accounts still pay the bcrypt cost so the
+    // response time doesn't reveal whether the email exists (timing oracle).
+    if (!user || !user.isActive || isUserDqActive(user)) {
+      await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
       return { ok: false, error: 'INVALID_CREDENTIALS' };
+    }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return { ok: false, error: 'INVALID_CREDENTIALS' };
+
+    // Transparent cost upgrade: legacy hashes (cost 10) re-hash to 12 on the
+    // first successful login. This also converges real-account compare time
+    // with the cost-12 DUMMY_BCRYPT_HASH above — with mixed costs, "unknown
+    // email" vs "known email, wrong password" remain timing-distinguishable.
+    const hashCost = Number(user.passwordHash.split('$')[2]);
+    if (Number.isFinite(hashCost) && hashCost < 12) {
+      const upgradedHash = await bcrypt.hash(password, 12);
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: upgradedHash },
+      });
+    }
 
     const role = user.role;
     if (!role) return { ok: false, error: 'INVALID_CREDENTIALS' };

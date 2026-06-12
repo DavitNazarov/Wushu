@@ -8,6 +8,7 @@ import { InlineAlert } from '@/components/ui/InlineAlert';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { usePublicResults } from '@/hooks/usePublicApi';
 import { useRealtimeQuerySync } from '@/hooks/useRealtimeQuerySync';
+import { useCanUseLiveSocket } from '@/hooks/useAuthRole';
 import { PublicClubStandings } from './PublicClubStandings';
 import { PublicResultsCategory } from './PublicResultsCategory';
 import { PublicResultsViewToggle } from './PublicResultsViewToggle';
@@ -23,11 +24,14 @@ export function PublicResultsPanel({ eventSlug }: Props) {
   const tCommon = useTranslations('common');
   const { data, isLoading, error, refetch } = usePublicResults(eventSlug);
   const [view, setView] = useState<ResultsView>('categories');
+  // C1: the gateway rejects sockets without LIVE_RUN, and a rejected socket.io
+  // client retries forever — anonymous spectators must not attempt to connect.
+  const canUseLiveSocket = useCanUseLiveSocket();
 
   useRealtimeQuerySync({
     scope: 'public-results',
     eventId: data?.eventId ?? null,
-    enabled: !!data?.eventId,
+    enabled: canUseLiveSocket && !!data?.eventId,
     queryKeys: [['public', 'results', eventSlug]],
   });
 

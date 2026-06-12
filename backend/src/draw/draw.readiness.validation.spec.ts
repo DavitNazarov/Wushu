@@ -25,7 +25,10 @@ function makeCategory(
     warningIssueCount: 0,
     issueCount: 0,
     hasMovedUpAthletes: false,
-    hasOverrideAthletes: false,
+    hasAgeGroupMove: false,
+    reviewed: false,
+    reviewedAt: null,
+    reviewedByName: null,
     issues: [],
     eligibleAthletes: [],
     excludedAthletes: [],
@@ -44,9 +47,7 @@ describe('draw readiness validation', () => {
       weighInCompletedForDraw: true,
       missingFinalCategoryIds: [],
       invalidFinalCategoryIds: [],
-      movedUpAthletesCount: 0,
-      overrideAthletesCount: 0,
-      oneAthletePoolsCount: 0,
+      ageGroupMoveAthletesCount: 0,
       bracketCount: 0,
     });
 
@@ -67,9 +68,7 @@ describe('draw readiness validation', () => {
       weighInCompletedForDraw: false,
       missingFinalCategoryIds: [],
       invalidFinalCategoryIds: [],
-      movedUpAthletesCount: 0,
-      overrideAthletesCount: 0,
-      oneAthletePoolsCount: 0,
+      ageGroupMoveAthletesCount: 0,
       bracketCount: 0,
     });
 
@@ -90,9 +89,7 @@ describe('draw readiness validation', () => {
       weighInCompletedForDraw: true,
       missingFinalCategoryIds: [],
       invalidFinalCategoryIds: [],
-      movedUpAthletesCount: 0,
-      overrideAthletesCount: 0,
-      oneAthletePoolsCount: 0,
+      ageGroupMoveAthletesCount: 0,
       bracketCount: 0,
     });
 
@@ -112,9 +109,7 @@ describe('draw readiness validation', () => {
       weighInCompletedForDraw: true,
       missingFinalCategoryIds: [],
       invalidFinalCategoryIds: [],
-      movedUpAthletesCount: 0,
-      overrideAthletesCount: 0,
-      oneAthletePoolsCount: 0,
+      ageGroupMoveAthletesCount: 0,
       bracketCount: 1,
     });
 
@@ -122,5 +117,64 @@ describe('draw readiness validation', () => {
     expect(result.actions.generateBlockedReasonCode).toBe(
       'DRAW_ALREADY_EXISTS',
     );
+  });
+
+  it('reports SOLO categories in their own bucket + warning, still drawable', () => {
+    const result = buildValidationAndSummary({
+      categoriesComputed: [
+        makeCategory({ readinessStatus: 'SOLO', eligibleAthletesCount: 1 }),
+      ],
+      drawStatus: 'NOT_GENERATED',
+      eventId: 'ev1',
+      eventLifecycle: 'WEIGH_IN_COMPLETED',
+      registrationClosedForDraw: true,
+      weighInCompletedForDraw: true,
+      missingFinalCategoryIds: [],
+      invalidFinalCategoryIds: [],
+      ageGroupMoveAthletesCount: 0,
+      bracketCount: 0,
+    });
+
+    expect(result.summary.soloCategoriesCount).toBe(1);
+    expect(result.summary.readyCategoriesCount).toBe(1);
+    expect(
+      result.validation.warnings.some(
+        (i) => i.code === 'ONE_ATHLETE_POOLS_PRESENT',
+      ),
+    ).toBe(true);
+    expect(result.validation.critical.length).toBe(0);
+    expect(result.actions.canGenerate).toBe(true);
+  });
+
+  it('warns on cross-age-group moves and never on overrides', () => {
+    const result = buildValidationAndSummary({
+      categoriesComputed: [
+        makeCategory({
+          readinessStatus: 'NEEDS_REVIEW',
+          hasAgeGroupMove: true,
+        }),
+      ],
+      drawStatus: 'NOT_GENERATED',
+      eventId: 'ev1',
+      eventLifecycle: 'WEIGH_IN_COMPLETED',
+      registrationClosedForDraw: true,
+      weighInCompletedForDraw: true,
+      missingFinalCategoryIds: [],
+      invalidFinalCategoryIds: [],
+      ageGroupMoveAthletesCount: 1,
+      bracketCount: 0,
+    });
+
+    expect(result.summary.needsReviewCategoriesCount).toBe(1);
+    expect(
+      result.validation.warnings.some(
+        (i) => i.code === 'AGE_GROUP_MOVE_ATHLETES_PRESENT',
+      ),
+    ).toBe(true);
+    expect(
+      result.validation.warnings.some(
+        (i) => i.code === 'OVERRIDE_RECORDS_PRESENT',
+      ),
+    ).toBe(false);
   });
 });

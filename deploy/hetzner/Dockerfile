@@ -17,6 +17,10 @@ COPY package.json package-lock.json ./
 COPY backend/package.json backend/
 COPY frontend/package.json frontend/
 
+# Skip Puppeteer's bundled-Chromium download during the build — the runner
+# stage installs a system Chromium instead (smaller image, shared with the OS).
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
 # Full install (dev deps required for `nest build` and `next build`).
 RUN npm ci
 
@@ -37,6 +41,15 @@ WORKDIR /app
 ENV NODE_ENV=production
 # server.js reads PORT (defaults to 4000). nginx (see nginx.conf) proxies to it.
 ENV PORT=4000
+
+# Chromium + Noto fonts for the server-side PDF exports (admin results page).
+# Puppeteer drives this system binary; fonts-noto-core carries Georgian glyphs
+# so the bilingual PDFs render correctly. Installed as root before dropping privs.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends chromium fonts-noto-core \
+  && rm -rf /var/lib/apt/lists/*
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Run as the unprivileged 'node' user shipped in the base image.
 USER node

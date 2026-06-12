@@ -29,7 +29,7 @@ type CandidateRestConflict = {
 
 // Public diagnostic record for one rest-violation that ended up in the plan.
 // Reported back through the response so the UI can flag the affected fight.
-export type AutoScheduleConflict = {
+type AutoScheduleConflict = {
   fightId: string;
   scheduledOrder: number;
   athleteIds: string[];
@@ -42,7 +42,7 @@ export type AutoScheduleConflict = {
 
 // Summary stats for an auto-schedule run. fullySatisfied is the at-a-glance
 // "did every athlete get their rest?" flag the UI uses for a green/red banner.
-export type AutoScheduleDiagnostics = {
+type AutoScheduleDiagnostics = {
   minFightGap: number;
   fullySatisfied: boolean;
   conflictCount: number;

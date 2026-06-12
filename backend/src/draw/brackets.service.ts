@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { FightStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../common/audit.service';
 import { DrawReadinessService } from './draw.readiness.service';
+import { DrawService } from './draw.service';
 import type { DrawCategoryComputedRow } from './draw.readiness.types';
 import {
   deriveBracketCategoryStatus,
@@ -10,6 +12,7 @@ import {
   extractScoreToken,
   fightStateCounters,
   isEventPublished,
+  isSwapLockedFight,
   roundStageLabel,
 } from './brackets.helpers';
 import { resolveCompetitionFormat } from './competition-format';
@@ -58,6 +61,8 @@ export class BracketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly readiness: DrawReadinessService,
+    private readonly draw: DrawService,
+    private readonly audit: AuditService,
   ) {}
 
   // GET /api/brackets/overview backing. Strategy:
@@ -144,16 +149,22 @@ export class BracketsService {
     }
 
     const hasAnyBracketInEvent = fights.length > 0;
-    const categories = computed.overview.categories.map((category) => {
-      const fullCategory = computed.categoriesById.get(category.id);
-      const categoryFights = fightsByCategory.get(category.id) ?? [];
-      return this.toOverviewCategoryRow({
-        category: fullCategory,
-        categoryFights,
-        hasAnyBracketInEvent,
-        eventPublished,
+    // Only categories that actually have athletes reach the Brackets page —
+    // the filtering happens HERE (server-side) so the client never has to.
+    // Category assignments are finalized on the Weigh-In Results page, so an
+    // eligible-athlete count of 0 means there's nothing to draw.
+    const categories = computed.overview.categories
+      .filter((category) => category.eligibleAthletesCount > 0)
+      .map((category) => {
+        const fullCategory = computed.categoriesById.get(category.id);
+        const categoryFights = fightsByCategory.get(category.id) ?? [];
+        return this.toOverviewCategoryRow({
+          category: fullCategory,
+          categoryFights,
+          hasAnyBracketInEvent,
+          eventPublished,
+        });
       });
-    });
 
     const athleteSet = new Set<string>();
     let totalByes = 0;
@@ -212,9 +223,14 @@ export class BracketsService {
         needsReviewCategoriesCount,
       },
       actions: {
+        // Surface the pre-draw readiness so the Brackets page can run the
+        // first-time draw itself (the old Draw page no longer generates).
+        canGenerate: computed.overview.actions.canGenerate,
         canPublish,
         canUnpublish,
         canExport: categoriesWithBrackets > 0,
+        generateBlockedReasonCode:
+          computed.overview.actions.generateBlockedReasonCode,
         publishBlockedReasonCode: canPublish
           ? null
           : categoriesWithBrackets <= 0
@@ -291,7 +307,9 @@ export class BracketsService {
               firstName: true,
               lastName: true,
               documentId: true,
-              club: { select: { name: true, country: true } },
+              club: {
+                select: { name: true, country: { select: { name: true } } },
+              },
             },
           },
           blueAthlete: {
@@ -300,7 +318,9 @@ export class BracketsService {
               firstName: true,
               lastName: true,
               documentId: true,
-              club: { select: { name: true, country: true } },
+              club: {
+                select: { name: true, country: { select: { name: true } } },
+              },
             },
           },
           mat: { select: { name: true } },
@@ -359,7 +379,7 @@ export class BracketsService {
               athleteName: `${fight.redAthlete.firstName} ${fight.redAthlete.lastName}`,
               clubName:
                 fight.redAthlete.club?.name ?? redMeta?.clubName ?? null,
-              country: fight.redAthlete.club?.country ?? null,
+              country: fight.redAthlete.club?.country?.name ?? null,
               athleteCode:
                 fight.redAthlete.documentId ??
                 redMeta?.athleteCode ??
@@ -378,7 +398,7 @@ export class BracketsService {
               athleteName: `${fight.blueAthlete.firstName} ${fight.blueAthlete.lastName}`,
               clubName:
                 fight.blueAthlete.club?.name ?? blueMeta?.clubName ?? null,
-              country: fight.blueAthlete.club?.country ?? null,
+              country: fight.blueAthlete.club?.country?.name ?? null,
               athleteCode:
                 fight.blueAthlete.documentId ??
                 blueMeta?.athleteCode ??
@@ -516,6 +536,7 @@ export class BracketsService {
   async swapParticipants(input: {
     organisationId: string;
     eventId: string;
+    actorUserId: string;
     fightId1: string;
     side1: 'red' | 'blue';
     fightId2: string;
@@ -548,6 +569,7 @@ export class BracketsService {
         },
         select: {
           id: true,
+          bracketId: true,
           status: true,
           redAthleteId: true,
           blueAthleteId: true,
@@ -562,6 +584,7 @@ export class BracketsService {
         },
         select: {
           id: true,
+          bracketId: true,
           status: true,
           redAthleteId: true,
           blueAthleteId: true,
@@ -574,13 +597,11 @@ export class BracketsService {
     if (input.fightId1 === input.fightId2 && input.side1 === input.side2) {
       throw new Error('SWAP_SAME_SLOT');
     }
-    // BF-12: never swap into/out of a bout that's already running or decided.
+    // BF-12: never swap into/out of a bout that's already running or holds a
+    // real (fought) result. A CONFIRMED single-sided BYE is just an auto-advance
+    // — still swappable; it's re-resolved after the swap (see autoConfirmByes).
     for (const fight of [fight1, fight2]) {
-      if (
-        fight.status === 'IN_PROGRESS' ||
-        fight.status === 'PAUSED' ||
-        fight.status === 'CONFIRMED'
-      ) {
+      if (isSwapLockedFight(fight)) {
         throw new Error('BRACKET_LOCKED');
       }
     }
@@ -588,8 +609,8 @@ export class BracketsService {
     const athleteId1 = fight1[field1 as keyof typeof fight1];
     const athleteId2 = fight2[field2 as keyof typeof fight2];
 
-    await this.prisma.$transaction([
-      this.prisma.fight.update({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.fight.update({
         where: { id: fight1.id },
         data: {
           [field1]: athleteId2,
@@ -603,8 +624,8 @@ export class BracketsService {
               ? ('QUEUED' as FightStatus)
               : undefined,
         },
-      }),
-      this.prisma.fight.update({
+      });
+      await tx.fight.update({
         where: { id: fight2.id },
         data: {
           [field2]: athleteId1,
@@ -617,8 +638,41 @@ export class BracketsService {
               ? ('QUEUED' as FightStatus)
               : undefined,
         },
-      }),
-    ]);
+      });
+
+      // A swap that touched a BYE reset it to QUEUED above. Re-confirm any
+      // resulting single-sided byes as walkovers and re-propagate the new
+      // occupant into the next round so the tree stays consistent. Idempotent
+      // for byes the swap didn't touch.
+      const bracketIds = [
+        ...new Set([fight1.bracketId, fight2.bracketId]),
+      ].filter((id): id is string => Boolean(id));
+      for (const bracketId of bracketIds) {
+        await this.draw.autoConfirmByes(tx, bracketId);
+      }
+
+      // A swap rewrites bracket membership (and may clear a recorded result) —
+      // it needs the same audit trail as every other draw mutation.
+      await this.audit.write(
+        {
+          organisationId: input.organisationId,
+          eventId: input.eventId,
+          actorUserId: input.actorUserId,
+          action: 'BRACKET_PARTICIPANTS_SWAPPED',
+          entityType: 'fight',
+          entityId: `${fight1.id}:${fight2.id}`,
+          before: {
+            fight1: { id: fight1.id, side: input.side1, athleteId: athleteId1 },
+            fight2: { id: fight2.id, side: input.side2, athleteId: athleteId2 },
+          },
+          after: {
+            fight1: { id: fight1.id, side: input.side1, athleteId: athleteId2 },
+            fight2: { id: fight2.id, side: input.side2, athleteId: athleteId1 },
+          },
+        },
+        tx,
+      );
+    });
   }
 
   // Project one category's drawn-state into a BracketsOverviewCategoryRow.
@@ -644,6 +698,11 @@ export class BracketsService {
 
     const athleteIds = new Set<string>();
     let byesCount = 0;
+    // BF: BYE fights (single-sided) that are auto-resolved at draw time must not
+    // count as real progress — track how many completed/in-progress fights are
+    // byes so the status machine can subtract them.
+    let byeCompletedCount = 0;
+    let byeInProgressCount = 0;
     let hasInvalidBlankFights = false;
     let completeWithoutWinner = false;
     let hasRoundRobinByes = false;
@@ -663,6 +722,16 @@ export class BracketsService {
         (fight.redAthleteId != null && fight.blueAthleteId == null)
       ) {
         byesCount += 1;
+        if (fight.status === 'COMPLETE' || fight.status === 'CONFIRMED') {
+          byeCompletedCount += 1;
+        }
+        if (
+          fight.status === 'IN_PROGRESS' ||
+          fight.status === 'PAUSED' ||
+          fight.status === 'ON_DECK'
+        ) {
+          byeInProgressCount += 1;
+        }
       }
     }
 
@@ -796,6 +865,14 @@ export class BracketsService {
       eligibleAthletesCount: input.category.eligibleAthletesCount,
       completedFightsCount: statusCounts.completed,
       inProgressFightsCount: statusCounts.inProgress,
+      nonByeCompletedFightsCount: Math.max(
+        0,
+        statusCounts.completed - byeCompletedCount,
+      ),
+      nonByeInProgressFightsCount: Math.max(
+        0,
+        statusCounts.inProgress - byeInProgressCount,
+      ),
       hasIntegrityIssue: integrityIssues.some(
         (issue) => issue.severity === 'CRITICAL',
       ),

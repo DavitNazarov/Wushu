@@ -19,6 +19,7 @@ import {
 import { resolveCompetitionFormat } from '../draw/competition-format';
 import { roundStageLabel } from '../draw/brackets.helpers';
 import {
+  compareQueueOrder,
   computeLiveStatuses,
   deriveLiveQueueBoard,
   type LiveFightStatus,
@@ -307,9 +308,21 @@ export class FightsService {
         },
         include: {
           mat: true,
-          redAthlete: { select: { id: true, firstName: true, lastName: true } },
+          redAthlete: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              club: { select: { name: true, nameKa: true } },
+            },
+          },
           blueAthlete: {
-            select: { id: true, firstName: true, lastName: true },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              club: { select: { name: true, nameKa: true } },
+            },
           },
           winnerAthlete: {
             select: { id: true, firstName: true, lastName: true },
@@ -344,6 +357,7 @@ export class FightsService {
     ]);
 
     const sessionOrderById = new Map(sessions.map((s) => [s.id, s.order]));
+    const sessionNameById = new Map(sessions.map((s) => [s.id, s.name]));
 
     const scheduleRows = buildScheduleRows(fights).map((row) => ({
       ...row,
@@ -415,18 +429,42 @@ export class FightsService {
         blueDisplayName: row.blueDisplayName,
         redDisplayNameKa: row.redDisplayNameKa,
         blueDisplayNameKa: row.blueDisplayNameKa,
+        redClubName: fight.redAthlete?.club?.name ?? null,
+        redClubNameKa: fight.redAthlete?.club?.nameKa ?? null,
+        blueClubName: fight.blueAthlete?.club?.name ?? null,
+        blueClubNameKa: fight.blueAthlete?.club?.nameKa ?? null,
         matId: row.matId,
         matName: row.matName,
         orderInMat: row.orderInMat,
         orderInSession: row.orderInSession,
+        sessionId: row.sessionId ?? null,
+        sessionName: row.sessionId
+          ? (sessionNameById.get(row.sessionId) ?? null)
+          : null,
+        sessionOrder: row.sessionId
+          ? (sessionOrderById.get(row.sessionId) ?? null)
+          : null,
         scheduledAt: row.scheduledAt,
         timerState: this.toTimerStateView(fight.timerState),
       };
     };
 
+    // Full queue order — lets the live UI render fights grouped by session.
+    const orderedFightIds = [...globalQueueRows]
+      .sort(compareQueueOrder)
+      .map((row) => row.id);
+
     return {
       eventId: input.eventId,
       mats,
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        name: s.name,
+        order: s.order,
+      })),
+      allFights: orderedFightIds
+        .map((id) => toFightRow(id))
+        .filter((row): row is NonNullable<typeof row> => row != null),
       selectedMatId: null,
       currentFight: board.current ? toFightRow(board.current.id) : null,
       onDeckFight: board.onDeck ? toFightRow(board.onDeck.id) : null,

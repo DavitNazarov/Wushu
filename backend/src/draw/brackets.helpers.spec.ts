@@ -2,6 +2,7 @@ import {
   deriveBracketCategoryStatus,
   detectCategoryIntegrityIssues,
   isEventPublished,
+  isSwapLockedFight,
   roundStageLabel,
 } from './brackets.helpers';
 
@@ -105,6 +106,46 @@ describe('brackets.helpers', () => {
     ).toBe('GENERATED_DRAFT');
   });
 
+  it('does not flag a freshly-drawn bracket with a resolved BYE as in progress', () => {
+    // 5 athletes → an opening BYE auto-CONFIRMED at draw time; the remaining
+    // real fights are still QUEUED. The bye alone must NOT read as progress.
+    const base = {
+      hasFights: true as const,
+      totalFights: 4,
+      hasAnyBracketInEvent: true as const,
+      eligibleAthletesCount: 5,
+      completedFightsCount: 1, // the BYE walkover
+      inProgressFightsCount: 0,
+      nonByeCompletedFightsCount: 0, // ...but it's a bye, so zero real progress
+      nonByeInProgressFightsCount: 0,
+      hasIntegrityIssue: false,
+    };
+
+    expect(
+      deriveBracketCategoryStatus({ ...base, eventPublished: false }),
+    ).toBe('GENERATED_DRAFT');
+    expect(deriveBracketCategoryStatus({ ...base, eventPublished: true })).toBe(
+      'PUBLISHED',
+    );
+  });
+
+  it('still flags a bracket as in progress once a real (non-bye) fight starts', () => {
+    expect(
+      deriveBracketCategoryStatus({
+        hasFights: true,
+        totalFights: 4,
+        hasAnyBracketInEvent: true,
+        eligibleAthletesCount: 5,
+        completedFightsCount: 2, // 1 bye + 1 real result
+        inProgressFightsCount: 0,
+        nonByeCompletedFightsCount: 1,
+        nonByeInProgressFightsCount: 0,
+        hasIntegrityIssue: false,
+        eventPublished: false,
+      }),
+    ).toBe('IN_PROGRESS');
+  });
+
   it('flags integrity issues with expected codes', () => {
     const issues = detectCategoryIntegrityIssues({
       competitionFormat: 'SINGLE_ELIMINATION',
@@ -128,6 +169,51 @@ describe('brackets.helpers', () => {
         'DUPLICATE_ACTIVE_FIGHT_ATHLETE',
       ]),
     );
+  });
+
+  it('allows swapping byes but locks running / decided fights', () => {
+    // CONFIRMED BYE (single-sided walkover) — swappable.
+    expect(
+      isSwapLockedFight({
+        status: 'CONFIRMED',
+        redAthleteId: 'a1',
+        blueAthleteId: null,
+      }),
+    ).toBe(false);
+
+    // Plain QUEUED fight — swappable.
+    expect(
+      isSwapLockedFight({
+        status: 'QUEUED',
+        redAthleteId: 'a1',
+        blueAthleteId: 'a2',
+      }),
+    ).toBe(false);
+
+    // CONFIRMED real result (both athletes) — locked.
+    expect(
+      isSwapLockedFight({
+        status: 'CONFIRMED',
+        redAthleteId: 'a1',
+        blueAthleteId: 'a2',
+      }),
+    ).toBe(true);
+
+    // Running fights — locked regardless of byes.
+    expect(
+      isSwapLockedFight({
+        status: 'IN_PROGRESS',
+        redAthleteId: 'a1',
+        blueAthleteId: 'a2',
+      }),
+    ).toBe(true);
+    expect(
+      isSwapLockedFight({
+        status: 'PAUSED',
+        redAthleteId: 'a1',
+        blueAthleteId: null,
+      }),
+    ).toBe(true);
   });
 
   it('maps round labels consistently', () => {

@@ -27,6 +27,9 @@ import { AthleteProfileService } from './athlete-profile.service';
 const athleteBodySchema = z.object({
   id: z.string().cuid().optional(),
   clubId: z.string().cuid().optional().nullable(),
+  // Used only for club-less athletes; ignored when a club is set (region is
+  // then derived from the club). Not .cuid() — migrated regions use UUIDs.
+  regionId: z.string().min(1).max(64).optional().nullable(),
   firstName: z.string().trim().min(1),
   firstNameKa: z.string().trim().min(1).optional().nullable(),
   lastName: z.string().trim().min(1),
@@ -71,6 +74,8 @@ export class AthletesController {
     @Query('clubId') clubId?: string,
     @Query('dateOfBirth') dateOfBirth?: string,
     @Query('documentId') documentId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
     const auth = req.auth!;
     // A coach with no club must NOT fall through to an unfiltered (all-org)
@@ -89,12 +94,16 @@ export class AthletesController {
       auth.role === 'coach' ? auth.clubId! : clubId || undefined;
 
     const parsedDob = dateOfBirth ? new Date(dateOfBirth) : undefined;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
+    const parsedOffset = offset ? Number.parseInt(offset, 10) : undefined;
 
     const result = await this.athletes.list(auth.organisationId, {
       search,
       clubId: effectiveClubId,
       dateOfBirth: parsedDob,
       documentId: documentId || undefined,
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      offset: Number.isFinite(parsedOffset) ? parsedOffset : undefined,
     });
 
     return result;
@@ -144,6 +153,7 @@ export class AthletesController {
           actorUserId: auth.sub,
           id: parsed.id,
           clubId: effectiveClubId,
+          regionId: parsed.regionId ?? null,
           actorClubId: auth.role === 'coach' ? (auth.clubId ?? null) : null,
           firstName: parsed.firstName,
           firstNameKa: parsed.firstNameKa ?? null,

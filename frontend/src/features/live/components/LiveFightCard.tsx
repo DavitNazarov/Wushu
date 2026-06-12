@@ -231,7 +231,7 @@ export function LiveFightCard({
         {/* ── ACTION ZONE (control panel only) ────────── */}
         {/* ══════════════════════════════════════════════ */}
         {actionConfig && (
-          <div className="space-y-3 pt-1">
+          <div className="mx-auto w-full max-w-sm space-y-3 pt-1">
             {/* ── Awaiting round result: big RED / BLUE winner buttons ── */}
             {awaitingRoundResult && (
               <>

@@ -16,6 +16,7 @@ import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CapabilityGuard } from '../auth/capability.guard';
 import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { FightStatus, WinMethod } from '@prisma/client';
 import { parseBody } from '../common/parse-body';
 import {
@@ -29,6 +30,19 @@ import {
 // timekeepers, and judges hold it; coaches don't. After every mutating write
 // we push a socket.io event so any active mat displays + live scoreboards
 // refetch immediately.
+//
+// Exempt from BOTH throttle buckets. The operator live console is driven by
+// socket fan-out: a single action (start / timer / result / round-result) emits
+// several socket events (fight:update + schedule:update + timer:update, plus a
+// pair for any auto-advanced next fight), and each one triggers a queue-board
+// refetch. Across a busy session this blew past not just the 'short' bucket
+// (10 req/10s) but the 'default' bucket (120 req/min) too, 429'ing operators
+// mid-fight. These routes are already AuthGuard + CapabilityGuard(LIVE_RUN)
+// protected, so per-IP request counting adds nothing as an abuse control here —
+// the gate is authentication + capability, not request volume. (The frontend
+// also coalesces the fan-out into a single debounced refetch; see
+// useRealtimeQuerySync.) Same precedent as the soft-auth /api/auth/me route.
+@SkipThrottle({ default: true, short: true })
 @Controller('fights')
 @UseGuards(AuthGuard, CapabilityGuard)
 @RequireCapability(CAPABILITIES.LIVE_RUN)

@@ -185,13 +185,18 @@ images remain for rollback: `docker compose ... up -d` after `git checkout <prev
 
 ## 8. Backups & rollback
 
-- **Backups:** the `pgdata` named volume holds all DB state. Schedule a host cron:
+- **Backups:** the `pgdata` named volume holds all DB state. Use the bundled
+  script — it dumps, gzips, verifies non-empty, and prunes past 14 days:
   ```bash
-  docker compose -f deploy/hetzner/docker-compose.prod.yml --env-file deploy/hetzner/.env.prod \
-    exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | gzip > backup-$(date +%F).sql.gz
+  # one-off
+  ./deploy/hetzner/backup.sh
+  # nightly host cron (03:15)
+  crontab -e
+  15 3 * * * /opt/geo-wushu/deploy/hetzner/backup.sh >> /var/log/geo-wushu-backup.log 2>&1
   ```
-  Copy backups **off the box** (Hetzner Storage Box / object storage). A VPS has no
-  managed safety net — this is mandatory before an event.
+  Then uncomment one of the OFF-BOX copy lines at the bottom of `backup.sh`
+  (Hetzner Storage Box / object storage). A VPS has no managed safety net —
+  off-box copies are mandatory before an event.
 - **App rollback:** `git checkout <previous-tag>` then `up -d --build`.
 - **Migration rollback:** Prisma migrations are **forward-only**. To revert: restore
   the latest `pg_dump` and check out the prior app tag. Take a manual `pg_dump`

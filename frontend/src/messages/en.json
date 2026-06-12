@@ -20,11 +20,14 @@
     "live": "Live",
     "display": "Display",
     "results": "Results",
+    "countries": "Countries",
     "clubs": "Clubs",
     "athletes": "Athletes",
     "users": "Users",
     "rulesets": "Category templates",
+    "categoryOptions": "Category options",
     "categoryTemplates": "Category templates",
+    "signatures": "Judge signatures",
     "news": "News",
     "inbox": "Inbox",
     "settings": "Settings",
@@ -32,7 +35,8 @@
     "section_overview": "Overview",
     "section_tournament": "Tournament",
     "section_people": "People",
-    "section_admin": "Admin",
+    "section_setup": "Setup",
+    "section_content": "Content",
     "integrity": "Integrity"
   },
   "common": {
@@ -193,6 +197,11 @@
     "clubsSubtitle": "Registered clubs and coaches participating in Geo Wushu events.",
     "clubAthletes": "Athletes",
     "clubCoaches": "Coaches",
+    "countries": "Countries",
+    "countriesTitle": "Countries",
+    "countriesSubtitle": "Countries and regions participating in Geo Wushu events.",
+    "countryRegions": "Regions",
+    "countryClubs": "Clubs",
     "news": "News",
     "newsTitle": "News",
     "newsSubtitle": "Announcements and updates about Geo Wushu events.",
@@ -346,7 +355,11 @@
     "rulesStep6": "Competition live — fights run; results update in real time.",
     "rulesStep7": "Completed — event finished.",
     "rulesPublishingTitle": "Publishing concept",
-    "rulesPublishingText": "Brackets, schedule, and results are only visible to the public after the organiser publishes them. Until then, these pages show \"Not published yet\". This ensures spectators and participants see accurate, finalised information."
+    "rulesPublishingText": "Brackets, schedule, and results are only visible to the public after the organiser publishes them. Until then, these pages show \"Not published yet\". This ensures spectators and participants see accurate, finalised information.",
+    "weights": "Weigh-in",
+    "weighInResultsNotPublished": "Weigh-in results aren't published yet",
+    "weighInResultsNotPublishedDescription": "Results will appear here once the organisers publish them.",
+    "weighInResultsAthleteCount": "{count, plural, one {# athlete} other {# athletes}}"
   },
   "auth": {
     "signIn": "Sign in",
@@ -720,6 +733,34 @@
         "link_brackets": "Brackets",
         "link_schedule": "Schedule",
         "link_live": "Live"
+      },
+      "wizard": {
+        "subtitle": "Set up a new competition step by step.",
+        "stepCount": "Step {current} of {total}",
+        "back": "Back",
+        "next": "Next",
+        "create": "Create event",
+        "steps": {
+          "basicsLabel": "Basics",
+          "basicsHint": "Name, location, and organiser",
+          "scheduleLabel": "Schedule",
+          "scheduleHint": "Registration and competition dates",
+          "categoriesLabel": "Categories",
+          "categoriesHint": "Choose the divisions to include",
+          "reviewLabel": "Review",
+          "reviewHint": "Confirm and create"
+        },
+        "review": {
+          "eyebrow": "Almost done",
+          "title": "Review your event",
+          "description": "Double-check the details before creating the event.",
+          "empty": "Not set",
+          "registrationDays": "Registration days",
+          "fightDays": "Competition days",
+          "daysCount": "{count, plural, one {# day} other {# days}}",
+          "categories": "Categories",
+          "categoriesCount": "{count, plural, one {# category} other {# categories}}"
+        }
       }
     },
     "users": {
@@ -738,6 +779,7 @@
       "passwordHint": "At least 6 characters",
       "selectClubPlaceholder": "Select a club",
       "loadingClubs": "Loading clubs...",
+      "coachRegionHint": "From club: {location}",
       "roleAdmin": "Admin",
       "roleCoach": "Coach",
       "roleAthlete": "Athlete",
@@ -814,11 +856,102 @@
       "fieldRole": "Role",
       "fieldClub": "Club",
       "linkUsers": "User Management",
-      "linkRulesets": "Category templates"
+      "linkRulesets": "Category templates",
+      "subtitle": "Your account, organisation, and quick links.",
+      "actionCopy": "Copy",
+      "actionCopied": "Copied",
+      "capabilitiesEmpty": "No capabilities assigned.",
+      "linkUsersDesc": "Manage admins, coaches, and officials.",
+      "linkRulesetsDesc": "Reusable category templates and rulesets.",
+      "linkClubs": "Clubs",
+      "linkClubsDesc": "Manage clubs and their details.",
+      "roles": {
+        "admin": "Admin",
+        "coach": "Coach",
+        "athlete": "Athlete",
+        "judge": "Judge",
+        "timekeeper": "Timekeeper"
+      },
+      "capabilityLabels": {
+        "EVENTS_MANAGE": "Events",
+        "RULESETS_MANAGE": "Rulesets",
+        "ATHLETES_MANAGE": "Athletes",
+        "WEIGHIN_RUN": "Weigh-in",
+        "DRAW_RUN": "Draw",
+        "SCHEDULE_MANAGE": "Schedule",
+        "LIVE_RUN": "Live",
+        "RESULTS_MANAGE": "Results",
+        "EXPORTS_MANAGE": "Exports",
+        "CONTENT_MANAGE": "Content"
+      }
     },
     "theme": {
       "light": "Switch to light mode",
       "dark": "Switch to dark mode"
+    },
+    "categoryOptions": {
+      "title": "Category options",
+      "subtitle": "Define reusable age and weight divisions for your competitions.",
+      "new": "New group",
+      "formDescription": "Group athletes by sex and age, then list the weight divisions inside it.",
+      "emptyTitle": "No category groups yet",
+      "emptyDescription": "Create your first group to define the age and weight divisions used in events.",
+      "weightCount": "{count, plural, one {# division} other {# divisions}}",
+      "roundMinutes": "{minutes} min rounds",
+      "ageAny": "Any age",
+      "ageRange": "{min}–{max} yrs",
+      "openDivision": "Open",
+      "inactive": "Inactive",
+      "actions": {
+        "edit": "Edit",
+        "delete": "Delete"
+      },
+      "edit": {
+        "title": "Edit group"
+      },
+      "delete": {
+        "title": "Delete group",
+        "description": "This permanently removes the group and its weight divisions. This can't be undone.",
+        "confirm": "Delete group",
+        "success": "Group deleted",
+        "failed": "Couldn't delete the group"
+      },
+      "fields": {
+        "nameEn": "Name (English)",
+        "nameKa": "Name (Georgian)",
+        "sex": "Sex",
+        "minAge": "Min age",
+        "maxAge": "Max age",
+        "roundMinutes": "Round (minutes)",
+        "active": "Active"
+      },
+      "placeholders": {
+        "nameEn": "e.g. Junior Men",
+        "nameKa": "e.g. ჭაბუკები",
+        "any": "Any"
+      },
+      "hints": {
+        "nameKa": "Shown to Georgian users; leave blank to use the English name."
+      },
+      "weights": {
+        "title": "Weight divisions",
+        "help": "List divisions from lightest to heaviest. The last one can be open-ended.",
+        "add": "Add division",
+        "remove": "Remove division",
+        "nameLabel": "Division name",
+        "namePlaceholder": "e.g. -52 kg",
+        "maxLabel": "Max weight (kg)",
+        "maxPlaceholder": "kg",
+        "openEnded": "Open-ended"
+      },
+      "errors": {
+        "roundRequired": "Enter a round duration greater than zero.",
+        "ageRange": "Max age must be greater than or equal to min age.",
+        "weightNameRequired": "Give every division a name.",
+        "openMustBeLast": "Only the last division can be open-ended.",
+        "weightMaxRequired": "Enter a maximum weight for this division.",
+        "weightAscending": "Each division's weight must be greater than the previous one."
+      }
     }
   },
   "coach": {
@@ -937,6 +1070,30 @@
             "description": "Check your coach and club context."
           }
         }
+      },
+      "greeting": "Welcome back, {name}",
+      "greetingSubtitle": "Here's what needs your attention today.",
+      "primaryAction": {
+        "noAthletesTitle": "Add your first athlete",
+        "noAthletesSubtitle": "Build your roster so you can register athletes for competitions.",
+        "noAthletesButton": "Add athlete",
+        "noOpenTitle": "You're all caught up",
+        "noOpenSubtitle": "No events are open for registration right now. Browse upcoming competitions.",
+        "noOpenButton": "Browse events",
+        "allSetEyebrow": "All set",
+        "openEventEyebrow": "Open for registration",
+        "allSetHeading": "Every athlete is registered",
+        "registerHeading": "Register athletes",
+        "progress": "{registered} of {total} registered",
+        "closesToday": "Registration closes today",
+        "closesIn": "{days, plural, one {Registration closes in # day} other {Registration closes in # days}}",
+        "reviewButton": "Review registrations",
+        "registerButton": "Register athletes",
+        "opensSoonEyebrow": "Opens soon",
+        "closedEyebrow": "Registration closed",
+        "opensOnLabel": "Registration opens {date}",
+        "closedNote": "Registration is closed for this event.",
+        "viewEventButton": "View event"
       }
     },
     "events": {
@@ -972,7 +1129,16 @@
         "brackets": "Brackets",
         "schedule": "Schedule",
         "live": "Live"
-      }
+      },
+      "successTitle": "Athlete registered",
+      "successBody": "{name} has been registered.",
+      "successAllRegistered": "All your athletes are now registered for this event.",
+      "addAnotherAthlete": "Register another athlete",
+      "done": "Done",
+      "allRegisteredTitle": "Everyone's registered",
+      "allRegisteredBody": "All of your athletes are already registered for this event.",
+      "noAthletesTitle": "No athletes yet",
+      "noAthletesBody": "Add athletes to your roster before registering them for events."
     },
     "athletes": {
       "title": "Athletes",
@@ -1035,7 +1201,8 @@
       "name": "Name",
       "role": "Role",
       "club": "Club",
-      "organisation": "Organisation"
+      "organisation": "Organisation",
+      "roleCoach": "Coach"
     },
     "noClub": {
       "title": "No club assigned",
@@ -1181,6 +1348,16 @@
         "pendingHint": "Bouts not resolved yet."
       }
     },
+    "medals": {
+      "title": "Medals & placements",
+      "subtitle": "Career results across completed competitions.",
+      "medalCount": "{count, plural, one {# medal} other {# medals}}",
+      "gold": "Gold",
+      "silver": "Silver",
+      "bronze": "Bronze",
+      "other": "Other places",
+      "empty": "No completed competition results yet."
+    },
     "identity": {
       "eyebrow": "Identity",
       "summary": "Core athlete and club information used across registration and competition operations.",
@@ -1274,6 +1451,45 @@
     "saveError": "Could not save the news post. Please try again.",
     "validationRequired": "Title and slug are required."
   },
+  "countries": {
+    "title": "Countries",
+    "new": "New country",
+    "emptyTitle": "No countries yet",
+    "emptyDescription": "Add countries, then regions and clubs inside them.",
+    "columns": {
+      "name": "Country",
+      "code": "Code",
+      "regions": "Regions",
+      "clubs": "Clubs"
+    },
+    "fields": {
+      "name": "Country name (EN)",
+      "nameKa": "Country name (Georgian)",
+      "code": "ISO code (e.g. GE)"
+    },
+    "deleteConfirm": "Delete this country? This cannot be undone.",
+    "notEmpty": "Remove this country’s regions, clubs, coaches and athletes first.",
+    "regionsCount": "{count, plural, =0 {No regions} one {# region} other {# regions}}",
+    "clubsCount": "{count, plural, =0 {No clubs} one {# club} other {# clubs}}",
+    "backToCountries": "Countries",
+    "regionsTitle": "Regions",
+    "newRegion": "New region",
+    "emptyRegionsTitle": "No regions yet",
+    "emptyRegionsDescription": "Add regions to group clubs inside this country.",
+    "regionColumns": {
+      "name": "Region",
+      "clubs": "Clubs"
+    },
+    "regionFields": {
+      "name": "Region name (EN)",
+      "nameKa": "Region name (Georgian)"
+    },
+    "deleteRegionConfirm": "Delete this region? This cannot be undone.",
+    "regionNotEmpty": "Move or remove this region’s clubs, coaches and athletes first.",
+    "clubsTitle": "Clubs",
+    "emptyClubsTitle": "No clubs in this region",
+    "emptyClubsDescription": "Clubs assigned to this region appear here."
+  },
   "clubs": {
     "title": "Clubs",
     "new": "New club",
@@ -1281,14 +1497,20 @@
     "emptyDescription": "Create clubs to organise athletes by their teams.",
     "columns": {
       "name": "Club",
+      "region": "Region",
       "city": "City",
       "country": "Country"
     },
     "fields": {
       "name": "Club name (EN)",
       "nameKa": "Club name (Georgian)",
+      "country": "Country",
+      "region": "Region",
       "city": "City",
-      "country": "Country"
+      "selectCountry": "Select country",
+      "selectRegion": "Select region",
+      "selectCountryFirst": "Select a country first",
+      "noRegions": "No regions in this country yet"
     },
     "detail": {
       "title": "Club details",
@@ -1455,6 +1677,39 @@
       "approve": "Approve only when status is Pending, Submitted or Rejected",
       "reject": "Reject only when status is Pending, Submitted or Approved",
       "withdraw": "Already withdrawn"
+    },
+    "addAthlete": {
+      "button": "Add athlete",
+      "title": "Add athlete to event",
+      "successTitle": "Athlete registered",
+      "successBody": "{name} from {club} has been registered.",
+      "errorTitle": "Couldn't register",
+      "errorBody": "Something went wrong while registering. Please try again.",
+      "addSameClub": "Add another from {club}",
+      "addAnotherClub": "Add from another club",
+      "done": "Done",
+      "tryAgain": "Try again",
+      "stepClub": "Club",
+      "stepAthlete": "Athlete",
+      "stepCategory": "Category",
+      "searchClubs": "Search clubs…",
+      "noClubs": "No clubs found",
+      "changeClub": "Change club",
+      "searchAthletes": "Search athletes…",
+      "noAthletes": "No athletes found",
+      "registeredBadge": "Registered",
+      "changeAthlete": "Change athlete",
+      "notesOptional": "Notes (optional)",
+      "register": "Register",
+      "errors": {
+        "REGISTRATION_CLOSED": "Registration is closed for this event.",
+        "REGISTRATION_ALREADY_EXISTS": "This athlete is already registered for this event.",
+        "REGISTRATION_LOCKED": "Registrations are locked for this event.",
+        "INVALID_CATEGORY_FOR_EVENT": "That category isn't available for this event.",
+        "ATHLETE_OUT_OF_AGE_GROUP": "The athlete's age doesn't match this category.",
+        "ATHLETE_SEX_MISMATCH_FOR_CATEGORY": "The athlete's sex doesn't match this category.",
+        "EVENT_READ_ONLY": "This event is read-only and can't be changed."
+      }
     }
   },
   "weighin": {
@@ -1762,7 +2017,19 @@
     "regenerateDialogDescription": "This is a critical action and will change existing brackets.",
     "regenerateDialogWarning": "Regeneration can alter athlete paths and existing bracket structure. Action is audited.",
     "regenerateReasonPlaceholder": "Reason is required for regeneration.",
-    "regenerateConfirmLabel": "Type REGENERATE to confirm"
+    "regenerateConfirmLabel": "Type REGENERATE to confirm",
+    "publicToggleLabel": "Public weigh-in results",
+    "publicToggleOn": "Visible on the public site",
+    "publicToggleOff": "Hidden from the public site",
+    "publicToggleOnToast": "Weigh-in results are now public",
+    "publicToggleOffToast": "Weigh-in results are now hidden",
+    "onlyWithPassed": "Only categories with passed athletes",
+    "passedCount": "{count, plural, one {# passed} other {# passed}}",
+    "passedCountShort": "{count, plural, one {# passed} other {# passed}}",
+    "columnsDocument": "Document ID",
+    "columnsWeighInWeight": "Weigh-in weight",
+    "actionMoveUp": "Move up",
+    "emptyPassedAthletes": "No athletes have passed weigh-in in this category yet."
   },
   "brackets": {
     "title": "Bracket Control",
@@ -1961,7 +2228,20 @@
     "regenerateConfirmToken": "REGENERATE",
     "regenerateConfirmLabel": "Type {token} to confirm",
     "regenerateConfirmPlaceholder": "{token}",
-    "valueUnavailable": "—"
+    "valueUnavailable": "—",
+    "generateDialogTitle": "Generate brackets",
+    "generateDialogDescription": "Create the fights for every eligible category from the weighed-in athletes.",
+    "generateDialogSummaryCategories": "{count, plural, one {# category ready to draw} other {# categories ready to draw}}",
+    "generateSameClubLabel": "Separate same-club athletes",
+    "generateSameClubHint": "Avoid pairing athletes from the same club in the early rounds when possible.",
+    "actionGenerate": "Generate",
+    "actionGenerating": "Generating…",
+    "generateSuccess": "Brackets generated",
+    "editEnter": "Edit bracket",
+    "editExit": "Done editing",
+    "editSaving": "Saving…",
+    "editDragHint": "Drag athletes to swap their positions.",
+    "viewerEmptyPlaceholder": "Select a category to view its bracket."
   },
   "schedule": {
     "title": "Schedule",
@@ -1994,7 +2274,9 @@
     "emptySession": "No fights assigned — drag fights here or regenerate",
     "fightReady": "Ready",
     "fightWaiting": "Waiting",
-    "errorGeneric": "Could not complete the action."
+    "errorGeneric": "Could not complete the action.",
+    "printSchedule": "Print schedule",
+    "printPopupBlocked": "Couldn't open the print window — allow pop-ups and try again."
   },
   "live": {
     "title": "Live",
@@ -2064,6 +2346,19 @@
     "completedHistory": "Completed fights",
     "noUpcoming": "No upcoming fights.",
     "noCompleted": "No completed fights yet.",
+    "sessionsHeading": "Fights by session",
+    "sessionActive": "In progress",
+    "sessionUpcoming": "Upcoming",
+    "sessionDone": "Completed",
+    "sessionUnassigned": "Unassigned",
+    "sessionProgress": "{done}/{total} done",
+    "sessionWrapUp": "Only {count} fights left — prepare the next session",
+    "sessionGateEyebrow": "Session complete",
+    "sessionGateDesc": "The previous session has finished. Start the next session when the mat is ready.",
+    "sessionGateFirstUp": "First up",
+    "startNextSession": "Start next session",
+    "liveRoundRunning": "Round {round} in progress",
+    "inProgressHeading": "In progress",
     "completionState": {
       "NOT_STARTED": "Not started",
       "IN_PROGRESS": "In progress",
@@ -2123,6 +2418,21 @@
       }
     }
   },
+  "signatures": {
+    "title": "Judge signatures",
+    "subtitle": "Head-judge signature blocks shown at the bottom of every results protocol. Create one, then choose it when exporting results.",
+    "addTitle": "New signature template",
+    "nameEn": "Judge full name (English)",
+    "nameKa": "Judge full name (Georgian)",
+    "signatureLabel": "Signature image",
+    "signatureHint": "PNG/JPG. The image is downscaled automatically before saving.",
+    "chooseImage": "Choose image",
+    "noImage": "No image selected",
+    "save": "Save template",
+    "empty": "No signature templates yet",
+    "deleteConfirm": "Delete this signature template?",
+    "uploadFailed": "Could not read that image"
+  },
   "results": {
     "title": "Results",
     "placements": "Placements",
@@ -2131,7 +2441,19 @@
     "completedCategories": "Completed categories",
     "needsReviewCategories": "Needs review categories",
     "medalTable": "Medal table",
-    "export": "Export",
+    "export": "Export PDFs",
+    "exportHint": "PDFs are generated live from the current event data.",
+    "exportLanguage": "Language",
+    "export_signature": "Head judge (results)",
+    "export_signature_manage": "Manage",
+    "export_signature_create": "Create a signature template first",
+    "export_signature_required": "Select a head-judge signature first",
+    "export_results": "Results protocols",
+    "export_results_hint": "Bracket + placements per category",
+    "export_schedule": "Schedule",
+    "export_schedule_hint": "Running order of all bouts",
+    "export_weighin": "Weigh-in form",
+    "export_weighin_hint": "Weigh-in sheet per category",
     "unknownClub": "Independent",
     "emptyTitle": "No results yet",
     "emptyDescription": "Results will appear after fights are confirmed.",

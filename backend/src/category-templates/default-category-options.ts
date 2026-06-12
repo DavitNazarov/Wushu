@@ -2,7 +2,7 @@ import type { AthleteSex } from '@prisma/client';
 
 import { validateCategoryTemplateStructure } from './category-template-structure.validator';
 
-export type DefaultCategoryOptionSeed = {
+type DefaultCategoryOptionSeed = {
   code: string;
   name: string;
   minWeightKgExcl: number | null;

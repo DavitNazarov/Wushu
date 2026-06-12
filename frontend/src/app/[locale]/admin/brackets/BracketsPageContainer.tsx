@@ -16,7 +16,7 @@ import { BracketCategoryList } from '@/features/brackets/components/BracketCateg
 import { BracketDetailsPanel } from '@/features/brackets/components/BracketDetailsPanel';
 import { BracketPublishDialog } from '@/features/brackets/components/BracketPublishDialog';
 import { BracketRegenerateDialog } from '@/features/brackets/components/BracketRegenerateDialog';
-import { BracketsAuditList } from '@/features/brackets/components/BracketsAuditList';
+import { BracketGenerateDialog } from '@/features/brackets/components/BracketGenerateDialog';
 import { BracketsHeaderSummary } from '@/features/brackets/components/BracketsHeaderSummary';
 import {
   filterAndSortBracketCategories,
@@ -27,6 +27,7 @@ import { useBracketsOverview } from './useBracketsOverview';
 import { useBracketCategoryDetails } from './useBracketCategoryDetails';
 import {
   useGenerateBracketExport,
+  useGenerateBrackets,
   useRegenerateBrackets,
   useSetEventPublishState,
 } from './useBracketActions';
@@ -46,23 +47,26 @@ export function BracketsPageContainer({ eventId }: Props) {
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [filter, setFilter] = useState<BracketCategoryFilter>('ALL');
   const [sort, setSort] = useState<BracketCategorySort>('CATEGORY');
-  const [onlyWithAthletes, setOnlyWithAthletes] = useState(false);
   const [publishDialogTarget, setPublishDialogTarget] = useState<boolean | null>(null);
+  const [generateOpen, setGenerateOpen] = useState(false);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<'categories' | 'selected'>('categories');
 
-  const { events, setSelectedEventId } = useAdminEventRoute({ eventId, page: 'brackets' });
+  const { events } = useAdminEventRoute({ eventId, page: 'brackets' });
 
   const overviewQuery = useBracketsOverview(eventId);
 
-  const filteredCategories = useMemo(() => {
-    const sorted = filterAndSortBracketCategories({
-      categories: overviewQuery.data?.categories ?? [],
-      filter,
-      sort,
-    });
-    return onlyWithAthletes ? sorted.filter((c) => c.athleteCount > 0) : sorted;
-  }, [overviewQuery.data?.categories, filter, sort, onlyWithAthletes]);
+  // The server already returns only populated categories — no client-side
+  // "has athletes" filtering needed here.
+  const filteredCategories = useMemo(
+    () =>
+      filterAndSortBracketCategories({
+        categories: overviewQuery.data?.categories ?? [],
+        filter,
+        sort,
+      }),
+    [overviewQuery.data?.categories, filter, sort],
+  );
 
   const resolvedSelectedCategoryId = useMemo(() => {
     if (!filteredCategories.length) return '';
@@ -80,6 +84,7 @@ export function BracketsPageContainer({ eventId }: Props) {
   const publishMutation = useSetEventPublishState();
   const exportMutation = useGenerateBracketExport();
   const regenerateMutation = useRegenerateBrackets();
+  const generateMutation = useGenerateBrackets();
 
   function handleError(error: unknown) {
     const message =
@@ -138,6 +143,22 @@ export function BracketsPageContainer({ eventId }: Props) {
     );
   }
 
+  function handleGenerate(input: { sameClubSeparation: boolean }) {
+    if (!eventId) return;
+
+    generateMutation.mutate(
+      { eventId, sameClubSeparation: input.sameClubSeparation },
+      {
+        onSuccess: () => {
+          setGenerateOpen(false);
+          refreshBracketsData();
+          toast(t('generateSuccess'));
+        },
+        onError: handleError,
+      },
+    );
+  }
+
   function handleRegenerate(input: { reason: string }) {
     if (!eventId) return;
 
@@ -185,14 +206,15 @@ export function BracketsPageContainer({ eventId }: Props) {
         <>
           <BracketsHeaderSummary
             overview={overviewQuery.data}
+            generatePending={generateMutation.isPending}
             publishPending={publishMutation.isPending}
             regeneratePending={regenerateMutation.isPending}
             exportPending={exportMutation.isPending}
+            onGenerate={() => setGenerateOpen(true)}
             onPublish={() => setPublishDialogTarget(true)}
             onUnpublish={() => setPublishDialogTarget(false)}
             onRegenerate={() => setRegenerateOpen(true)}
             onExport={handleExport}
-            onRefresh={refreshBracketsData}
             t={t}
           />
 
@@ -201,18 +223,16 @@ export function BracketsPageContainer({ eventId }: Props) {
           <div className="grid min-w-0 gap-4 xl:h-[calc(100vh-var(--topbar-height)-18rem)] xl:grid-cols-[380px_1fr] xl:overflow-hidden">
             <div
               className={`min-w-0 space-y-3 xl:h-full xl:overflow-y-auto ${
-                mobileTab === 'selected' ? 'hidden md:block' : ''
+                mobileTab === 'selected' ? 'hidden xl:block' : ''
               }`}
             >
               <BracketCategoryFilters
                 filter={filter}
                 sort={sort}
-                onlyWithAthletes={onlyWithAthletes}
                 totalCount={overviewQuery.data?.categories.length ?? 0}
                 shownCount={filteredCategories.length}
                 onFilter={setFilter}
                 onSort={setSort}
-                onOnlyWithAthletesChange={setOnlyWithAthletes}
                 t={t}
               />
               <BracketCategoryList
@@ -228,10 +248,10 @@ export function BracketsPageContainer({ eventId }: Props) {
 
             <div
               className={`min-w-0 space-y-3 xl:h-full xl:overflow-y-auto ${
-                mobileTab === 'categories' ? 'hidden md:block' : ''
+                mobileTab === 'categories' ? 'hidden xl:block' : ''
               }`}
             >
-              <div className="md:hidden">
+              <div className="xl:hidden">
                 <button
                   type="button"
                   onClick={() => setMobileTab('categories')}
@@ -258,10 +278,18 @@ export function BracketsPageContainer({ eventId }: Props) {
               </div>
             </div>
           </div>
-
-          <BracketsAuditList entries={overviewQuery.data.audit.recent} t={t} />
         </>
       )}
+
+      <BracketGenerateDialog
+        open={generateOpen}
+        overview={overviewQuery.data ?? null}
+        pending={generateMutation.isPending}
+        onClose={() => setGenerateOpen(false)}
+        onConfirm={handleGenerate}
+        t={t}
+        tCommon={(key) => tCommon(key as Parameters<typeof tCommon>[0])}
+      />
 
       <BracketPublishDialog
         open={publishDialogTarget != null}

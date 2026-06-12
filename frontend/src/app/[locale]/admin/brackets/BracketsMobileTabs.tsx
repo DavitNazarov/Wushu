@@ -8,7 +8,7 @@ type Props = {
 
 export function BracketsMobileTabs({ activeTab, onChange, t }: Props) {
   return (
-    <div className="md:hidden">
+    <div className="xl:hidden">
       <div className="grid grid-cols-2 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
         <button
           type="button"

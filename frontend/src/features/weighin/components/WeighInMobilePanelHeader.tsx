@@ -1,7 +1,6 @@
 'use client';
 
-import { Button } from '@/components/ui/primitives/button';
-import { Card } from '@/components/ui/primitives/card';
+import { ArrowLeft } from 'lucide-react';
 
 type Props = {
   backLabel: string;
@@ -10,6 +9,10 @@ type Props = {
   onBack: () => void;
 };
 
+/**
+ * Slim sticky sub-bar shown only on mobile, pinned directly under the app top bar.
+ * Back affordance + queue eyebrow + athlete name — no floating card, no leading gap.
+ */
 export function WeighInMobilePanelHeader({
   backLabel,
   queueLabel,
@@ -17,15 +20,25 @@ export function WeighInMobilePanelHeader({
   onBack,
 }: Props) {
   return (
-    <div className="sticky top-[var(--topbar-height)] z-30 -mx-4 bg-[var(--color-bg)] px-4 py-3 md:hidden">
-      <Card className="flex min-h-[44px] items-center justify-between gap-3 px-3 py-2 shadow-sm">
-        <Button variant="secondary" className="min-h-[44px] shrink-0 px-3" onClick={onBack}>
-          {`\u2190 ${backLabel} ${queueLabel}`}
-        </Button>
-        <p className="min-w-0 flex-1 truncate text-right text-[13px] font-semibold text-[var(--color-text)]">
+    <div
+      className="sticky top-[var(--topbar-height)] z-30 -mx-4 flex items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-2.5 md:hidden"
+    >
+      <button
+        type="button"
+        onClick={onBack}
+        aria-label={backLabel}
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] transition active:scale-95 hover:bg-[var(--color-surface-alt)]"
+      >
+        <ArrowLeft className="h-5 w-5" strokeWidth={2} />
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+          {queueLabel}
+        </p>
+        <p className="truncate text-[15px] font-semibold leading-tight text-[var(--color-text)]">
           {selectedAthleteName}
         </p>
-      </Card>
+      </div>
     </div>
   );
 }

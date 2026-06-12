@@ -9,6 +9,7 @@ import {
 } from './draw.utils';
 import { isEventReadOnly } from '../events/lifecycle-rules';
 import { DrawReadinessService } from './draw.readiness.service';
+import { computeCategoryReviewSignature } from './draw.readiness.helpers';
 import { resolveCompetitionFormat } from './competition-format';
 
 // Build a human-readable + globally-unique category code for a bracket.
@@ -288,17 +289,18 @@ export class DrawService {
             );
           }
 
+          const competitionFormat = resolveCompetitionFormat({
+            eligibleAthletesCount: athleteIds.length,
+          });
+
           const bracket = await tx.bracket.create({
             data: {
               organisationId: input.organisationId,
               eventId: input.eventId,
               categoryCode,
               seed,
+              format: competitionFormat,
             },
-          });
-
-          const competitionFormat = resolveCompetitionFormat({
-            eligibleAthletesCount: athleteIds.length,
           });
 
           const bouts =
@@ -482,6 +484,109 @@ export class DrawService {
     return { ok: true };
   }
 
+  // Mark a flagged (SOLO / NEEDS_REVIEW) category as reviewed. Stores who + when
+  // plus a signature of the current eligible pool; the readiness compute then
+  // treats the category as READY until that pool changes — at which point the
+  // signature mismatch auto-expires the sign-off. Idempotent: re-reviewing just
+  // refreshes the stamp against the latest pool.
+  async reviewCategory(input: {
+    organisationId: string;
+    eventId: string;
+    eventWeightCategoryId: string;
+    actorUserId: string;
+    reason?: string | null;
+  }) {
+    const event = await this.prisma.event.findFirst({
+      where: { id: input.eventId, organisationId: input.organisationId },
+      select: { id: true, lifecycle: true },
+    });
+    if (!event) throw new Error('EVENT_NOT_FOUND');
+    if (isEventReadOnly(event.lifecycle)) throw new Error('EVENT_READ_ONLY');
+
+    // Reuse the readiness compute so the signature is built from exactly the
+    // same eligible-pool projection the UI (and the validity check) sees.
+    const computed = await this.readiness.computeOverview({
+      organisationId: input.organisationId,
+      eventId: input.eventId,
+    });
+    const category = computed.categoriesById.get(input.eventWeightCategoryId);
+    if (!category) throw new Error('CATEGORY_NOT_FOUND');
+
+    await this.prisma.eventWeightCategory.update({
+      where: { id: input.eventWeightCategoryId },
+      data: {
+        drawReviewedAt: new Date(),
+        drawReviewedById: input.actorUserId,
+        drawReviewSignature: computeCategoryReviewSignature(
+          category.eligibleAthletes,
+        ),
+      },
+    });
+
+    await this.audit.write({
+      organisationId: input.organisationId,
+      eventId: input.eventId,
+      actorUserId: input.actorUserId,
+      action: 'DRAW_CATEGORY_REVIEWED',
+      entityType: 'eventWeightCategory',
+      entityId: input.eventWeightCategoryId,
+      after: {
+        categoryName: category.categoryName,
+        ageGroup: category.ageGroupName,
+      } as unknown as Prisma.JsonValue,
+      reason: input.reason ?? null,
+      override: false,
+    });
+
+    return { ok: true };
+  }
+
+  // Clear a category's review sign-off so it shows its raw SOLO / NEEDS_REVIEW
+  // status again.
+  async unreviewCategory(input: {
+    organisationId: string;
+    eventId: string;
+    eventWeightCategoryId: string;
+    actorUserId: string;
+  }) {
+    const event = await this.prisma.event.findFirst({
+      where: { id: input.eventId, organisationId: input.organisationId },
+      select: { id: true },
+    });
+    if (!event) throw new Error('EVENT_NOT_FOUND');
+
+    const category = await this.prisma.eventWeightCategory.findFirst({
+      where: {
+        id: input.eventWeightCategoryId,
+        eventAgeGroup: { eventId: input.eventId },
+      },
+      select: { id: true },
+    });
+    if (!category) throw new Error('CATEGORY_NOT_FOUND');
+
+    await this.prisma.eventWeightCategory.update({
+      where: { id: input.eventWeightCategoryId },
+      data: {
+        drawReviewedAt: null,
+        drawReviewedById: null,
+        drawReviewSignature: null,
+      },
+    });
+
+    await this.audit.write({
+      organisationId: input.organisationId,
+      eventId: input.eventId,
+      actorUserId: input.actorUserId,
+      action: 'DRAW_CATEGORY_REVIEW_CLEARED',
+      entityType: 'eventWeightCategory',
+      entityId: input.eventWeightCategoryId,
+      reason: null,
+      override: false,
+    });
+
+    return { ok: true };
+  }
+
   // List every bracket in an event with its fight tree inlined.
   // Ordered by categoryCode so the UI gets a stable, grouped list.
   async listBrackets(organisationId: string, eventId: string) {
@@ -539,7 +644,11 @@ export class DrawService {
   //
   // Skipped when the empty slot is fed by an upstream fight (nextFightSlot
   // pointing here) — that's an unresolved dependency, NOT a real BYE.
-  private async autoConfirmByes(
+  //
+  // Public so BracketsService can re-run it inside its swap transaction: a swap
+  // that moves a byed athlete resets the bye to QUEUED, and this re-confirms +
+  // re-propagates the new occupant. Idempotent for untouched byes.
+  async autoConfirmByes(
     tx: Prisma.TransactionClient,
     bracketId: string,
   ): Promise<void> {

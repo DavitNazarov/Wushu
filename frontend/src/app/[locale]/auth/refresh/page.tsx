@@ -35,16 +35,12 @@ export default function AuthRefreshPage() {
 
     async function doRefresh() {
       try {
-        // [LOG] temporary observability
-        console.debug('[auth/refresh] POSTing to /api/auth/refresh');
-
         const res = await fetch('/api/auth/refresh', {
           method: 'POST',
           credentials: 'include',
         });
 
         if (res.ok) {
-          console.debug('[auth/refresh] refresh ok — navigating to', nextPath);
           setStatus('redirecting');
           router.replace(nextPath);
           return;

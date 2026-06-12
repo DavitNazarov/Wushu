@@ -55,6 +55,7 @@ export async function replaceTemplateStructure(
         categoryTemplateId: templateId,
         code: ageGroup.code,
         name: ageGroup.name,
+        nameKa: ageGroup.nameKa,
         sex: ageGroup.sex,
         minAge: ageGroup.minAge,
         maxAge: ageGroup.maxAge,

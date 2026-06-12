@@ -18,7 +18,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
-export type SidebarNavItem = {
+type SidebarNavItem = {
   key: string;
   href: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;

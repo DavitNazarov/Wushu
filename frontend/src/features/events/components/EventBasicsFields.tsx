@@ -10,6 +10,8 @@ type Props = {
   timezone: string;
   slugIsValid: boolean;
   issuesByPath: Map<string, string[]>;
+  /** 1 = single column (default), 2 = pair related fields side by side. */
+  columns?: 1 | 2;
   onNameChange: (value: string) => void;
   onNameKaChange: (value: string) => void;
   onSlugChange: (value: string) => void;
@@ -25,6 +27,7 @@ export function EventBasicsFields({
   timezone,
   slugIsValid,
   issuesByPath,
+  columns = 1,
   onNameChange,
   onNameKaChange,
   onSlugChange,
@@ -36,26 +39,29 @@ export function EventBasicsFields({
     'h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
   const labelClassName =
     'mb-1 block text-[12px] font-medium text-[var(--color-text-muted)]';
+  const pairClassName = columns === 2 ? 'grid items-start gap-4 sm:grid-cols-2' : 'space-y-4';
 
   return (
     <div className="space-y-4">
-      <div>
-        <label className={labelClassName}>{tEvents('form.nameLabel')}</label>
-        <input
-          className={inputClassName}
-          value={name}
-          onChange={(event) => onNameChange(event.target.value)}
-        />
-      </div>
+      <div className={pairClassName}>
+        <div>
+          <label className={labelClassName}>{tEvents('form.nameLabel')}</label>
+          <input
+            className={inputClassName}
+            value={name}
+            onChange={(event) => onNameChange(event.target.value)}
+          />
+        </div>
 
-      <div>
-        <label className={labelClassName}>{tEvents('form.nameKaLabel')}</label>
-        <input
-          className={inputClassName}
-          value={nameKa}
-          onChange={(event) => onNameKaChange(event.target.value)}
-          placeholder={tEvents('form.nameKaPlaceholder')}
-        />
+        <div>
+          <label className={labelClassName}>{tEvents('form.nameKaLabel')}</label>
+          <input
+            className={inputClassName}
+            value={nameKa}
+            onChange={(event) => onNameKaChange(event.target.value)}
+            placeholder={tEvents('form.nameKaPlaceholder')}
+          />
+        </div>
       </div>
 
       <div>
@@ -83,7 +89,7 @@ export function EventBasicsFields({
         ))}
       </div>
 
-      <div className="grid items-end gap-3 sm:grid-cols-2">
+      <div className="grid items-end gap-4 sm:grid-cols-2">
         <div>
           <label className={labelClassName}>{tEvents('form.locationLabel')}</label>
           <input

@@ -1,9 +1,8 @@
 import type { FightSlot, TimerPhaseEnum, TimerStateEnum } from '@prisma/client';
 
-export const DEFAULT_ROUND_DURATION_SECONDS = 120;
+const DEFAULT_ROUND_DURATION_SECONDS = 120;
 export const DEFAULT_REST_DURATION_SECONDS = 60;
-export const REQUIRED_ROUND_WINS = 2;
-export const MAX_FIGHT_ROUNDS = 3;
+const REQUIRED_ROUND_WINS = 2;
 
 export type FightTimerSnapshot = {
   state: TimerStateEnum;
@@ -94,7 +93,7 @@ export function getRoundWinnerField(
   return 'round3Winner';
 }
 
-export function getRoundWinners(
+function getRoundWinners(
   timer: FightTimerSnapshot,
 ): Array<FightSlot | null> {
   return [timer.round1Winner, timer.round2Winner, timer.round3Winner];

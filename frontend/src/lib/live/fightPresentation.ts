@@ -58,16 +58,3 @@ export function getRoundSlotState(input: {
 
   return 'PENDING';
 }
-
-export function isFightFinished(input: {
-  timerState: TimerState | null;
-  winnerAthleteId?: string | null;
-  status?: string | null;
-}): boolean {
-  return (
-    !!input.winnerAthleteId ||
-    input.timerState?.phase === 'FINISHED' ||
-    input.status === 'COMPLETE' ||
-    input.status === 'CONFIRMED'
-  );
-}

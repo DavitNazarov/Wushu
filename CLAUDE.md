@@ -17,9 +17,9 @@ Tournament management system for the Georgian Wushu Federation. Handles athlete 
 └── server.js          Production entry point
 ```
 
-**Production deployment:** `server.js` runs a **single combined Node/Express process** — Next.js serves everything, and `/api/*` is mounted into the NestJS app via `ExpressAdapter` (`globalPrefix: false`, Nest's `createApp` from `backend/dist/src/main`). Frontend + backend ship as **one server on one port** (default 4000). **Prod target is a self-hosted Hetzner VPS** running `deploy/hetzner/docker-compose.prod.yml`: `nginx` (TLS + reverse proxy) → `app` (combined process) → `postgres 16`, plus a one-shot `migrate` job (`npm run db:deploy` = repair-schema + lock-free migrate-deploy). **Node 22 LTS** (`.nvmrc`, baked into the Dockerfile). Health check `/api/health`. Full runbook in `docs/DEPLOYMENT.md`. **Single instance only** — schedulers, socket.io rooms, the rate limiter, and exports are all in-process (scaling out needs a Redis adapter + distributed cron locks first).
+**Production deployment:** `server.js` runs a **single combined Node/Express process** — Next.js serves everything, and `/api/*` is mounted into the NestJS app via `ExpressAdapter` (`globalPrefix: false`, Nest's `createApp` from `backend/dist/src/main`). Frontend + backend ship as **one server on one port** (default 4000). **Prod target is a self-hosted Hetzner VPS** running `deploy/hetzner/docker-compose.prod.yml`: `nginx` (TLS + reverse proxy) → `app` (combined process) → `postgres 16`, plus a one-shot `migrate` job (`npm run db:deploy` = repair-schema + lock-free migrate-deploy). **Node 22 LTS** (`.nvmrc`, baked into the Dockerfile). Health checks: `/api/health` (liveness, constant) + `/api/ready` (readiness, `SELECT 1`, 503 when DB is down). Full runbook in `docs/DEPLOYMENT.md`. **Single instance only** — schedulers, socket.io rooms, the rate limiter, and exports are all in-process (scaling out needs a Redis adapter + distributed cron locks first).
 
-**External services:** PostgreSQL is the only **required** external dependency. The frontend also has **optional Sentry** error/performance monitoring (`frontend/src/instrumentation*.ts` + `sentry.*.config.ts`, wired through `next.config.ts`); it is gated on `NEXT_PUBLIC_SENTRY_DSN` and is a complete no-op when that var is unset, so it stays out of the way in dev/self-host. Beyond that there is **no** email provider, payment processor, cloud storage, or Redis/queue — contact forms write to the `ContactSubmission` table, and exports write JSON to local `/tmp/wushu-exports`. Background work is three in-process schedulers (`@nestjs/schedule`): hourly event stage auto-advance, daily refresh-token cleanup (03:00), and a 1s fight-timer automation interval.
+**External services:** PostgreSQL is the only **required** external dependency. The frontend also has **optional Sentry** error/performance monitoring (`frontend/src/instrumentation*.ts` + `sentry.*.config.ts`, wired through `next.config.ts`); it is gated on `NEXT_PUBLIC_SENTRY_DSN` and is a complete no-op when that var is unset, so it stays out of the way in dev/self-host. Beyond that there is **no** email provider, payment processor, cloud storage, or Redis/queue — contact forms write to the `ContactSubmission` table, and exports write JSON to local `/tmp/wushu-exports`. PDF exports (results protocols, schedule, weigh-in lists) are rendered server-side with **Puppeteer** — the prod Docker image installs system Chromium + Noto fonts (Georgian glyphs) for this. Background work is four in-process schedulers (`@nestjs/schedule`): hourly event stage auto-advance (`0 5 * * * *`), daily refresh-token cleanup (03:00), daily export TTL sweep (03:30 — prunes `/tmp/wushu-exports` + stale `DocumentLink` rows after 72h), and a 1s fight-timer automation interval. Optional backend **Sentry** error aggregation is gated on `SENTRY_DSN` (no-op when unset); nightly DB backups run via `deploy/hetzner/backup.sh` (host cron, see DEPLOYMENT.md §8).
 
 ---
 
@@ -57,11 +57,16 @@ cp backend/.env.example backend/.env
 cp frontend/.env.local.example frontend/.env.local
 ```
 
-Key vars:
-- `DATABASE_URL` — PostgreSQL connection string  
-- `JWT_SECRET` — ≥32-char random string  
-- `FRONTEND_URL` — CORS origin (default `http://localhost:3000`)  
-- `NEXT_PUBLIC_API_URL` — Backend URL (default `http://localhost:4000`)
+Key vars (backend — validated at boot by `src/config/validate-env.ts`, fails fast in prod):
+- `DATABASE_URL` — PostgreSQL connection string (pooled in prod)  
+- `DIRECT_URL` — direct (non-pooled) connection for migrations/DDL — **never route DDL through a pooler** (historical schema-drift root cause)  
+- `JWT_SECRET` — ≥32-char random string (boot rejects shorter)  
+- `FRONTEND_URL` / `CORS_ALLOWED_ORIGINS` — CORS allow-list (default `http://localhost:3000`)  
+- `PUBLIC_ORG_SLUG` — pins the org served on public pages (required in prod)  
+- `BOOTSTRAP_SECRET` — guards `POST /api/auth/bootstrap-admin`  
+- `SENTRY_DSN` — optional backend error aggregation (SDK dormant when unset)
+
+Frontend vars: `API_URL` (server-side rewrite target for `/api/*`, default `http://localhost:4000`), optional `NEXT_PUBLIC_SOCKET_URL` (socket origin override; defaults to same-origin), optional `NEXT_PUBLIC_SENTRY_DSN` + `SENTRY_AUTH_TOKEN`. There is **no** `NEXT_PUBLIC_API_URL` — client code calls same-origin `/api/...` paths.
 
 ---
 
@@ -104,26 +109,35 @@ Key vars:
 Feature-per-folder. Every module has `*.module.ts`, `*.controller.ts`, `*.service.ts`, and often `*.schemas.ts` (Zod) and `*.types.ts`.
 
 Key modules:
-- **auth** — JWT login/refresh/logout, `/api/auth/me`, capabilities, guards
-- **users** — Admin user management (create/update/DQ), role assignments
-- **athletes** — Athlete profiles, documentId uniqueness, bilingual names
-- **clubs** — Club management (name + nameKa)
-- **events** — Event lifecycle, registration windows, policies
-- **registrations** — Athlete-to-event registration workflow
-- **weighin** — Weight-in verification with status machine
-- **draw** — Bracket drawing algorithm
-- **fights** — Fight creation, scoring, win method
-- **schedule** — Session-based fight scheduling
+- **auth** — JWT login/refresh/logout, `/api/auth/me`, capabilities, guards, refresh-token cleanup cron
+- **users** — Admin user management (create/update/DQ), role assignments (`/api/admin/users`)
+- **athletes** — Athlete profiles, documentId uniqueness, bilingual names, merge
+- **clubs** — Club management (name + nameKa) + public club details
+- **geography** — Country → Region hierarchy (org-scoped; clubs/athletes/users link into it)
+- **events** — Event lifecycle, registration windows, policies, stage automation cron
+- **event-policies** — Policy option listings (weigh-in / bronze / rest / publish-timing)
+- **registrations** — Athlete-to-event registration workflow (+ bulk status ops)
+- **weighin** — Weight-in verification with status machine + preview/reconcile
+- **draw** — Readiness validation + bracket drawing (single-elim / round-robin), category review sign-off
+- **fights** — Live fight state machine, timers, round results, live boards; **socket.io gateway** (`fights.gateway.ts`)
+- **schedule** — Mats, sessions, auto-scheduling, fight ordering, rest-violation checks
 - **results** — Result compilation
-- **public** — Unauthenticated public endpoints
+- **exports** — JSON exports (`/tmp/wushu-exports`) + Puppeteer PDFs (results/schedule/weigh-in)
+- **signature-templates** — Head-judge signature blocks embedded in protocol PDFs
+- **content** — News posts (`/api/admin/news`)
+- **forms** — Public contact form → `ContactSubmission` + admin inbox
+- **integrity** — Data consistency check + lock
+- **public** — Unauthenticated public endpoints (two controllers, CDN `Cache-Control` tiers)
 - **category-templates** — Reusable rulesets
 
 ### Auth Pattern
 
 Protected endpoints use `@UseGuards(AuthGuard, CapabilityGuard)` + the `@RequireCapability('CODE')` decorator (defined in `auth/capability.decorator.ts`). `AuthGuard` reads the JWT from the `gw_auth` httpOnly cookie (or `Authorization: Bearer`) and **re-validates the user against the DB on every request** (rejects archived/disabled/DQ-suspended users) — it does not blindly trust the JWT.  
 Cookies: `gw_auth` (access, 15 min) + `gw_refresh` (refresh, 7 days), both httpOnly. Refresh tokens are DB-backed (SHA-256 hashed in `RefreshToken`) with **rotation + reuse/theft detection** (reusing a revoked token revokes all of that user's sessions).  
-`POST /api/auth/bootstrap-admin` — creates first admin (protected by `BOOTSTRAP_SECRET`; disabled in production when the secret is unset).  
-Refresh token rotation: `POST /api/auth/refresh`. `GET /api/auth/me` is soft-auth (returns null fields instead of throwing).
+`POST /api/auth/bootstrap-admin` — creates first admin (timing-safe `BOOTSTRAP_SECRET` check; **refused in every non-development environment** when the secret is unset, not just production).  
+Refresh token rotation: `POST /api/auth/refresh`. `GET /api/auth/me` is soft-auth (returns null fields instead of throwing) and skips both throttle buckets.  
+**Sockets**: the socket.io handshake mirrors `AuthGuard` (cookie or Bearer) **and requires `LIVE_RUN`**; open sockets are re-validated against the DB every 60s. There is no anonymous socket — public pages poll the cached `/api/public/*` endpoints instead (mat board every 30s with `no-store`; live/schedule feeds every 20s via `refetchInterval`). Public components gate `useRealtimeQuerySync` on the `LIVE_RUN` capability (`useCanUseLiveSocket`), so anonymous viewers never attempt a socket handshake (the old C1 rejected-handshake retry loop is gone). CSRF posture: same-origin deployment + `SameSite=lax` httpOnly cookies + CORS allow-list — there is **no** token-based CSRF defense.  
+Throttling: global default 120 req/min + short 10 req/10s; per-endpoint login 5/min, refresh 20/min, bootstrap 3/min (all tunable via `THROTTLE_*` env vars; public controllers skip the short bucket).
 
 Capability codes (`auth/capabilities.ts`): `EVENTS_MANAGE`, `RULESETS_MANAGE`, `ATHLETES_MANAGE`, `WEIGHIN_RUN`, `DRAW_RUN`, `SCHEDULE_MANAGE`, `LIVE_RUN`, `RESULTS_MANAGE`, `EXPORTS_MANAGE`, `CONTENT_MANAGE` (defined but unused). Role→capability defaults: admin = all; coach = `ATHLETES_MANAGE`; judge/timekeeper = `LIVE_RUN`; athlete = none. Effective capabilities = role defaults ∪ any `UserCapability` DB rows (note: no admin API currently writes `UserCapability` rows).
 
@@ -131,8 +145,10 @@ Capability codes (`auth/capabilities.ts`): `EVENTS_MANAGE`, `RULESETS_MANAGE`, `
 
 - Global prefix: `/api`
 - Request body validated with Zod via `ZodValidationPipe`
-- Errors returned as `{ message, code }` — `code` is a snake_case string (e.g. `DOCUMENT_ID_ALREADY_EXISTS`)
+- Errors returned as `{ message, code }` — `code` is a SCREAMING_SNAKE_CASE string (e.g. `DOCUMENT_ID_ALREADY_EXISTS`)
 - Body size limit: 100 KB
+- List endpoints are row-capped server-side (athletes 500, registrations 1000) with optional `limit`/`offset` query params
+- State-changing requests carrying an `Origin` header must match the CORS allow-list (`OriginCheckMiddleware`, CSRF defense-in-depth)
 
 ---
 
@@ -145,21 +161,27 @@ Capability codes (`auth/capabilities.ts`): `EVENTS_MANAGE`, `RULESETS_MANAGE`, `
 Main route groups:
 ```
 /[locale]/
-  admin/               Admin dashboard + sub-pages
-    events/[eventId]/  Event-scoped sub-pages (overview, registrations, weighin, brackets, schedule, results, live)
-    athletes/          Athlete management
-    clubs/             Club management
-    users/             User management
-    category-templates/
-    weighin/           Weight-in UI
-    registrations/     Registration management
-  coach/               Coach portal
-    athletes/          Coach's athletes
-    events/            Event listing + registration
-  athletes/[athleteId] Public athlete profile
-  clubs/[clubId]       Public club profile
-  events/              Public event listing + detail
-  mat/[slug]/[mat]     TV/scoreboard display
+  admin/                    Admin dashboard + sub-pages
+    events/[eventId]/       Event-scoped sub-pages: (overview at index), registrations,
+                            weigh-in, weighin-results, brackets, schedule, results, live
+    athletes/  clubs/  users/  countries/        Registry management
+    category-templates/  category-options/  rulesets/
+    weighin/  weighin-results/  registrations/  brackets/  schedule/  live/  results/
+    news/  content/  inbox/  integrity/  signatures/  settings/
+  coach/                    Coach portal (own club only)
+    athletes/               Coach's athletes
+    events/                 Event listing + registration
+    events/[eventSlug]/     registrations, brackets, schedule, live (read views)
+    me/                     Coach profile
+  athlete/                  Athlete portal (placeholder, under development)
+  athletes/[athleteId]      Public athlete profile
+  clubs/  clubs/[clubId]    Public club listing + profile
+  countries/ + [countryId]  Public geography pages
+  events/  events/[slug]/   Public event detail + brackets, schedule, live, results
+  news/  rules/  contact/  about/   Public content
+  mat/[eventSlug]/[matName] Public TV/scoreboard (polls /api/public/mat, no-store)
+  display/[eventId]         Admin full-screen TV display (authed API + socket)
+  login/  auth/refresh/  no-access/  dashboard/
 ```
 
 ### Data Flow
@@ -222,7 +244,8 @@ All name-bearing entities carry optional KA fields:
 |---|---|
 | Athlete | `firstName`/`lastName` + `firstNameKa`/`lastNameKa` |
 | Event | `name` + `nameKa` |
-| Club | `name` + `nameKa` (shown in forms only when `country === 'GE'`) |
+| Club | `name` + `nameKa` (KA field shown in forms only when the club's `Country.code === 'GE'`) |
+| Country / Region | `name` + `nameKa` |
 
 ### Schedule / Live Display Names
 
@@ -256,7 +279,7 @@ Messages live in `frontend/src/messages/en.json` and `ka.json`.
 REG_OPEN → LOCKED → WEIGHIN → WEIGH_IN_COMPLETED → DRAWN → PUBLISHED → LIVE → COMPLETED
 ```
 
-The lifecycle controls what actions are allowed. There is **no backend `EventPhaseGate` guard** — enforcement is via pure helper functions in `backend/src/events/lifecycle-rules.ts` (`isRegistrationMutableLifecycle`, `canRunDraw`, `canManageSchedule`, `canRunLiveCompetition`, `isWeighInStage`, `isEventReadOnly`) plus per-service assertion methods (`assertScheduleMutable`, `assertLiveStage`, `assertEventAllowsRegistrationChanges`, …). Manual transitions go through `EventOpsService.transitionLifecycle()` (forward/backward along the ordered chain; skips/reverts need `allowOverride` + `reason`). An hourly cron (`EventStageAutomationService`, `0 5 * * * *`) plus opportunistic checks on event reads auto-advance stages when date/weigh-in conditions are met. (`EventPhaseGate` does exist as a **frontend** component at `frontend/src/components/admin/EventPhaseGate.tsx`.)
+The lifecycle controls what actions are allowed. There is **no backend `EventPhaseGate` guard** — enforcement is via pure helper functions in `backend/src/events/lifecycle-rules.ts` (`isRegistrationMutableLifecycle`, `canManageSchedule`, `canRunLiveCompetition`, `isWeighInStage`, `isEventReadOnly`) plus per-service assertion methods (`assertScheduleMutable`, `assertLiveStage`, `assertEventAllowsRegistrationChanges`, …). The **draw** is *not* gated by a single lifecycle helper: `DrawService.executeDraw` enforces readiness via the `EVENT_NOT_LOCKED` / `WEIGHIN_NOT_COMPLETED_FOR_DRAW` critical codes and `isWeighInCompletedForDraw` (`draw/draw.readiness.helpers.ts`), which also permits overridden re-draws past `WEIGH_IN_COMPLETED`. Manual transitions go through `EventOpsService.transitionLifecycle()` (forward/backward along the ordered chain; skips/reverts need `allowOverride` + `reason`). An hourly cron (`EventStageAutomationService`, `0 5 * * * *`) plus opportunistic checks on event reads auto-advance stages when date/weigh-in conditions are met. (`EventPhaseGate` does exist as a **frontend** component at `frontend/src/components/admin/EventPhaseGate.tsx`.)
 
 ### Key Entities
 
@@ -264,22 +287,25 @@ The lifecycle controls what actions are allowed. There is **no backend `EventPha
 |---|---|
 | **Organisation** | Tenant — all data is org-scoped |
 | **User** | System user (admin, coach, judge, timekeeper). Coaches have `clubId` + optional `nationality` ("GE" or null) |
-| **Club** | Sports club with bilingual name (`name` EN + `nameKa` KA) |
-| **Athlete** | Competitor — `documentId` required + unique per org, bilingual names (`firstName`/`firstNameKa`, `lastName`/`lastNameKa`) |
-| **Event** | Competition — has lifecycle, registration windows, policies, bilingual name |
-| **Registration** | Athlete entry — status: PENDING → SUBMITTED → APPROVED/REJECTED/WITHDRAWN |
+| **Country / Region** | Geography hierarchy (Country → Region → Club); `Country.code` is ISO alpha-2 — `"GE"` drives Georgian-only UI behaviour |
+| **Club** | Sports club with bilingual name; belongs to a Region + Country |
+| **Athlete** | Competitor — `documentId` required + unique per org, bilingual names, `sex`, optional club/region/country links |
+| **Event** | Competition — has lifecycle, registration windows (`registrationOpensAt`/`ClosesAt`), policies, bilingual name, `weighInResultsPublic` toggle (public weights page) |
+| **Registration** | Athlete entry — status: PENDING → SUBMITTED → APPROVED/REJECTED/WITHDRAWN. Carries **two** category FKs: `registeredEventWeightCategoryId` (initial pick) vs `eventWeightCategoryId` (final, after weigh-in move-ups) |
 | **WeighInAttempt** | Weight verification attempt per registration |
-| **Bracket** | Per-category draw containing Fight records |
-| **Fight** | Head-to-head match with timer, scoring, win method |
+| **Bracket** | Per-category draw containing Fight records. `format` (DIRECT_FINAL ≤2 athletes / ROUND_ROBIN =3 / SINGLE_ELIMINATION 4+) is persisted at draw time and drives results placement logic — round-robin medals come from standings (`competition.logic.ts`), never from a "final fight" |
+| **Fight** | Head-to-head match with timer (`TimerState` 1:1), scoring, win method, winner propagation (`nextFightId`/`nextFightSlot`) |
 | **Mat** | Physical ring where fights are assigned |
 | **ScheduleSession** | Time-slot grouping of fights |
+| **ProtocolSignatureTemplate** | Reusable head-judge signature block for results-protocol PDFs |
 
 ### User Roles
 
 - **admin** — Full access
 - **coach** — Manages own club's athletes + registrations
-- **judge / timekeeper** — Fight operations (scoring, timer)
 - **athlete** — (future) self-service
+
+3 roles total. The `UserRole` enum also defines leftover `judge`/`timekeeper` values, but they are **unused** — the main judge/admin does scoring & timing from the admin pages. Don't model features around separate judge/timekeeper logins.
 
 ### Document IDs
 

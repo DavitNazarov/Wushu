@@ -44,6 +44,3 @@ export const EventCategorySelectionSchema = z
     });
   });
 
-export type EventCategorySelectionDto = z.infer<
-  typeof EventCategorySelectionSchema
->;

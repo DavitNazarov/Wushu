@@ -23,6 +23,9 @@ type CategorySummaryRow = {
   completedFights: number;
   completionState: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'NEEDS_REVIEW';
   needsReview: boolean;
+  // ROUND_ROBIN pools that finished in an unbreakable rank tie (1-1-1 cycle):
+  // medals were assigned deterministically but need a manual federation call.
+  tieUnresolved: boolean;
   issues: CompetitionValidationIssue[];
   placements: CategoryPlacementRow[];
   standings: RoundRobinStandingRow[] | null;
@@ -105,6 +108,7 @@ export class ResultsService {
               },
             },
           },
+          bracket: { select: { format: true } },
         },
         orderBy: [
           { eventWeightCategoryId: 'asc' },
@@ -201,9 +205,13 @@ export class ResultsService {
         }
 
         const uniqueAthleteCount = athleteById.size;
-        const format = resolveCompetitionFormat({
-          athleteCount: uniqueAthleteCount,
-        });
+        // The bracket stores the format the draw actually used; the count-based
+        // inference stays only as a fallback for pre-format legacy fights.
+        const format =
+          categoryFights[0]?.bracket?.format ??
+          resolveCompetitionFormat({
+            athleteCount: uniqueAthleteCount,
+          });
         const athleteRows = [...athleteById.entries()].map(
           ([athleteId, athleteName]) => ({
             athleteId,
@@ -270,7 +278,8 @@ export class ResultsService {
           totalFights: viewModel.totalFights,
           completedFights: viewModel.completedFights,
           completionState: viewModel.completionState,
-          needsReview: viewModel.needsReview,
+          needsReview: viewModel.needsReview || categoryResults.tieUnresolved,
+          tieUnresolved: categoryResults.tieUnresolved,
           issues: viewModel.issues,
           placements: categoryResults.placements,
           standings: categoryResults.standings,

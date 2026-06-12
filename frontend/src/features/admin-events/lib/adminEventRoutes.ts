@@ -2,7 +2,9 @@ export const ADMIN_EVENT_ROUTE_SEGMENTS = {
   overview: '',
   registrations: 'registrations',
   weighin: 'weigh-in',
-  draw: 'draw',
+  // Key stays `draw` internally (gate/matcher/nav all key on it); only the
+  // user-visible URL segment + labels became "weigh-in results".
+  draw: 'weighin-results',
   brackets: 'brackets',
   schedule: 'schedule',
   live: 'live',
@@ -11,7 +13,7 @@ export const ADMIN_EVENT_ROUTE_SEGMENTS = {
 
 export type AdminEventRoutePage = keyof typeof ADMIN_EVENT_ROUTE_SEGMENTS;
 
-export const ADMIN_EVENT_ROUTE_PAGES = Object.keys(
+const ADMIN_EVENT_ROUTE_PAGES = Object.keys(
   ADMIN_EVENT_ROUTE_SEGMENTS,
 ) as AdminEventRoutePage[];
 

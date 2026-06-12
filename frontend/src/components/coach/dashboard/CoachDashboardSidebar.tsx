@@ -12,6 +12,18 @@ type Props = {
   quickActions: DashboardQuickAction[];
 };
 
+function clubInitials(name: string | null) {
+  return (
+    (name ?? '')
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((word) => word[0])
+      .join('')
+      .toUpperCase() || '—'
+  );
+}
+
 function quickActionIcon(id: DashboardQuickAction['id']) {
   if (id === 'athletes') return Users;
   if (id === 'events') return Calendar;
@@ -27,10 +39,15 @@ export function CoachDashboardSidebar({ context, athleteCount, quickActions }: P
   return (
     <div className="space-y-4">
       <Card className="space-y-4 p-5">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">{t('eyebrow')}</p>
-          <h2 className="mt-2 text-lg font-semibold text-[var(--color-text)]">{context.clubName ?? t('noClub')}</h2>
-          <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">{context.displayName ?? '—'}</p>
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-subtle)] text-[15px] font-bold uppercase tracking-wide text-[var(--color-primary)]">
+            {clubInitials(context.clubName)}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">{t('eyebrow')}</p>
+            <h2 className="mt-0.5 truncate text-[16px] font-semibold text-[var(--color-text)]">{context.clubName ?? t('noClub')}</h2>
+            <p className="truncate text-[13px] text-[var(--color-text-muted)]">{context.displayName ?? '—'}</p>
+          </div>
         </div>
         <div className="grid gap-3 text-[13px]">
           <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/40 px-3 py-2.5">

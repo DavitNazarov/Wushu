@@ -10,23 +10,23 @@ type Props = {
 
 export function EventValidationIssuesAlert({ issues }: Props) {
   const tEvents = useTranslations('admin.events');
-  const tCommon = useTranslations('common');
 
   if (issues.length === 0) return null;
 
+  // Surface each distinct human-readable reason. The raw Zod field path
+  // (e.g. "dates.registrationDays") is intentionally omitted — the offending
+  // fields are already highlighted inline and the wizard jumps to their step.
+  const messages = Array.from(new Set(issues.map((issue) => issue.message)));
+
   return (
     <InlineAlert variant="error">
-      <p className="text-[12px] font-medium">
-        {tCommon('error')}: {tEvents('validation.summary')}
-      </p>
+      <p className="text-[12px] font-medium">{tEvents('validation.summary')}</p>
       <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[12px]">
-        {issues.slice(0, 5).map((issue, index) => (
-          <li key={`${issue.path}-${index}`}>
-            <span className="font-mono">{issue.path}</span>: {issue.message}
-          </li>
+        {messages.slice(0, 5).map((message, index) => (
+          <li key={index}>{message}</li>
         ))}
-        {issues.length > 5 ? (
-          <li>{tEvents('validation.more', { count: issues.length - 5 })}</li>
+        {messages.length > 5 ? (
+          <li>{tEvents('validation.more', { count: messages.length - 5 })}</li>
         ) : null}
       </ul>
     </InlineAlert>

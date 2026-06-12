@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, Layers3 } from 'lucide-react';
+import { localizedName } from '@/lib/bilingual';
 import { Checkbox } from '@/components/ui/primitives/checkbox';
 import {
   Select,
@@ -44,6 +45,7 @@ function AgeGroupSection({
 }) {
   const tIdentity = useTranslations('athleteProfile.identity');
   const tCategoryTemplates = useTranslations('admin.events.categoryTemplates');
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const allSelected = ageGroup.weightCategories.every((wc) => selectedWeightCategoryIds.has(wc.id));
   const anySelected = ageGroup.weightCategories.some((wc) => selectedWeightCategoryIds.has(wc.id));
@@ -66,7 +68,7 @@ function AgeGroupSection({
               onCheckedChange={(checked) => onToggleAll(checked === true)}
               className="h-4 w-4 rounded border-[var(--color-border)] bg-[var(--color-surface)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/40 focus-visible:ring-offset-0 data-[state=checked]:border-[var(--color-primary)] data-[state=checked]:bg-[var(--color-primary)] data-[state=indeterminate]:border-[var(--color-primary)] data-[state=indeterminate]:bg-[var(--color-primary)]"
             />
-            <span className="text-[14px] font-semibold text-[var(--color-text)]">{ageGroup.name}</span>
+            <span className="text-[14px] font-semibold text-[var(--color-text)]">{localizedName(ageGroup.name, ageGroup.nameKa, locale)}</span>
           </label>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">

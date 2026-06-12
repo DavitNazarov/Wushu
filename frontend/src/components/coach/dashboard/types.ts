@@ -16,7 +16,7 @@ export type DashboardSummary = {
   upcomingEvents: number;
 };
 
-export type DashboardActionPriority = 'high' | 'medium' | 'low';
+type DashboardActionPriority = 'high' | 'medium' | 'low';
 
 export type DashboardPendingAction = {
   id: string;
@@ -46,6 +46,7 @@ export type DashboardUpcomingEvent = {
   registrationStatus: EventRow['registrationStatus'];
   competitionStartDate: string;
   competitionEndDate: string;
+  registrationOpensAt: string | null;
   registrationClosesAt: string | null;
   registrationsCount: number;
   availableAthletesCount: number;

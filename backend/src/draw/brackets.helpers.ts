@@ -31,6 +31,13 @@ export type BracketStatusInput = {
   eligibleAthletesCount: number;
   completedFightsCount: number;
   inProgressFightsCount: number;
+  // Same counts but with BYE walkovers excluded. A BYE is auto-CONFIRMED at
+  // draw time (DrawService.autoConfirmByes), so on its own it must NOT read as
+  // real progress — otherwise a freshly-drawn bracket with an odd athlete
+  // count wrongly shows IN_PROGRESS. Optional: when omitted, fall back to the
+  // full counts (byes already excluded by the caller, or none present).
+  nonByeCompletedFightsCount?: number;
+  nonByeInProgressFightsCount?: number;
   hasIntegrityIssue: boolean;
   eventPublished: boolean;
 };
@@ -73,6 +80,25 @@ export function fightStateCounters(statuses: FightStatus[]): {
   return { completed, inProgress };
 }
 
+// Can this fight be reorganised by an admin bracket swap? A fight is locked
+// once it's genuinely contested:
+//   - running          : IN_PROGRESS / PAUSED
+//   - a real result     : CONFIRMED / COMPLETE *with both athletes assigned*
+// A CONFIRMED single-sided BYE is NOT a real result — it's an auto-advance
+// walkover (DrawService.autoConfirmByes) — so a byed athlete stays swappable;
+// the bye is re-resolved + re-propagated after the swap.
+export function isSwapLockedFight(input: {
+  status: FightStatus;
+  redAthleteId: string | null;
+  blueAthleteId: string | null;
+}): boolean {
+  if (input.status === 'IN_PROGRESS' || input.status === 'PAUSED') return true;
+  const isBye = (input.redAthleteId == null) !== (input.blueAthleteId == null);
+  return (
+    (input.status === 'CONFIRMED' || input.status === 'COMPLETE') && !isBye
+  );
+}
+
 // Pill shown next to each bracket. Priority order:
 //   No fights:
 //     EMPTY          (no eligible athletes ever)
@@ -81,9 +107,12 @@ export function fightStateCounters(statuses: FightStatus[]): {
 //   Has fights:
 //     NEEDS_REVIEW   (integrity issue detected)
 //     COMPLETED      (every fight done, none in progress)
-//     IN_PROGRESS    (anything running OR partially completed)
-//     PUBLISHED      (event flagged published and nothing's started)
+//     IN_PROGRESS    (a NON-BYE fight is running OR partially completed)
+//     PUBLISHED      (event flagged published and nothing real has started)
 //     GENERATED_DRAFT (drawn but not yet published)
+// BF: BYE walkovers are auto-CONFIRMED at draw, so they're excluded from the
+// IN_PROGRESS trigger — a bracket whose only completed fights are byes is still
+// just "generated", not "in progress".
 export function deriveBracketCategoryStatus(
   input: BracketStatusInput,
 ): BracketViewStatus {
@@ -102,7 +131,11 @@ export function deriveBracketCategoryStatus(
     return 'COMPLETED';
   }
 
-  if (input.inProgressFightsCount > 0 || input.completedFightsCount > 0) {
+  const realCompleted =
+    input.nonByeCompletedFightsCount ?? input.completedFightsCount;
+  const realInProgress =
+    input.nonByeInProgressFightsCount ?? input.inProgressFightsCount;
+  if (realInProgress > 0 || realCompleted > 0) {
     return 'IN_PROGRESS';
   }
 

@@ -26,6 +26,7 @@ import {
 import { AthleteProfileActions } from './AthleteProfileActions';
 import { AthleteProfileCompetition } from './AthleteProfileCompetition';
 import { AthleteProfileIdentity } from './AthleteProfileIdentity';
+import { AthleteProfileMedals } from './AthleteProfileMedals';
 import { AthleteProfileOverview } from './AthleteProfileOverview';
 import { AthleteProfileRegistrations } from './AthleteProfileRegistrations';
 
@@ -243,6 +244,8 @@ export function AthleteProfilePage({ athleteId, scope }: Props) {
             fights={query.data.fights}
             scope={scope}
           />
+
+          <AthleteProfileMedals medals={query.data.medals} />
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_360px]">
             <div className="space-y-5">

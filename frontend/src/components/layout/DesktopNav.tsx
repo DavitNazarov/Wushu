@@ -9,6 +9,7 @@ import { Link } from '@/i18n/navigation';
 const GAP_DESKTOP = 20;
 
 const PRIMARY_LINKS = [
+  { href: '/countries', key: 'countries', exact: true },
   { href: '/clubs', key: 'clubs', exact: true },
   { href: '/news', key: 'news', exact: true },
   { href: '/events', key: 'viewEvents', exact: false },

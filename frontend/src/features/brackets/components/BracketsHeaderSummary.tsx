@@ -1,7 +1,6 @@
 'use client';
 
 import { useLocale } from 'next-intl';
-import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/primitives/button';
 import { Card } from '@/components/ui/primitives/card';
 import type { BracketsOverviewResponse } from '@/types/api';
@@ -9,14 +8,15 @@ import { formatDateTime } from '@/features/brackets/lib/dateFormat';
 
 type Props = {
   overview: BracketsOverviewResponse;
+  generatePending: boolean;
   publishPending: boolean;
   regeneratePending: boolean;
   exportPending: boolean;
+  onGenerate: () => void;
   onPublish: () => void;
   onUnpublish: () => void;
   onRegenerate: () => void;
   onExport: () => void;
-  onRefresh: () => void;
   t: (key: string, values?: Record<string, string | number | Date>) => string;
 };
 
@@ -33,17 +33,19 @@ function StatTile({ label, value }: { label: string; value: number | string }) {
 
 export function BracketsHeaderSummary({
   overview,
+  generatePending,
   publishPending,
   regeneratePending,
   exportPending,
+  onGenerate,
   onPublish,
   onUnpublish,
   onRegenerate,
   onExport,
-  onRefresh,
   t,
 }: Props) {
   const locale = useLocale();
+  const hasBrackets = overview.summary.categoriesWithBrackets > 0;
   const publishBlockedReason = overview.event.published
     ? overview.actions.unpublishBlockedReasonCode
     : overview.actions.publishBlockedReasonCode;
@@ -79,54 +81,63 @@ export function BracketsHeaderSummary({
         </div>
 
         <div className="grid w-full gap-2 sm:grid-cols-2 xl:w-auto xl:grid-cols-none xl:flex xl:flex-wrap">
-          {overview.event.published ? (
+          {!hasBrackets ? (
             <Button
-              onClick={onUnpublish}
-              disabled={!overview.actions.canUnpublish || publishPending}
-              className="w-full bg-[var(--color-danger)] hover:bg-[var(--color-danger)]/90 xl:w-auto"
-            >
-              {publishPending ? t('actionUnpublishing') : t('actionUnpublish')}
-            </Button>
-          ) : (
-            <Button
-              onClick={onPublish}
-              disabled={!overview.actions.canPublish || publishPending}
+              onClick={onGenerate}
+              disabled={!overview.actions.canGenerate || generatePending}
               className="w-full xl:w-auto"
             >
-              {publishPending ? t('actionPublishing') : t('actionPublish')}
+              {generatePending ? t('actionGenerating') : t('actionGenerate')}
             </Button>
+          ) : (
+            <>
+              {overview.event.published ? (
+                <Button
+                  onClick={onUnpublish}
+                  disabled={!overview.actions.canUnpublish || publishPending}
+                  className="w-full bg-[var(--color-danger)] hover:bg-[var(--color-danger)]/90 xl:w-auto"
+                >
+                  {publishPending ? t('actionUnpublishing') : t('actionUnpublish')}
+                </Button>
+              ) : (
+                <Button
+                  onClick={onPublish}
+                  disabled={!overview.actions.canPublish || publishPending}
+                  className="w-full xl:w-auto"
+                >
+                  {publishPending ? t('actionPublishing') : t('actionPublish')}
+                </Button>
+              )}
+
+              <Button
+                variant="secondary"
+                onClick={onExport}
+                disabled={!overview.actions.canExport || exportPending}
+                className="w-full xl:w-auto"
+              >
+                {exportPending ? t('actionExporting') : t('actionExport')}
+              </Button>
+
+              <Button
+                variant="secondary"
+                onClick={onRegenerate}
+                disabled={regeneratePending}
+                className="w-full border-[var(--color-danger)]/40 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 xl:w-auto"
+              >
+                {regeneratePending ? t('actionRegenerating') : t('actionRegenerate')}
+              </Button>
+            </>
           )}
-
-          <Button
-            variant="secondary"
-            onClick={onExport}
-            disabled={!overview.actions.canExport || exportPending}
-            className="w-full xl:w-auto"
-          >
-            {exportPending ? t('actionExporting') : t('actionExport')}
-          </Button>
-
-          <Button
-            variant="secondary"
-            onClick={onRegenerate}
-            disabled={overview.summary.categoriesWithBrackets <= 0 || regeneratePending}
-            className="w-full border-[var(--color-danger)]/40 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 xl:w-auto"
-          >
-            {regeneratePending ? t('actionRegenerating') : t('actionRegenerate')}
-          </Button>
-
-          <Button variant="secondary" onClick={onRefresh} className="w-full xl:w-auto">
-            <RefreshCw className="mr-1 h-4 w-4" />
-            {t('actionRefresh')}
-          </Button>
-
-          <Button asChild variant="secondary" className="w-full xl:w-auto">
-            <a href="#bracket-audit">{t('actionViewAudit')}</a>
-          </Button>
         </div>
       </div>
 
-      {publishBlockedReason && (
+      {!hasBrackets && overview.actions.generateBlockedReasonCode && (
+        <p className="text-[12px] text-amber-300">
+          {t(`blockReason.${overview.actions.generateBlockedReasonCode}`)}
+        </p>
+      )}
+
+      {hasBrackets && publishBlockedReason && (
         <p className="text-[12px] text-amber-300">
           {t(`blockReason.${publishBlockedReason}`)}
         </p>

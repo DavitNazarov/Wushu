@@ -10,10 +10,10 @@
  * Tiers follow CACHING_TASK.md:
  * - LONG   — static-ish public reads (events, news, clubs, athletes, brackets,
  *            results). 30s is well within how often these change.
- * - SHORT  — schedule feeds: they shift during an event, but a ~15-30s lag is
- *            acceptable (not real-time).
- * - live / mat get `no-store` (see controller) — live scores must stay fresh;
- *            real-time delivery is over the websocket anyway.
+ * - SHORT  — schedule + live feeds: they shift during an event, but a ~15-30s
+ *            lag is acceptable. The public live page is poll/refresh-based (no
+ *            socket), so the live feed is safe to edge-cache like the schedule.
+ * - mat gets `no-store` (see controller) — the TV scoreboard must stay fresh.
  *
  * `stale-while-revalidate` lets the cache serve the slightly-stale copy while
  * it refreshes in the background, so a refresh never blocks on the origin.

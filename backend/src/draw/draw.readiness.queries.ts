@@ -9,6 +9,8 @@ const DRAW_AUDIT_ACTIONS = [
   'DRAW_REGENERATED',
   'DRAW_RESET',
   'BRACKETS_PUBLISHED',
+  'DRAW_CATEGORY_REVIEWED',
+  'DRAW_CATEGORY_REVIEW_CLEARED',
 ] as const;
 
 // All the data computeDrawReadiness needs in one bundle. Hand-typed so the
@@ -34,6 +36,7 @@ export type DrawReadinessContext = {
       | 'IMMEDIATE_AFTER_DRAW'
       | 'MANUAL_PUBLISH_LATER'
       | 'COMPETITION_DAY_ONLY';
+    weighInResultsPublic: boolean;
   };
   categories: Array<{
     id: string;
@@ -48,6 +51,10 @@ export type DrawReadinessContext = {
         sex: 'MALE' | 'FEMALE' | null;
       };
     };
+    drawReviewedAt: Date | null;
+    drawReviewedById: string | null;
+    drawReviewSignature: string | null;
+    drawReviewedBy: { displayName: string } | null;
   }>;
   bracketCount: number;
   drawnCategoryIds: Set<string>;
@@ -87,6 +94,7 @@ export type DrawReadinessContext = {
     weighIns: Array<{
       id: string;
       override: boolean;
+      weightKg: number;
     }>;
   }>;
   recentAudit: Array<{
@@ -137,6 +145,7 @@ export class DrawReadinessQueryService {
         registrationClosesAt: true,
         published: true,
         publishTimingPolicyCode: true,
+        weighInResultsPublic: true,
       },
     });
     if (!event) throw new Error('EVENT_NOT_FOUND');
@@ -168,6 +177,10 @@ export class DrawReadinessQueryService {
               },
             },
           },
+          drawReviewedAt: true,
+          drawReviewedById: true,
+          drawReviewSignature: true,
+          drawReviewedBy: { select: { displayName: true } },
         },
         orderBy: [
           { eventAgeGroup: { categoryTemplateAgeGroup: { sortOrder: 'asc' } } },
@@ -229,6 +242,7 @@ export class DrawReadinessQueryService {
             select: {
               id: true,
               override: true,
+              weightKg: true,
             },
             orderBy: { attemptNo: 'desc' },
             take: 1,

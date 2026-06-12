@@ -19,6 +19,13 @@ import type { EventLifecycle } from '@/types/api';
 
 type Props = { params: Promise<{ slug: string }> };
 
+const WeighInResultsTab = dynamic(
+  () =>
+    import('@/components/event/WeighInResultsTab').then(
+      (m) => m.WeighInResultsTab,
+    ),
+  { loading: () => <EventTabPanelFallback rows={4} /> },
+);
 const BracketsTab = dynamic(
   () => import('@/components/event/BracketsTab').then((m) => m.BracketsTab),
   { loading: () => <EventTabPanelFallback rows={3} /> },
@@ -293,6 +300,7 @@ export default function PublicEventDetailPage({ params }: Props) {
                   </div>
                 </div>
               }
+              weights={<WeighInResultsTab eventSlug={eventSlug} />}
               brackets={<BracketsTab eventSlug={eventSlug} />}
               schedule={<ScheduleTab eventSlug={eventSlug} />}
               live={<PublicLivePanel eventSlug={eventSlug} />}

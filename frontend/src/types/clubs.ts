@@ -3,20 +3,20 @@ import type {
   RegistrationStatus,
 } from './api';
 
-export type ClubAccountStatus =
+type ClubAccountStatus =
   | 'ACTIVE'
   | 'DQ'
   | 'ARCHIVED'
   | 'INACTIVE';
 
-export type ClubAccountRole =
+type ClubAccountRole =
   | 'admin'
   | 'coach'
   | 'athlete'
   | 'judge'
   | 'timekeeper';
 
-export type ClubWeighInStatus =
+type ClubWeighInStatus =
   | 'NOT_WEIGHED'
   | 'PASSED'
   | 'MOVED_UP'

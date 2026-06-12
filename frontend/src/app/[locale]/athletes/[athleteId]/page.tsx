@@ -50,6 +50,42 @@ function StatCard({ value, label }: { value: number | string; label: string }) {
   );
 }
 
+const MEDAL_TONE: Record<'gold' | 'silver' | 'bronze' | 'other', { text: string; chip: string }> = {
+  gold: { text: 'text-[var(--color-medal-gold)]', chip: 'bg-[var(--color-medal-gold-subtle)]' },
+  silver: { text: 'text-[var(--color-medal-silver)]', chip: 'bg-[var(--color-medal-silver-subtle)]' },
+  bronze: { text: 'text-[var(--color-medal-bronze)]', chip: 'bg-[var(--color-medal-bronze-subtle)]' },
+  other: { text: 'text-[var(--color-text-muted)]', chip: 'bg-[var(--color-surface-alt)]' },
+};
+
+function MedalCard({
+  value,
+  label,
+  tone,
+}: {
+  value: number;
+  label: string;
+  tone: 'gold' | 'silver' | 'bronze' | 'other';
+}) {
+  const { text, chip } = MEDAL_TONE[tone];
+  const dimmed = value === 0;
+  return (
+    <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${chip} ${dimmed ? 'opacity-40' : ''}`}>
+        <svg className={`h-4 w-4 ${text}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <circle cx="12" cy="8" r="6" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+        </svg>
+      </span>
+      <div className="min-w-0">
+        <p className={`text-[22px] font-bold tabular-nums leading-none ${dimmed ? 'text-[var(--color-text-muted)]' : text}`}>
+          {value}
+        </p>
+        <p className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">{label}</p>
+      </div>
+    </div>
+  );
+}
+
 function LifecyclePill({ lifecycle }: { lifecycle: string }) {
   const isLive = lifecycle === 'LIVE';
   const isDone = lifecycle === 'COMPLETED';
@@ -108,7 +144,7 @@ export default async function PublicAthleteProfilePage({ params }: Props) {
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) notFound();
 
-  const { athlete, registrations, fights } = (await res.json()) as AthleteProfileResponse;
+  const { athlete, registrations, fights, medals } = (await res.json()) as AthleteProfileResponse;
 
   const wins = fights.filter((f) => outcome(f, athlete.id) === 'win').length;
   const losses = fights.filter((f) => outcome(f, athlete.id) === 'loss').length;
@@ -195,6 +231,26 @@ export default async function PublicAthleteProfilePage({ params }: Props) {
           <StatCard value={`${wins}–${losses}`} label="Record" />
           <StatCard value={registrations.length} label="Events" />
         </div>
+
+        {/* Medals */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-3">
+            <h2 className="text-[13px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+              Medals &amp; placements
+            </h2>
+            {medals.total > 0 && (
+              <span className="rounded-full bg-[var(--color-medal-gold-subtle)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-medal-gold)]">
+                {medals.total} {medals.total === 1 ? 'medal' : 'medals'}
+              </span>
+            )}
+          </div>
+          <div className="grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
+            <MedalCard tone="gold" value={medals.gold} label="Gold" />
+            <MedalCard tone="silver" value={medals.silver} label="Silver" />
+            <MedalCard tone="bronze" value={medals.bronze} label="Bronze" />
+            <MedalCard tone="other" value={medals.other} label="Other places" />
+          </div>
+        </section>
 
         {/* Events / Registrations */}
         {sortedRegs.length > 0 && (

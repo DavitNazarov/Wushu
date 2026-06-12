@@ -91,6 +91,7 @@ export type BuiltScheduleRow = {
   scheduledAt: Date | null;
   sessionId: string | null;
   orderInSession: number | null;
+  winnerCorner: 'RED' | 'BLUE' | null;
 };
 
 // Loose alias so displayName/displayNameKa can accept whatever shape the

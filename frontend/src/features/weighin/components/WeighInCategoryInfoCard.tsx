@@ -90,24 +90,28 @@ export function WeighInCategoryInfoCard({ entry, preview, weightInput, t }: Prop
           </span>
           <span className="text-[13px] font-bold text-[var(--color-text)]">{rangeLabel}</span>
         </div>
+      </div>
 
-        {deltaLabel && (
-          <div
-            className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 ${
-              isOver || isUnder
+      {/* Status strip — reserved height prevents layout shift when preview loads */}
+      <div className="flex min-h-[34px] flex-wrap items-center gap-2">
+        <div
+          className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 ${
+            deltaLabel
+              ? isOver || isUnder
                 ? 'border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10'
                 : 'border-[var(--color-success)]/40 bg-[var(--color-success)]/10'
+              : 'border-transparent bg-transparent'
+          } ${deltaLabel ? '' : 'invisible'}`}
+          aria-hidden={!deltaLabel}
+        >
+          <span
+            className={`text-[13px] font-bold ${
+              isOver || isUnder ? 'text-[var(--color-danger)]' : 'text-[var(--color-success)]'
             }`}
           >
-            <span
-              className={`text-[13px] font-bold ${
-                isOver || isUnder ? 'text-[var(--color-danger)]' : 'text-[var(--color-success)]'
-              }`}
-            >
-              {isWithin ? '✓' : isOver ? '▲' : '▼'} {deltaLabel}
-            </span>
-          </div>
-        )}
+            {isWithin ? '✓' : isOver ? '▲' : '▼'} {deltaLabel ?? t('deltaWithin')}
+          </span>
+        </div>
 
         {preview?.nextCategory && preview.nextCategory.name !== current?.name && (
           <div className="flex items-center gap-1.5 rounded-full border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/8 px-3 py-1.5">

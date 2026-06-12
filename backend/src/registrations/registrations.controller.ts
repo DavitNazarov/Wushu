@@ -17,18 +17,10 @@ import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CapabilityGuard } from '../auth/capability.guard';
 import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
-import type { RegistrationStatus } from '@prisma/client';
+import { RegistrationStatus } from '@prisma/client';
 
-// Allow-list mirror of the Prisma enum — used to validate ?status= query
-// values without importing zod into every list call. Kept manually in sync
-// with the schema; a stray value here would be a real bug.
-const REGISTRATION_STATUSES: RegistrationStatus[] = [
-  'PENDING',
-  'SUBMITTED',
-  'APPROVED',
-  'REJECTED',
-  'WITHDRAWN',
-];
+// Derived straight from the Prisma enum object — can't drift from the schema.
+const registrationStatusSchema = z.enum(RegistrationStatus);
 
 // POST /api/registrations body. notes/reason are capped at 10K/2K chars to
 // keep them survivable in DB columns and to prevent unbounded inputs.
@@ -48,7 +40,7 @@ const createRegistrationSchema = z.object({
 // at this layer; the service validates it against the RegistrationStatus enum
 // and rejects invalid transitions with INVALID_STATUS_TRANSITION.
 const setStatusSchema = z.object({
-  status: z.string().min(1),
+  status: registrationStatusSchema,
   override: z.boolean().optional(),
   reason: z.string().trim().max(2_000).nullable().optional(),
 });
@@ -83,12 +75,14 @@ export class RegistrationsController {
     @Query('status') status?: string,
     @Query('q') q?: string,
     @Query('categoryCode') categoryCode?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
     const auth = req.auth!;
     const normalizedStatus = status?.trim();
     if (
       normalizedStatus &&
-      !REGISTRATION_STATUSES.includes(normalizedStatus as RegistrationStatus)
+      !registrationStatusSchema.safeParse(normalizedStatus).success
     ) {
       throw new HttpException(
         {
@@ -122,6 +116,9 @@ export class RegistrationsController {
     const effectiveClubId =
       actorClubId ?? (auth.role === 'admin' ? clubId : undefined);
 
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
+    const parsedOffset = offset ? Number.parseInt(offset, 10) : undefined;
+
     return this.registrations.list({
       organisationId: auth.organisationId,
       eventId,
@@ -130,6 +127,8 @@ export class RegistrationsController {
       q: q?.trim() || undefined,
       categoryCode: categoryCode?.trim() || undefined,
       actorClubId,
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      offset: Number.isFinite(parsedOffset) ? parsedOffset : undefined,
     });
   }
 

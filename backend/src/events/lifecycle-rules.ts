@@ -1,11 +1,9 @@
 import type { EventLifecycle } from '@prisma/client';
-export {
-  FINAL_WEIGH_IN_STATUSES,
-  isFinalWeighInStatus,
-  isWeighInComplete,
-} from './weighin-completion.helper';
 
-export const EVENT_LIFECYCLE_ORDER: EventLifecycle[] = [
+// Canonical ordering of the event lifecycle. Internal-only — the sole
+// consumers are the transition helpers below. (Weigh-in completion helpers
+// live in ./weighin-completion.helper, which is the canonical source.)
+const EVENT_LIFECYCLE_ORDER: EventLifecycle[] = [
   'REG_OPEN',
   'LOCKED',
   'WEIGHIN',
@@ -34,10 +32,6 @@ export function isRegistrationMutableLifecycle(
   return REGISTRATION_MUTABLE_STAGES.has(lifecycle);
 }
 
-export function canRunDraw(lifecycle: EventLifecycle): boolean {
-  return lifecycle === 'WEIGH_IN_COMPLETED';
-}
-
 export function canManageSchedule(lifecycle: EventLifecycle): boolean {
   return SCHEDULE_MUTABLE_STAGES.has(lifecycle);
 }
@@ -50,7 +44,7 @@ export function isWeighInStage(lifecycle: EventLifecycle): boolean {
   return lifecycle === 'WEIGHIN';
 }
 
-export function getLifecycleIndex(lifecycle: EventLifecycle): number {
+function getLifecycleIndex(lifecycle: EventLifecycle): number {
   return EVENT_LIFECYCLE_ORDER.indexOf(lifecycle);
 }
 
@@ -81,12 +75,4 @@ export function isBackwardLifecycleTransition(
   const targetIndex = getLifecycleIndex(target);
   if (currentIndex < 0 || targetIndex < 0) return false;
   return targetIndex < currentIndex;
-}
-
-export function getPreviousLifecycle(
-  lifecycle: EventLifecycle,
-): EventLifecycle | null {
-  const currentIndex = getLifecycleIndex(lifecycle);
-  if (currentIndex <= 0) return null;
-  return EVENT_LIFECYCLE_ORDER[currentIndex - 1];
 }

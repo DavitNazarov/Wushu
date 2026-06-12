@@ -20,11 +20,14 @@
     "live": "ლაივი",
     "display": "დისპლეი",
     "results": "შედეგები",
+    "countries": "ქვეყნები",
     "clubs": "კლუბები",
     "athletes": "სპორტსმენები",
     "users": "მომხმარებლები",
     "rulesets": "კატეგორიების შაბლონები",
+    "categoryOptions": "კატეგორიების პარამეტრები",
     "categoryTemplates": "კატეგორიების შაბლონები",
+    "signatures": "მსაჯის ხელმოწერები",
     "news": "სიახლეები",
     "inbox": "შეტყობინებები",
     "settings": "პარამეტრები",
@@ -32,7 +35,8 @@
     "section_overview": "მიმოხილვა",
     "section_tournament": "ტურნირი",
     "section_people": "ადამიანები",
-    "section_admin": "ადმინისტრაცია",
+    "section_setup": "კონფიგურაცია",
+    "section_content": "კონტენტი",
     "integrity": "მონაცემთა მთლიანობა"
   },
   "common": {
@@ -193,6 +197,11 @@
     "clubsSubtitle": "Geo Wushu ღონისძიებებში მონაწილე რეგისტრირებული კლუბები და მწვრთნელები.",
     "clubAthletes": "სპორტსმენები",
     "clubCoaches": "მწვრთნელები",
+    "countries": "ქვეყნები",
+    "countriesTitle": "ქვეყნები",
+    "countriesSubtitle": "Geo Wushu-ის ღონისძიებებში მონაწილე ქვეყნები და რეგიონები.",
+    "countryRegions": "რეგიონები",
+    "countryClubs": "კლუბები",
     "news": "სიახლეები",
     "newsTitle": "სიახლეები",
     "newsSubtitle": "Geo Wushu ღონისძიებების განცხადებები და განახლებები.",
@@ -346,7 +355,11 @@
     "rulesStep6": "შეჯიბრი მიმდინარეობს — ბრძოლები ტარდება და შედეგები რეალურ დროში ახლდება.",
     "rulesStep7": "დასრულებულია — ღონისძიება დასრულდა.",
     "rulesPublishingTitle": "გამოქვეყნების პრინციპი",
-    "rulesPublishingText": "ბადეები, განრიგი და შედეგები საჯაროდ მხოლოდ მას შემდეგ ჩანს, რაც ორგანიზატორი მათ გამოაქვეყნებს. მანამდე ეს გვერდები აჩვენებს შეტყობინებას, რომ ინფორმაცია ჯერ არ გამოქვეყნებულა. ეს უზრუნველყოფს, რომ მაყურებლებმა და მონაწილეებმა მხოლოდ ზუსტი და საბოლოო მონაცემები იხილონ."
+    "rulesPublishingText": "ბადეები, განრიგი და შედეგები საჯაროდ მხოლოდ მას შემდეგ ჩანს, რაც ორგანიზატორი მათ გამოაქვეყნებს. მანამდე ეს გვერდები აჩვენებს შეტყობინებას, რომ ინფორმაცია ჯერ არ გამოქვეყნებულა. ეს უზრუნველყოფს, რომ მაყურებლებმა და მონაწილეებმა მხოლოდ ზუსტი და საბოლოო მონაცემები იხილონ.",
+    "weights": "წონის კონტროლი",
+    "weighInResultsNotPublished": "წონის შედეგები ჯერ არ გამოქვეყნებულა",
+    "weighInResultsNotPublishedDescription": "შედეგები აქ გამოჩნდება, როცა ორგანიზატორები გამოაქვეყნებენ.",
+    "weighInResultsAthleteCount": "{count, plural, one {# სპორტსმენი} other {# სპორტსმენი}}"
   },
   "auth": {
     "signIn": "შესვლა",
@@ -720,6 +733,34 @@
         "link_brackets": "ბადეები",
         "link_schedule": "განრიგი",
         "link_live": "ლაივი"
+      },
+      "wizard": {
+        "subtitle": "შექმენით ახალი ტურნირი ეტაპობრივად.",
+        "stepCount": "ნაბიჯი {current} / {total}",
+        "back": "უკან",
+        "next": "შემდეგი",
+        "create": "ღონისძიების შექმნა",
+        "steps": {
+          "basicsLabel": "ძირითადი",
+          "basicsHint": "სახელი, ადგილი და ორგანიზატორი",
+          "scheduleLabel": "განრიგი",
+          "scheduleHint": "რეგისტრაციისა და ტურნირის თარიღები",
+          "categoriesLabel": "კატეგორიები",
+          "categoriesHint": "აირჩიეთ ჩასართავი კატეგორიები",
+          "reviewLabel": "გადახედვა",
+          "reviewHint": "დაადასტურეთ და შექმენით"
+        },
+        "review": {
+          "eyebrow": "თითქმის დასრულდა",
+          "title": "გადახედეთ თქვენს ღონისძიებას",
+          "description": "შექმნამდე გადაამოწმეთ დეტალები.",
+          "empty": "მითითებული არ არის",
+          "registrationDays": "რეგისტრაციის დღეები",
+          "fightDays": "შეჯიბრის დღეები",
+          "daysCount": "{count, plural, one {# დღე} other {# დღე}}",
+          "categories": "კატეგორიები",
+          "categoriesCount": "{count, plural, one {# კატეგორია} other {# კატეგორია}}"
+        }
       }
     },
     "users": {
@@ -738,6 +779,7 @@
       "passwordHint": "At least 6 characters",
       "selectClubPlaceholder": "აირჩიეთ კლუბი",
       "loadingClubs": "კლუბები იტვირთება...",
+      "coachRegionHint": "კლუბიდან: {location}",
       "roleAdmin": "Admin",
       "roleCoach": "Coach",
       "roleAthlete": "Athlete",
@@ -814,11 +856,102 @@
       "fieldRole": "Role",
       "fieldClub": "Club",
       "linkUsers": "User Management",
-      "linkRulesets": "კატეგორიების შაბლონები"
+      "linkRulesets": "კატეგორიების შაბლონები",
+      "subtitle": "თქვენი ანგარიში, ორგანიზაცია და სწრაფი ბმულები.",
+      "actionCopy": "კოპირება",
+      "actionCopied": "დაკოპირდა",
+      "capabilitiesEmpty": "უფლებები მინიჭებული არ არის.",
+      "linkUsersDesc": "მართეთ ადმინები, მწვრთნელები და ოფიციალური პირები.",
+      "linkRulesetsDesc": "მრავალჯერადი კატეგორიების შაბლონები.",
+      "linkClubs": "კლუბები",
+      "linkClubsDesc": "მართეთ კლუბები და მათი დეტალები.",
+      "roles": {
+        "admin": "ადმინისტრატორი",
+        "coach": "მწვრთნელი",
+        "athlete": "სპორტსმენი",
+        "judge": "მსაჯი",
+        "timekeeper": "დროის ოპერატორი"
+      },
+      "capabilityLabels": {
+        "EVENTS_MANAGE": "ღონისძიებები",
+        "RULESETS_MANAGE": "შაბლონები",
+        "ATHLETES_MANAGE": "სპორტსმენები",
+        "WEIGHIN_RUN": "წონის კონტროლი",
+        "DRAW_RUN": "გათამაშება",
+        "SCHEDULE_MANAGE": "განრიგი",
+        "LIVE_RUN": "ლაივი",
+        "RESULTS_MANAGE": "შედეგები",
+        "EXPORTS_MANAGE": "ექსპორტი",
+        "CONTENT_MANAGE": "კონტენტი"
+      }
     },
     "theme": {
       "light": "Switch to light mode",
       "dark": "Switch to dark mode"
+    },
+    "categoryOptions": {
+      "title": "კატეგორიების პარამეტრები",
+      "subtitle": "განსაზღვრეთ მრავალჯერადი ასაკობრივი და წონითი კატეგორიები ტურნირებისთვის.",
+      "new": "ახალი ჯგუფი",
+      "formDescription": "დააჯგუფეთ სპორტსმენები სქესისა და ასაკის მიხედვით, შემდეგ ჩამოწერეთ წონითი კატეგორიები.",
+      "emptyTitle": "კატეგორიების ჯგუფები ჯერ არ არის",
+      "emptyDescription": "შექმენით პირველი ჯგუფი ღონისძიებებში გამოსაყენებელი ასაკობრივი და წონითი კატეგორიების განსასაზღვრად.",
+      "weightCount": "{count, plural, one {# კატეგორია} other {# კატეგორია}}",
+      "roundMinutes": "{minutes} წთ რაუნდები",
+      "ageAny": "ნებისმიერი ასაკი",
+      "ageRange": "{min}–{max} წ.",
+      "openDivision": "ღია",
+      "inactive": "არააქტიური",
+      "actions": {
+        "edit": "რედაქტირება",
+        "delete": "წაშლა"
+      },
+      "edit": {
+        "title": "ჯგუფის რედაქტირება"
+      },
+      "delete": {
+        "title": "ჯგუფის წაშლა",
+        "description": "ეს სამუდამოდ წაშლის ჯგუფს და მის წონით კატეგორიებს. მოქმედება შეუქცევადია.",
+        "confirm": "ჯგუფის წაშლა",
+        "success": "ჯგუფი წაიშალა",
+        "failed": "ჯგუფის წაშლა ვერ მოხერხდა"
+      },
+      "fields": {
+        "nameEn": "სახელი (ინგლისურად)",
+        "nameKa": "სახელი (ქართულად)",
+        "sex": "სქესი",
+        "minAge": "მინ. ასაკი",
+        "maxAge": "მაქს. ასაკი",
+        "roundMinutes": "რაუნდი (წუთები)",
+        "active": "აქტიური"
+      },
+      "placeholders": {
+        "nameEn": "მაგ. Junior Men",
+        "nameKa": "მაგ. ჭაბუკები",
+        "any": "ნებისმიერი"
+      },
+      "hints": {
+        "nameKa": "ნაჩვენებია ქართველი მომხმარებლებისთვის; ცარიელად დატოვებისას გამოიყენება ინგლისური სახელი."
+      },
+      "weights": {
+        "title": "წონითი კატეგორიები",
+        "help": "ჩამოწერეთ კატეგორიები მსუბუქიდან მძიმისკენ. ბოლო შეიძლება იყოს ღია.",
+        "add": "კატეგორიის დამატება",
+        "remove": "კატეგორიის წაშლა",
+        "nameLabel": "კატეგორიის სახელი",
+        "namePlaceholder": "მაგ. -52 კგ",
+        "maxLabel": "მაქს. წონა (კგ)",
+        "maxPlaceholder": "კგ",
+        "openEnded": "ღია (ზედა ზღვრის გარეშე)"
+      },
+      "errors": {
+        "roundRequired": "შეიყვანეთ რაუნდის ხანგრძლივობა ნულზე მეტი.",
+        "ageRange": "მაქს. ასაკი უნდა იყოს მინ. ასაკის ტოლი ან მეტი.",
+        "weightNameRequired": "მიუთითეთ ყველა კატეგორიის სახელი.",
+        "openMustBeLast": "მხოლოდ ბოლო კატეგორია შეიძლება იყოს ღია.",
+        "weightMaxRequired": "შეიყვანეთ ამ კატეგორიის მაქსიმალური წონა.",
+        "weightAscending": "თითოეული კატეგორიის წონა წინაზე მეტი უნდა იყოს."
+      }
     }
   },
   "coach": {
@@ -937,6 +1070,30 @@
             "description": "შეამოწმეთ თქვენი coach და კლუბის ინფორმაცია."
           }
         }
+      },
+      "greeting": "მოგესალმებით, {name}",
+      "greetingSubtitle": "აი, რას სჭირდება დღეს თქვენი ყურადღება.",
+      "primaryAction": {
+        "noAthletesTitle": "დაამატეთ პირველი სპორტსმენი",
+        "noAthletesSubtitle": "შექმენით თქვენი შემადგენლობა, რომ შეძლოთ სპორტსმენების რეგისტრაცია.",
+        "noAthletesButton": "სპორტსმენის დამატება",
+        "noOpenTitle": "ყველაფერი მოგვარებულია",
+        "noOpenSubtitle": "ამჟამად რეგისტრაციისთვის ღია ღონისძიება არ არის. იხილეთ მომავალი ტურნირები.",
+        "noOpenButton": "ღონისძიებების ნახვა",
+        "allSetEyebrow": "მზადაა",
+        "openEventEyebrow": "ღია რეგისტრაციისთვის",
+        "allSetHeading": "ყველა სპორტსმენი დარეგისტრირებულია",
+        "registerHeading": "სპორტსმენების რეგისტრაცია",
+        "progress": "{registered} / {total} დარეგისტრირებული",
+        "closesToday": "რეგისტრაცია იხურება დღეს",
+        "closesIn": "{days, plural, one {რეგისტრაცია იხურება # დღეში} other {რეგისტრაცია იხურება # დღეში}}",
+        "reviewButton": "რეგისტრაციების გადახედვა",
+        "registerButton": "სპორტსმენების რეგისტრაცია",
+        "opensSoonEyebrow": "მალე გაიხსნება",
+        "closedEyebrow": "რეგისტრაცია დახურულია",
+        "opensOnLabel": "რეგისტრაცია იხსნება {date}",
+        "closedNote": "ამ ღონისძიებაზე რეგისტრაცია დახურულია.",
+        "viewEventButton": "ღონისძიების ნახვა"
       }
     },
     "events": {
@@ -972,7 +1129,16 @@
         "brackets": "ბადეები",
         "schedule": "განრიგი",
         "live": "ლაივი"
-      }
+      },
+      "successTitle": "სპორტსმენი დარეგისტრირდა",
+      "successBody": "{name} დარეგისტრირდა.",
+      "successAllRegistered": "თქვენი ყველა სპორტსმენი ახლა დარეგისტრირებულია ამ ღონისძიებაზე.",
+      "addAnotherAthlete": "კიდევ ერთი სპორტსმენის რეგისტრაცია",
+      "done": "მზადაა",
+      "allRegisteredTitle": "ყველა დარეგისტრირებულია",
+      "allRegisteredBody": "თქვენი ყველა სპორტსმენი უკვე დარეგისტრირებულია ამ ღონისძიებაზე.",
+      "noAthletesTitle": "სპორტსმენები ჯერ არ არის",
+      "noAthletesBody": "სანამ დაარეგისტრირებთ, დაამატეთ სპორტსმენები თქვენს შემადგენლობაში."
     },
     "athletes": {
       "title": "სპორტსმენები",
@@ -1035,7 +1201,8 @@
       "name": "სახელი",
       "role": "როლი",
       "club": "კლუბი",
-      "organisation": "ორგანიზაცია"
+      "organisation": "ორგანიზაცია",
+      "roleCoach": "მწვრთნელი"
     },
     "noClub": {
       "title": "კლუბი მინიჭებული არ არის",
@@ -1181,6 +1348,16 @@
         "pendingHint": "ბრძოლები, რომლებიც ჯერ გადაწყვეტილი არ არის."
       }
     },
+    "medals": {
+      "title": "მედლები და ადგილები",
+      "subtitle": "კარიერული შედეგები დასრულებულ შეჯიბრებში.",
+      "medalCount": "{count, plural, one {# მედალი} other {# მედალი}}",
+      "gold": "ოქრო",
+      "silver": "ვერცხლი",
+      "bronze": "ბრინჯაო",
+      "other": "სხვა ადგილები",
+      "empty": "დასრულებული შეჯიბრის შედეგები ჯერ არ არის."
+    },
     "identity": {
       "eyebrow": "იდენტობა",
       "summary": "სპორტსმენისა და კლუბის ძირითადი ინფორმაცია, რომელიც გამოიყენება რეგისტრაციასა და შეჯიბრის პროცესებში.",
@@ -1274,6 +1451,45 @@
     "saveError": "Could not save the news post. Please try again.",
     "validationRequired": "Title and slug are required."
   },
+  "countries": {
+    "title": "ქვეყნები",
+    "new": "ახალი ქვეყანა",
+    "emptyTitle": "ქვეყნები ჯერ არ არის",
+    "emptyDescription": "დაამატეთ ქვეყნები, შემდეგ კი რეგიონები და კლუბები მათ შიგნით.",
+    "columns": {
+      "name": "ქვეყანა",
+      "code": "კოდი",
+      "regions": "რეგიონები",
+      "clubs": "კლუბები"
+    },
+    "fields": {
+      "name": "ქვეყნის სახელი (EN)",
+      "nameKa": "ქვეყნის სახელი (ქართ.)",
+      "code": "ISO კოდი (მაგ. GE)"
+    },
+    "deleteConfirm": "წავშალოთ ეს ქვეყანა? ამის გაუქმება ვერ მოხერხდება.",
+    "notEmpty": "ჯერ წაშალეთ ამ ქვეყნის რეგიონები, კლუბები, მწვრთნელები და სპორტსმენები.",
+    "regionsCount": "{count, plural, =0 {რეგიონები არ არის} one {# რეგიონი} other {# რეგიონი}}",
+    "clubsCount": "{count, plural, =0 {კლუბები არ არის} one {# კლუბი} other {# კლუბი}}",
+    "backToCountries": "ქვეყნები",
+    "regionsTitle": "რეგიონები",
+    "newRegion": "ახალი რეგიონი",
+    "emptyRegionsTitle": "რეგიონები ჯერ არ არის",
+    "emptyRegionsDescription": "დაამატეთ რეგიონები ამ ქვეყნის კლუბების დასაჯგუფებლად.",
+    "regionColumns": {
+      "name": "რეგიონი",
+      "clubs": "კლუბები"
+    },
+    "regionFields": {
+      "name": "რეგიონის სახელი (EN)",
+      "nameKa": "რეგიონის სახელი (ქართ.)"
+    },
+    "deleteRegionConfirm": "წავშალოთ ეს რეგიონი? ამის გაუქმება ვერ მოხერხდება.",
+    "regionNotEmpty": "ჯერ გადაიტანეთ ან წაშალეთ ამ რეგიონის კლუბები, მწვრთნელები და სპორტსმენები.",
+    "clubsTitle": "კლუბები",
+    "emptyClubsTitle": "ამ რეგიონში კლუბები არ არის",
+    "emptyClubsDescription": "ამ რეგიონზე მიბმული კლუბები აქ გამოჩნდება."
+  },
   "clubs": {
     "title": "კლუბები",
     "new": "ახალი კლუბი",
@@ -1281,14 +1497,20 @@
     "emptyDescription": "შექმენით კლუბები სპორტსმენების გუნდების მიხედვით დასაჯგუფებლად.",
     "columns": {
       "name": "კლუბი",
+      "region": "რეგიონი",
       "city": "ქალაქი",
       "country": "ქვეყანა"
     },
     "fields": {
       "name": "კლუბის სახელი (EN)",
       "nameKa": "კლუბის სახელი (ქართ.)",
+      "country": "ქვეყანა",
+      "region": "რეგიონი",
       "city": "ქალაქი",
-      "country": "ქვეყანა"
+      "selectCountry": "აირჩიეთ ქვეყანა",
+      "selectRegion": "აირჩიეთ რეგიონი",
+      "selectCountryFirst": "ჯერ აირჩიეთ ქვეყანა",
+      "noRegions": "ამ ქვეყანაში რეგიონები ჯერ არ არის"
     },
     "detail": {
       "title": "კლუბის დეტალები",
@@ -1455,6 +1677,39 @@
       "approve": "Approve only when status is Pending, Submitted or Rejected",
       "reject": "Reject only when status is Pending, Submitted or Approved",
       "withdraw": "Already withdrawn"
+    },
+    "addAthlete": {
+      "button": "სპორტსმენის დამატება",
+      "title": "სპორტსმენის დამატება ღონისძიებაში",
+      "successTitle": "სპორტსმენი დარეგისტრირდა",
+      "successBody": "{name} ({club}) დარეგისტრირდა.",
+      "errorTitle": "რეგისტრაცია ვერ მოხერხდა",
+      "errorBody": "რეგისტრაციისას მოხდა შეცდომა. სცადეთ ხელახლა.",
+      "addSameClub": "კიდევ დაამატეთ {club}-დან",
+      "addAnotherClub": "სხვა კლუბიდან დამატება",
+      "done": "მზადაა",
+      "tryAgain": "ხელახლა ცდა",
+      "stepClub": "კლუბი",
+      "stepAthlete": "სპორტსმენი",
+      "stepCategory": "კატეგორია",
+      "searchClubs": "კლუბების ძიება…",
+      "noClubs": "კლუბი ვერ მოიძებნა",
+      "changeClub": "კლუბის შეცვლა",
+      "searchAthletes": "სპორტსმენების ძიება…",
+      "noAthletes": "სპორტსმენი ვერ მოიძებნა",
+      "registeredBadge": "დარეგისტრირებული",
+      "changeAthlete": "სპორტსმენის შეცვლა",
+      "notesOptional": "შენიშვნები (არასავალდებულო)",
+      "register": "რეგისტრაცია",
+      "errors": {
+        "REGISTRATION_CLOSED": "ამ ღონისძიებაზე რეგისტრაცია დახურულია.",
+        "REGISTRATION_ALREADY_EXISTS": "ეს სპორტსმენი უკვე დარეგისტრირებულია ამ ღონისძიებაზე.",
+        "REGISTRATION_LOCKED": "ამ ღონისძიების რეგისტრაციები ჩაკეტილია.",
+        "INVALID_CATEGORY_FOR_EVENT": "ეს კატეგორია მიუწვდომელია ამ ღონისძიებისთვის.",
+        "ATHLETE_OUT_OF_AGE_GROUP": "სპორტსმენის ასაკი არ შეესაბამება ამ კატეგორიას.",
+        "ATHLETE_SEX_MISMATCH_FOR_CATEGORY": "სპორტსმენის სქესი არ შეესაბამება ამ კატეგორიას.",
+        "EVENT_READ_ONLY": "ეს ღონისძიება მხოლოდ წასაკითხია და ვერ შეიცვლება."
+      }
     }
   },
   "weighin": {
@@ -1762,7 +2017,19 @@
     "regenerateDialogDescription": "This is a critical action and will change existing brackets.",
     "regenerateDialogWarning": "Regeneration can alter athlete paths and existing bracket structure. Action is audited.",
     "regenerateReasonPlaceholder": "Reason is required for regeneration.",
-    "regenerateConfirmLabel": "Type REGENERATE to confirm"
+    "regenerateConfirmLabel": "Type REGENERATE to confirm",
+    "publicToggleLabel": "წონის შედეგების საჯაროობა",
+    "publicToggleOn": "ჩანს საჯარო საიტზე",
+    "publicToggleOff": "დამალულია საჯარო საიტზე",
+    "publicToggleOnToast": "წონის შედეგები ახლა საჯაროა",
+    "publicToggleOffToast": "წონის შედეგები ახლა დამალულია",
+    "onlyWithPassed": "მხოლოდ კატეგორიები გავლილი სპორტსმენებით",
+    "passedCount": "{count, plural, one {# გავლილი} other {# გავლილი}}",
+    "passedCountShort": "{count, plural, one {# გავლილი} other {# გავლილი}}",
+    "columnsDocument": "დოკუმენტის ID",
+    "columnsWeighInWeight": "წონის შედეგი",
+    "actionMoveUp": "აწევა",
+    "emptyPassedAthletes": "ამ კატეგორიაში ჯერ არცერთ სპორტსმენს არ გაუვლია წონა."
   },
   "brackets": {
     "title": "ბადეების მართვა",
@@ -1961,7 +2228,20 @@
     "regenerateConfirmToken": "REGENERATE",
     "regenerateConfirmLabel": "დასადასტურებლად ჩაწერეთ {token}",
     "regenerateConfirmPlaceholder": "{token}",
-    "valueUnavailable": "—"
+    "valueUnavailable": "—",
+    "generateDialogTitle": "ბადეების გენერაცია",
+    "generateDialogDescription": "შექმენით შერკევები ყველა შესაბამის კატეგორიაში წონაგავლილი სპორტსმენებისგან.",
+    "generateDialogSummaryCategories": "{count, plural, one {# კატეგორია მზადაა გასათამაშებლად} other {# კატეგორია მზადაა გასათამაშებლად}}",
+    "generateSameClubLabel": "ერთი კლუბის სპორტსმენების გაყოფა",
+    "generateSameClubHint": "შეძლებისდაგვარად აარიდეთ ერთი კლუბის სპორტსმენების შეხვედრა ადრეულ რაუნდებში.",
+    "actionGenerate": "გენერაცია",
+    "actionGenerating": "მიმდინარეობს…",
+    "generateSuccess": "ბადეები დაგენერირდა",
+    "editEnter": "ბადის რედაქტირება",
+    "editExit": "რედაქტირების დასრულება",
+    "editSaving": "ინახება…",
+    "editDragHint": "გადაიტანეთ სპორტსმენები პოზიციების შესაცვლელად.",
+    "viewerEmptyPlaceholder": "აირჩიეთ კატეგორია ბადის სანახავად."
   },
   "schedule": {
     "title": "გრაფიკი",
@@ -1994,7 +2274,9 @@
     "emptySession": "ბრძოლები არ არის — გადაათრიეთ ბრძოლები ან გადაარედაქტირეთ",
     "fightReady": "მზადაა",
     "fightWaiting": "ლოდინი",
-    "errorGeneric": "მოქმედება ვერ შესრულდა."
+    "errorGeneric": "მოქმედება ვერ შესრულდა.",
+    "printSchedule": "განრიგის ბეჭდვა",
+    "printPopupBlocked": "ბეჭდვის ფანჯარა ვერ გაიხსნა — დაუშვით ამომხტარი ფანჯრები და სცადეთ ხელახლა."
   },
   "live": {
     "title": "პირდაპირი ეთერი",
@@ -2064,6 +2346,19 @@
     "completedHistory": "დასრულებული ბრძოლები",
     "noUpcoming": "მომდევნო ბრძოლები არ არის.",
     "noCompleted": "დასრულებული ბრძოლები ჯერ არ არის.",
+    "sessionsHeading": "ბრძოლები სესიების მიხედვით",
+    "sessionActive": "მიმდინარეობს",
+    "sessionUpcoming": "მოახლოებული",
+    "sessionDone": "დასრულდა",
+    "sessionUnassigned": "მიუნიჭებელი",
+    "sessionProgress": "{done}/{total} დასრულდა",
+    "sessionWrapUp": "დარჩა მხოლოდ {count} ბრძოლა — მოამზადეთ შემდეგი სესია",
+    "sessionGateEyebrow": "სესია დასრულდა",
+    "sessionGateDesc": "წინა სესია დასრულდა. დაიწყეთ შემდეგი სესია, როცა მატი მზად იქნება.",
+    "sessionGateFirstUp": "პირველი ბრძოლა",
+    "startNextSession": "შემდეგი სესიის დაწყება",
+    "liveRoundRunning": "რაუნდი {round} მიმდინარეობს",
+    "inProgressHeading": "მიმდინარე",
     "completionState": {
       "NOT_STARTED": "არ დაწყებულა",
       "IN_PROGRESS": "მიმდინარეობს",
@@ -2123,6 +2418,21 @@
       }
     }
   },
+  "signatures": {
+    "title": "მსაჯის ხელმოწერები",
+    "subtitle": "მთავარი მსაჯის ხელმოწერის ბლოკი, რომელიც გამოჩნდება ყველა ოქმის ბოლოში. შექმენით და აირჩიეთ შედეგების ექსპორტისას.",
+    "addTitle": "ახალი ხელმოწერის შაბლონი",
+    "nameEn": "მსაჯის სრული სახელი (ინგლისურად)",
+    "nameKa": "მსაჯის სრული სახელი (ქართულად)",
+    "signatureLabel": "ხელმოწერის სურათი",
+    "signatureHint": "PNG/JPG. სურათი ავტომატურად შემცირდება შენახვამდე.",
+    "chooseImage": "სურათის არჩევა",
+    "noImage": "სურათი არ არის არჩეული",
+    "save": "შაბლონის შენახვა",
+    "empty": "ხელმოწერის შაბლონები ჯერ არ არის",
+    "deleteConfirm": "წავშალო ეს ხელმოწერის შაბლონი?",
+    "uploadFailed": "სურათის წაკითხვა ვერ მოხერხდა"
+  },
   "results": {
     "title": "Results",
     "placements": "Placements",
@@ -2131,7 +2441,19 @@
     "completedCategories": "Completed categories",
     "needsReviewCategories": "Needs review categories",
     "medalTable": "Medal table",
-    "export": "Export",
+    "export": "PDF ექსპორტი",
+    "exportHint": "PDF ფაილები იქმნება ღონისძიების მიმდინარე მონაცემებიდან.",
+    "exportLanguage": "ენა",
+    "export_signature": "მთავარი მსაჯი (შედეგები)",
+    "export_signature_manage": "მართვა",
+    "export_signature_create": "ჯერ შექმენით ხელმოწერის შაბლონი",
+    "export_signature_required": "ჯერ აირჩიეთ მთავარი მსაჯის ხელმოწერა",
+    "export_results": "შედეგების ოქმები",
+    "export_results_hint": "ბადე + ადგილები კატეგორიების მიხედვით",
+    "export_schedule": "განრიგი",
+    "export_schedule_hint": "ყველა შერკევის თანმიმდევრობა",
+    "export_weighin": "აწონვის ფორმა",
+    "export_weighin_hint": "აწონვის ფურცელი კატეგორიის მიხედვით",
     "unknownClub": "Independent",
     "emptyTitle": "No results yet",
     "emptyDescription": "Results will appear after fights are confirmed.",

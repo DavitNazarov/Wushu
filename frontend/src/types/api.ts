@@ -8,7 +8,7 @@ export type EventLifecycle =
   | 'LIVE'
   | 'COMPLETED';
 
-export type RegistrationWindowStatus = 'UPCOMING' | 'OPEN' | 'CLOSED';
+type RegistrationWindowStatus = 'UPCOMING' | 'OPEN' | 'CLOSED';
 
 export type CategoryTemplateStatus = 'DRAFT' | 'ACTIVE';
 export type CategoryTemplateType = 'SYSTEM' | 'CUSTOM' | 'OFFICIAL';
@@ -25,9 +25,9 @@ export type WeighInPolicyCode =
   | 'MOVE_UP_AFTER_FAILED_REWEIGH'
   | 'DIRECT_MOVE_UP'
   | 'MANUAL_ADMIN_DECISION';
-export type BronzePolicyCode = 'TWO_BRONZES';
-export type RestPolicyCode = 'MIN_15_MINUTES';
-export type PublishTimingPolicyCode =
+type BronzePolicyCode = 'TWO_BRONZES';
+type RestPolicyCode = 'MIN_15_MINUTES';
+type PublishTimingPolicyCode =
   | 'IMMEDIATE_AFTER_DRAW'
   | 'MANUAL_PUBLISH_LATER'
   | 'COMPETITION_DAY_ONLY';
@@ -36,7 +36,7 @@ export type WinMethod = 'POINTS' | 'KO' | 'DQ' | 'WO';
 export type AthleteSex = 'MALE' | 'FEMALE';
 export type SubmissionStatus = 'NEW' | 'HANDLED';
 
-export interface EventDates {
+interface EventDates {
   range: {
     startDate: string; // YYYY-MM-DD
     endDate: string; // YYYY-MM-DD
@@ -125,7 +125,7 @@ export interface CategoryTemplateRow {
   deleteBlockedReason?: string | null;
 }
 
-export interface CategoryTemplateCategoryRow {
+interface CategoryTemplateCategoryRow {
   id: string;
   name: string;
   minWeightKgExcl: number | null;
@@ -137,6 +137,7 @@ export interface CategoryTemplateGroupRow {
   id: string;
   code: string;
   name: string;
+  nameKa: string | null;
   sex: AthleteSex | null;
   minAge: number | null;
   maxAge: number | null;
@@ -145,7 +146,7 @@ export interface CategoryTemplateGroupRow {
   weightCategories: CategoryTemplateCategoryRow[];
 }
 
-export interface CategoryTemplateUsageEventRow {
+interface CategoryTemplateUsageEventRow {
   id: string;
   name: string;
   nameKa?: string | null;
@@ -178,7 +179,7 @@ export interface CategoryTemplateDetailRow extends CategoryTemplateRow {
   };
 }
 
-export interface CategoryOptionRow {
+interface CategoryOptionRow {
   id: string;
   code: string;
   name: string;
@@ -191,12 +192,34 @@ export interface CategoryOptionGroupRow {
   id: string;
   code: string;
   name: string;
+  nameKa: string | null;
   sex: AthleteSex | null;
   minAge: number | null;
   maxAge: number | null;
   roundDurationSeconds: number;
   sortOrder: number;
+  isActive: boolean;
   options: CategoryOptionRow[];
+}
+
+/** Payload for creating/updating a category group (weight-category library). */
+interface WeightDivisionInput {
+  /** Present when editing an existing division; omitted for new rows. */
+  id?: string;
+  name: string;
+  minWeightKgExcl: number | null;
+  maxWeightKgIncl: number | null;
+}
+
+export interface CategoryOptionGroupInput {
+  name: string;
+  nameKa: string | null;
+  sex: AthleteSex | null;
+  minAge: number | null;
+  maxAge: number | null;
+  roundDurationSeconds: number;
+  isActive: boolean;
+  weights: WeightDivisionInput[];
 }
 
 export interface EventWeightCategoryRow {
@@ -237,7 +260,53 @@ export interface ClubRow {
   name: string;
   nameKa: string | null;
   city: string | null;
+  // `country` is the country NAME (derived from the club's Country relation).
   country: string | null;
+  // Present on the /api/clubs list (region/country are required on a club);
+  // omitted on the lighter club summary embedded in athlete rows.
+  regionId?: string;
+  regionName?: string;
+  regionNameKa?: string | null;
+  countryId?: string;
+  countryNameKa?: string | null;
+}
+
+// Top-level country row for the admin countries table.
+export interface CountryRow {
+  id: string;
+  name: string;
+  nameKa: string | null;
+  code: string | null;
+  regionCount: number;
+  clubCount: number;
+}
+
+// A region as shown inside a country's detail page.
+export interface CountryRegionRow {
+  id: string;
+  name: string;
+  nameKa: string | null;
+  clubCount: number;
+}
+
+// GET /api/countries/:id — a country plus its regions.
+export interface CountryDetail {
+  id: string;
+  name: string;
+  nameKa: string | null;
+  code: string | null;
+  regions: CountryRegionRow[];
+}
+
+// GET /api/regions — a region with its parent country name + club count.
+export interface RegionRow {
+  id: string;
+  countryId: string;
+  name: string;
+  nameKa: string | null;
+  countryName: string;
+  countryNameKa: string | null;
+  clubCount: number;
 }
 
 export interface AthleteRow {
@@ -250,6 +319,8 @@ export interface AthleteRow {
   sex: AthleteSex | null;
   documentId: string;
   clubId: string | null;
+  regionId?: string | null;
+  countryId?: string | null;
   club?: ClubRow | null;
   duplicateCount?: number;
   _dedupeCount?: number;
@@ -283,35 +354,18 @@ export interface RegistrationBulkStatusResponse {
   }>;
 }
 
-export interface WeighInResult {
-  id: string;
-  registrationId: string;
-  weight: number;
-  decision: WeighInDecision;
-  reason: string | null;
-  override: boolean;
-  createdAt: string;
-}
-
-export interface BracketRow {
-  id: string;
-  eventId: string;
-  categoryCode: string;
-  seed?: number | null;
-  fights?: FightRow[];
-}
-
-export type DrawIssueSeverity = 'CRITICAL' | 'WARNING';
-export type DrawOverallStatus = 'NOT_GENERATED' | 'GENERATED' | 'PUBLISHED';
-export type DrawBracketStatus = 'NOT_DRAWN' | 'DRAWN';
-export type DrawCategoryStatus =
+type DrawIssueSeverity = 'CRITICAL' | 'WARNING';
+type DrawOverallStatus = 'NOT_GENERATED' | 'GENERATED' | 'PUBLISHED';
+type DrawBracketStatus = 'NOT_DRAWN' | 'DRAWN';
+type DrawCategoryStatus =
   | 'READY'
   | 'BLOCKED'
   | 'DRAWN'
   | 'EMPTY'
+  | 'SOLO'
   | 'NEEDS_REVIEW';
 
-export interface DrawValidationIssue {
+interface DrawValidationIssue {
   code: string;
   severity: DrawIssueSeverity;
   count: number;
@@ -333,7 +387,10 @@ export interface DrawCategoryOverviewRow {
   warningIssueCount: number;
   issueCount: number;
   hasMovedUpAthletes: boolean;
-  hasOverrideAthletes: boolean;
+  hasAgeGroupMove: boolean;
+  reviewed: boolean;
+  reviewedAt: string | null;
+  reviewedByName: string | null;
   issues: DrawValidationIssue[];
 }
 
@@ -352,9 +409,11 @@ export interface DrawAthletePoolRow {
     | 'OVERRIDE_APPROVED'
     | 'REWEIGH_ALLOWED'
     | 'DISQUALIFIED';
+  weighInWeightKg: number | null;
   originalCategory: string | null;
   finalCategory: string | null;
   movedUp: boolean;
+  crossesAgeGroup: boolean;
   overrideUsed: boolean;
   eligibilityState: 'ELIGIBLE' | 'EXCLUDED';
   exclusionReasonCode: string | null;
@@ -368,6 +427,7 @@ export interface DrawOverviewResponse {
     publishTimingPolicyCode: PublishTimingPolicyCode;
     drawStatus: DrawOverallStatus;
     registrationLocked: boolean;
+    weighInResultsPublic: boolean;
   };
   summary: {
     totalCategories: number;
@@ -376,6 +436,7 @@ export interface DrawOverviewResponse {
     drawnCategoriesCount: number;
     emptyCategoriesCount: number;
     needsReviewCategoriesCount: number;
+    soloCategoriesCount: number;
     eligibleAthletesCount: number;
     movedUpAthletesCount: number;
     outstandingIssuesCount: number;
@@ -431,13 +492,13 @@ export type BracketViewStatus =
   | 'NEEDS_REVIEW'
   | 'EMPTY';
 
-export type BracketPublicationStatus = 'DRAFT' | 'PUBLISHED';
+type BracketPublicationStatus = 'DRAFT' | 'PUBLISHED';
 export type CompetitionFormat =
   | 'DIRECT_FINAL'
   | 'ROUND_ROBIN'
   | 'SINGLE_ELIMINATION';
 
-export type BracketIssueSeverity = 'CRITICAL' | 'WARNING';
+type BracketIssueSeverity = 'CRITICAL' | 'WARNING';
 
 export interface BracketIssue {
   code: string;
@@ -484,9 +545,11 @@ export interface BracketsOverviewResponse {
     needsReviewCategoriesCount: number;
   };
   actions: {
+    canGenerate: boolean;
     canPublish: boolean;
     canUnpublish: boolean;
     canExport: boolean;
+    generateBlockedReasonCode: string | null;
     publishBlockedReasonCode: string | null;
     unpublishBlockedReasonCode: string | null;
   };
@@ -511,7 +574,7 @@ export interface BracketsOverviewResponse {
   categories: BracketsOverviewCategoryRow[];
 }
 
-export interface BracketParticipantView {
+interface BracketParticipantView {
   athleteId: string;
   athleteName: string;
   clubName: string | null;
@@ -529,7 +592,7 @@ export interface BracketParticipantSlotView {
   athlete: BracketParticipantView | null;
 }
 
-export interface BracketRoundMatchup {
+interface BracketRoundMatchup {
   fightId: string;
   boutNo: number;
   round: number;
@@ -653,30 +716,6 @@ export interface PublicBracketCategoryDetailsResponse {
   fights: BracketFightListRow[];
 }
 
-export interface FightRow {
-  id: string;
-  bracketId?: string | null;
-  categoryCode?: string;
-  eventWeightCategoryId?: string | null;
-  roundDurationSeconds?: number | null;
-  round: number;
-  boutNo: number;
-  redAthleteId?: string | null;
-  blueAthleteId?: string | null;
-  redAthlete?: { id: string; firstName: string; lastName: string } | null;
-  blueAthlete?: { id: string; firstName: string; lastName: string } | null;
-  winnerAthlete?: { id: string; firstName: string; lastName: string } | null;
-  winnerAthleteId?: string | null;
-  status: FightStatus;
-  winMethod?: WinMethod | null;
-  matId?: string | null;
-  mat?: { id: string; name: string } | null;
-  orderInMat?: number | null;
-  scheduledStartTime?: string | null;
-  notes?: string | null;
-  confirmedAt?: string | null;
-}
-
 export interface ScheduleSessionRow {
   id: string;
   eventId: string;
@@ -710,99 +749,14 @@ export interface ScheduleFightRow {
   hasGapViolation?: boolean;
 }
 
-export interface AutoScheduleConflict {
-  fightId: string;
-  scheduledOrder: number;
-  athleteIds: string[];
-  violatedAthleteIds: string[];
-  previousFightIds: string[];
-  requiredFightGap: number;
-  actualFightGap: number;
-  missingFightCount: number;
-}
-
-export interface AutoScheduleDiagnostics {
-  minFightGap: number;
-  fullySatisfied: boolean;
-  conflictCount: number;
-  conflicts: AutoScheduleConflict[];
-}
-
-export interface AutoScheduleResponse {
-  updates: Array<{
-    id: string;
-    matId: string;
-    orderInMat: number;
-    scheduledStartTime: string;
-  }>;
-  diagnostics: AutoScheduleDiagnostics;
-}
-
-export interface LiveBoardParticipantView {
-  athleteId: string | null;
-  name: string;
-  kind: 'ATHLETE' | 'WINNER_PLACEHOLDER' | 'BYE' | 'TBD';
-  sourceBoutNo: number | null;
-}
-
-export interface LiveBoardFightRow {
-  id: string;
-  round: number;
-  boutNo: number;
-  stageLabel: string;
-  bracketRoundLabel?: string;
-  scheduleOrder?: number | null;
-  redSourceScheduleOrder?: number | null;
-  blueSourceScheduleOrder?: number | null;
-  status: FightStatus;
-  isPlayable?: boolean;
-  winnerAthleteId: string | null;
-  winMethod: WinMethod | null;
-  notes: string | null;
-  red: LiveBoardParticipantView;
-  blue: LiveBoardParticipantView;
-  matId?: string | null;
-  matName?: string | null;
-  orderInMat?: number | null;
-  scheduledAt?: string | null;
-  timerState: TimerState | null;
-}
-
-export interface LiveCategoryBoardCategoryRow {
-  eventWeightCategoryId: string;
-  categoryCode: string;
-  categoryName: string;
-  ageGroupName: string | null;
-  competitionFormat: CompetitionFormat;
-  athleteCount: number;
-  totalFights: number;
-  completedFights: number;
-  completionState: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'NEEDS_REVIEW';
-  currentFightStatus: FightStatus | null;
-  needsReview: boolean;
-  issues: Array<{ code: string; severity: 'CRITICAL' | 'WARNING' }>;
-}
-
-export interface LiveCategoryBoardResponse {
-  eventId: string;
-  categories: LiveCategoryBoardCategoryRow[];
-  selectedCategoryId: string | null;
-  board: (LiveCategoryBoardCategoryRow & {
-    currentFight: LiveBoardFightRow | null;
-    onDeck?: LiveBoardFightRow | null;
-    queue: LiveBoardFightRow[];
-    completed: LiveBoardFightRow[];
-  }) | null;
-}
-
-export interface ResultsSummaryPlacementRow {
+interface ResultsSummaryPlacementRow {
   rank: number;
   athleteId: string | null;
   athleteName: string | null;
   medal: 'GOLD' | 'SILVER' | 'BRONZE' | null;
 }
 
-export interface ResultsSummaryStandingRow {
+interface ResultsSummaryStandingRow {
   rank: number;
   athleteId: string;
   athleteName: string;
@@ -814,7 +768,7 @@ export interface ResultsSummaryStandingRow {
   tieBreakWins: number;
 }
 
-export interface ResultsSummaryCategoryRow {
+interface ResultsSummaryCategoryRow {
   eventWeightCategoryId: string;
   categoryCode: string;
   categoryName: string;
@@ -864,12 +818,12 @@ export interface ResultsSummaryResponse {
   }>;
 }
 
-export interface AthleteProfileCoachRow {
+interface AthleteProfileCoachRow {
   id: string;
   displayName: string;
 }
 
-export interface AthleteProfileClubRow {
+interface AthleteProfileClubRow {
   id: string;
   name: string;
   nameKa: string | null;
@@ -925,6 +879,14 @@ export interface AthleteProfileFightRow {
   winnerAthleteId: string | null;
 }
 
+export interface AthleteMedalSummary {
+  gold: number;
+  silver: number;
+  bronze: number;
+  other: number;
+  total: number;
+}
+
 export interface AthleteProfileResponse {
   athlete: {
     id: string;
@@ -941,6 +903,7 @@ export interface AthleteProfileResponse {
   };
   registrations: AthleteProfileRegistrationRow[];
   fights: AthleteProfileFightRow[];
+  medals: AthleteMedalSummary;
 }
 
 export interface MatRow {

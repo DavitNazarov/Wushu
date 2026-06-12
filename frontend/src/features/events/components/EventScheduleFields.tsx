@@ -50,7 +50,7 @@ export function EventScheduleFields({
     <div className="space-y-6">
       <div>
         <p className={subsectionClassName}>{tEvents('form.eventDatesLabel')}</p>
-        <div className="grid items-end gap-3 sm:grid-cols-2">
+        <div className="grid items-end gap-4 sm:grid-cols-2">
           <div>
             <EventDateField
               label={tEvents('dates.start')}
@@ -84,7 +84,7 @@ export function EventScheduleFields({
         </div>
 
         {eventDays.length > 0 ? (
-          <div className="mt-3">
+          <div className="mt-4">
             <DayPicker
               days={eventDays}
               registrationDays={registrationDays}
@@ -100,9 +100,9 @@ export function EventScheduleFields({
         ) : null}
       </div>
 
-      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-alt)]/40 p-4">
+      <div className="border-t border-[var(--color-border)] pt-5">
         <p className={subsectionClassName}>{tEvents('registrationWindow.label')}</p>
-        <div className="grid items-end gap-3 sm:grid-cols-2">
+        <div className="grid items-end gap-4 sm:grid-cols-2">
           <div>
             <EventDateField
               label={tEvents('registrationWindow.opensAt')}

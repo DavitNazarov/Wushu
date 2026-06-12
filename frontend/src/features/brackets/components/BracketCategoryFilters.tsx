@@ -34,38 +34,25 @@ const SORTS: BracketCategorySort[] = [
 type Props = {
   filter: BracketCategoryFilter;
   sort: BracketCategorySort;
-  onlyWithAthletes: boolean;
   totalCount: number;
   shownCount: number;
   onFilter: (filter: BracketCategoryFilter) => void;
   onSort: (sort: BracketCategorySort) => void;
-  onOnlyWithAthletesChange: (value: boolean) => void;
   t: (key: string, values?: Record<string, string | number | Date>) => string;
 };
 
 export function BracketCategoryFilters({
   filter,
   sort,
-  onlyWithAthletes,
   totalCount,
   shownCount,
   onFilter,
   onSort,
-  onOnlyWithAthletesChange,
   t,
 }: Props) {
   return (
     <Card className="space-y-3 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[var(--color-text)]">
-          <input
-            type="checkbox"
-            checked={onlyWithAthletes}
-            onChange={(e) => onOnlyWithAthletesChange(e.target.checked)}
-            className="h-4 w-4 rounded border-[var(--color-border)] bg-[var(--color-surface)] accent-[var(--color-primary)]"
-          />
-          {t('onlyWithAthletes')}
-        </label>
+      <div className="flex items-center justify-end gap-2">
         <span className="text-[12px] text-[var(--color-text-muted)]">
           {shownCount}/{totalCount}
         </span>

@@ -1,10 +1,3 @@
-export function getApiUrl(path: string): string {
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return normalizedPath.startsWith('/api/')
-    ? normalizedPath
-    : `/api${normalizedPath}`;
-}
-
 /**
  * For server-side fetch: use same-origin URL so Next.js rewrite proxies to backend.
  * Avoids direct localhost:4000 calls that can fail (e.g. server not reachable).

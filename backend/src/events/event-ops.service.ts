@@ -105,6 +105,42 @@ export class EventOpsService {
     return updated;
   }
 
+  // Toggle public visibility of the confirmed weigh-in weights list, surfaced
+  // at /events/:slug/weights. Independent of the general `published` flag and
+  // the lifecycle state machine — admins control it from the Weigh-In Results
+  // page. Returns null when the event isn't found in this org.
+  async setWeighInResultsPublic(
+    eventId: string,
+    organisationId: string,
+    isPublic: boolean,
+    actorUserId: string,
+  ): Promise<Event | null> {
+    const existing = await this.prisma.event.findFirst({
+      where: { id: eventId, organisationId },
+    });
+    if (!existing) return null;
+
+    const updated = await this.prisma.event.update({
+      where: { id: eventId },
+      data: { weighInResultsPublic: isPublic },
+    });
+
+    await this.audit.write({
+      organisationId,
+      eventId,
+      actorUserId,
+      action: isPublic
+        ? 'EVENT_WEIGHIN_RESULTS_PUBLISHED'
+        : 'EVENT_WEIGHIN_RESULTS_UNPUBLISHED',
+      entityType: 'event',
+      entityId: eventId,
+      before: existing as unknown as Prisma.JsonValue,
+      after: updated as unknown as Prisma.JsonValue,
+    });
+
+    return updated;
+  }
+
   // Hard-delete an event and every child row. Performed in a single
   // transaction so a partial failure rolls back cleanly. Order matters:
   //   - AuditLog / NewsPost: detached (nulled), not deleted, to preserve history
@@ -122,39 +158,46 @@ export class EventOpsService {
     });
     if (!existing) throw new Error('EVENT_NOT_FOUND');
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.auditLog.updateMany({
-        where: { eventId },
-        data: { eventId: null },
-      });
-      await tx.newsPost.updateMany({
-        where: { eventId },
-        data: { eventId: null },
-      });
-      await tx.timerState.deleteMany({ where: { fight: { eventId } } });
-      await tx.fight.deleteMany({ where: { eventId } });
-      await tx.scheduleSession.deleteMany({ where: { eventId } });
-      await tx.bracket.deleteMany({ where: { eventId } });
-      await tx.mat.deleteMany({ where: { eventId } });
-      await tx.weighInAttempt.deleteMany({ where: { eventId } });
-      await tx.registration.deleteMany({ where: { eventId } });
-      await tx.eventCategoryTemplateSnapshot.deleteMany({ where: { eventId } });
+    await this.prisma.$transaction(
+      async (tx) => {
+        await tx.auditLog.updateMany({
+          where: { eventId },
+          data: { eventId: null },
+        });
+        await tx.newsPost.updateMany({
+          where: { eventId },
+          data: { eventId: null },
+        });
+        await tx.timerState.deleteMany({ where: { fight: { eventId } } });
+        await tx.fight.deleteMany({ where: { eventId } });
+        await tx.scheduleSession.deleteMany({ where: { eventId } });
+        await tx.bracket.deleteMany({ where: { eventId } });
+        await tx.mat.deleteMany({ where: { eventId } });
+        await tx.weighInAttempt.deleteMany({ where: { eventId } });
+        await tx.registration.deleteMany({ where: { eventId } });
+        await tx.eventCategoryTemplateSnapshot.deleteMany({
+          where: { eventId },
+        });
 
-      await this.audit.write(
-        {
-          organisationId,
-          actorUserId,
-          action: 'EVENT_DELETED',
-          entityType: 'event',
-          entityId: eventId,
-          before: existing as unknown as Prisma.JsonValue,
-          after: null,
-        },
-        tx,
-      );
+        await this.audit.write(
+          {
+            organisationId,
+            actorUserId,
+            action: 'EVENT_DELETED',
+            entityType: 'event',
+            entityId: eventId,
+            before: existing as unknown as Prisma.JsonValue,
+            after: null,
+          },
+          tx,
+        );
 
-      await tx.event.delete({ where: { id: eventId } });
-    });
+        await tx.event.delete({ where: { id: eventId } });
+        // Large events delete thousands of child rows — Prisma's default 5s
+        // interactive-transaction timeout is too tight (same value as the draw).
+      },
+      { timeout: 30000 },
+    );
   }
 
   // Move an event between lifecycle states. Enforces three layers of rules:
@@ -224,14 +267,22 @@ export class EventOpsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // When moving backward via override, disable auto-advance so automation
-      // doesn't immediately re-advance the event back to where it was.
-      const result = await tx.event.update({
-        where: { id: input.eventId },
+      // Compare-and-swap on the lifecycle we validated against: if another
+      // admin (or the auto-advance cron) moved the event between our read and
+      // this write, the guards above ran against a stale state — abort instead
+      // of blindly overwriting (mapped to 409 in the controller).
+      const updated = await tx.event.updateMany({
+        where: { id: input.eventId, lifecycle: existing.lifecycle },
         data: {
           lifecycle: input.targetState,
           ...(isBackward ? { autoAdvanceStage: false } : {}),
         },
+      });
+      if (updated.count === 0) {
+        throw new Error('EVENT_LIFECYCLE_CONFLICT');
+      }
+      const result = await tx.event.findUniqueOrThrow({
+        where: { id: input.eventId },
       });
 
       await this.audit.write({

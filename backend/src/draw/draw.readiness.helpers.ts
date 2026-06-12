@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import type {
   DrawActionAvailability,
   DrawValidationIssue,
@@ -77,8 +78,12 @@ export function deriveExclusionReasonCode(input: {
 //   EMPTY ⇒ no athletes at all.
 //   BLOCKED ⇒ critical issues OR zero eligible (a category with only
 //             excluded athletes is unusable).
-//   NEEDS_REVIEW ⇒ warnings only — admin should look but can still draw.
+//   SOLO ⇒ exactly one eligible athlete — its own pill (needs a bye/auto-
+//          advance decision), kept distinct from generic review warnings.
+//   NEEDS_REVIEW ⇒ other warnings only — admin should look but can still draw.
 //   READY ⇒ everything's clean.
+// NOTE: a stored "reviewed" sign-off can promote SOLO/NEEDS_REVIEW to READY —
+// that happens in computeDrawReadiness, not here (this fn is review-agnostic).
 export function deriveCategoryStatus(input: {
   bracketDrawn: boolean;
   eligibleCount: number;
@@ -90,8 +95,24 @@ export function deriveCategoryStatus(input: {
   if (input.eligibleCount === 0 && input.excludedCount === 0) return 'EMPTY';
   if (input.criticalIssueCount > 0 || input.eligibleCount === 0)
     return 'BLOCKED';
+  if (input.eligibleCount === 1) return 'SOLO';
   if (input.warningIssueCount > 0) return 'NEEDS_REVIEW';
   return 'READY';
+}
+
+// Deterministic fingerprint of a category's eligible pool + each athlete's
+// cross-age-group flag. The "Mark as reviewed" sign-off stores this; if the
+// pool or any flag later changes, the recomputed signature stops matching and
+// the review auto-expires (category drops back to SOLO/NEEDS_REVIEW). Sorted so
+// athlete ordering never affects the hash. Shared by the compute step (to test
+// validity) and the review endpoint (to stamp it).
+export function computeCategoryReviewSignature(
+  eligible: Array<{ registrationId: string; crossesAgeGroup: boolean }>,
+): string {
+  const rows = eligible
+    .map((a) => `${a.registrationId}:${a.crossesAgeGroup ? 1 : 0}`)
+    .sort();
+  return createHash('sha256').update(rows.join('|')).digest('hex');
 }
 
 // "Is registration closed enough to safely draw?" — true once the event has

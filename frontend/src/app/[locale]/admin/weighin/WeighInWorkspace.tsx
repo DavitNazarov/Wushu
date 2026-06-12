@@ -172,15 +172,15 @@ export function WeighInWorkspace({
                 : 'absolute inset-0 translate-x-full opacity-0 pointer-events-none'
             }`}
           >
-            <h2 className="hidden text-[13px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] md:block">
-              {t('detailsTitle')}
-            </h2>
             <WeighInMobilePanelHeader
               backLabel={tC('back')}
               queueLabel={t('queueTitle')}
               selectedAthleteName={selectedAthleteName}
               onBack={onBackToQueue}
             />
+            <h2 className="hidden text-[13px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] md:block">
+              {t('detailsTitle')}
+            </h2>
             <WeighInDetailsPanel
               selected={selectedEntry}
               preview={preview}

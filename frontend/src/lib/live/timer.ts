@@ -5,7 +5,7 @@ function getPendingRoundWinner(timerState: TimerState | null): 'RED' | 'BLUE' | 
   return timerState.roundWinners[timerState.currentRound - 1] ?? null;
 }
 
-export function getTimerElapsedMs(
+function getTimerElapsedMs(
   timerState: TimerState | null,
   nowMs = Date.now(),
 ): number {

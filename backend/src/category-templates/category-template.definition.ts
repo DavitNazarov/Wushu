@@ -9,13 +9,13 @@ const CategoryTemplateDefinitionSchema = z
   })
   .passthrough();
 
-export type CategoryTemplateDefinition = z.infer<
+type CategoryTemplateDefinition = z.infer<
   typeof CategoryTemplateDefinitionSchema
 >;
 
 export type CategoryTemplateType = 'SYSTEM' | 'CUSTOM' | 'OFFICIAL';
 
-export function parseCategoryTemplateDefinition(
+function parseCategoryTemplateDefinition(
   value: unknown,
 ): CategoryTemplateDefinition {
   const parsed = CategoryTemplateDefinitionSchema.safeParse(value);

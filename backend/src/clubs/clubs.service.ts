@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import type { Club, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
@@ -15,18 +15,45 @@ export class ClubsService {
     private readonly audit: AuditService,
   ) {}
 
-  // Admin/coach club list, alphabetical by EN name.
-  async list(organisationId: string): Promise<Club[]> {
-    return this.prisma.club.findMany({
+  // Admin/coach club list, alphabetical by EN name. Region + country are
+  // required relations, so they're always present; `country` is exposed as the
+  // country NAME (back-compat with the old free-text field) alongside the
+  // structured region/country ids + Georgian names.
+  async list(organisationId: string) {
+    const rows = await this.prisma.club.findMany({
       where: { organisationId },
       orderBy: [{ name: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        nameKa: true,
+        city: true,
+        regionId: true,
+        countryId: true,
+        region: { select: { name: true, nameKa: true } },
+        country: { select: { name: true, nameKa: true } },
+      },
     });
+    return rows.map((c) => ({
+      id: c.id,
+      name: c.name,
+      nameKa: c.nameKa,
+      city: c.city,
+      regionId: c.regionId,
+      regionName: c.region.name,
+      regionNameKa: c.region.nameKa,
+      countryId: c.countryId,
+      country: c.country.name,
+      countryNameKa: c.country.nameKa,
+    }));
   }
 
   // Create-or-update a club. If input.id matches a club in this org, updates
-  // it; otherwise creates a new row. Trims all string inputs and treats empty
-  // strings as null for the optional fields (nameKa/city/country). Wrapped
-  // in a transaction with the CLUB_CREATED / CLUB_UPDATED audit log row.
+  // it; otherwise creates a new row. regionId is required; the club's countryId
+  // is derived from the chosen region (validated to be in this org). When an
+  // existing club's region/country changes, the denormalised regionId/countryId
+  // on its coaches + athletes are cascaded in the same transaction so they
+  // never drift. Wrapped with the CLUB_CREATED / CLUB_UPDATED audit row.
   async upsert(input: {
     organisationId: string;
     actorUserId: string;
@@ -34,8 +61,19 @@ export class ClubsService {
     name: string;
     nameKa?: string | null;
     city?: string | null;
-    country?: string | null;
+    regionId: string;
   }): Promise<Club> {
+    const region = await this.prisma.region.findFirst({
+      where: { id: input.regionId, organisationId: input.organisationId },
+      select: { id: true, countryId: true },
+    });
+    if (!region) {
+      throw new HttpException(
+        { code: 'REGION_NOT_FOUND', message: 'Region not found' },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
     const existing = input.id
       ? await this.prisma.club.findFirst({
           where: { id: input.id, organisationId: input.organisationId },
@@ -47,28 +85,45 @@ export class ClubsService {
       name: input.name.trim(),
       nameKa: input.nameKa?.trim() || null,
       city: input.city?.trim() || null,
-      country: input.country?.trim() || null,
+      regionId: region.id,
+      countryId: region.countryId,
     };
 
     return this.prisma.$transaction(async (tx) => {
       const saved = existing
-        ? await tx.club.update({
-            where: { id: existing.id },
-            data,
-          })
+        ? await tx.club.update({ where: { id: existing.id }, data })
         : await tx.club.create({ data });
 
-      await this.audit.write({
-        organisationId: input.organisationId,
-        actorUserId: input.actorUserId,
-        action: existing ? 'CLUB_UPDATED' : 'CLUB_CREATED',
-        entityType: 'club',
-        entityId: saved.id,
-        before: existing as unknown as Prisma.JsonValue | null,
-        after: saved as unknown as Prisma.JsonValue,
-        reason: null,
-        ipAddress: null,
-      });
+      // Keep coaches/athletes of this club aligned with its region/country.
+      if (
+        existing &&
+        (existing.regionId !== saved.regionId ||
+          existing.countryId !== saved.countryId)
+      ) {
+        await tx.user.updateMany({
+          where: { clubId: saved.id },
+          data: { regionId: saved.regionId, countryId: saved.countryId },
+        });
+        await tx.athlete.updateMany({
+          where: { clubId: saved.id },
+          data: { regionId: saved.regionId, countryId: saved.countryId },
+        });
+      }
+
+      await this.audit.write(
+        {
+          organisationId: input.organisationId,
+          actorUserId: input.actorUserId,
+          action: existing ? 'CLUB_UPDATED' : 'CLUB_CREATED',
+          entityType: 'club',
+          entityId: saved.id,
+          before: existing as unknown as Prisma.JsonValue | null,
+          after: saved as unknown as Prisma.JsonValue,
+          reason: null,
+          ipAddress: null,
+        },
+        tx,
+      );
 
       return saved;
     });
@@ -102,6 +157,14 @@ export class ClubsService {
 
     const club = await this.prisma.club.findFirst({
       where: { id: clubId, organisationId: org.id },
+      select: {
+        id: true,
+        name: true,
+        nameKa: true,
+        city: true,
+        region: { select: { name: true, nameKa: true } },
+        country: { select: { name: true, nameKa: true } },
+      },
     });
     if (!club) return null;
 
@@ -146,7 +209,10 @@ export class ClubsService {
         name: club.name,
         nameKa: club.nameKa ?? null,
         city: club.city,
-        country: club.country,
+        country: club.country.name,
+        countryNameKa: club.country.nameKa,
+        regionName: club.region.name,
+        regionNameKa: club.region.nameKa,
       },
       coaches: coaches.map((c) => ({
         id: c.id,

@@ -17,8 +17,15 @@ import { useAdminEventRoute } from '@/features/admin-events/hooks/useAdminEventR
 import type { LiveQueueBoardResponse, LiveQueueFightRow } from '@/types/live';
 import { LiveControlHeader } from '@/features/live/components/LiveControlHeader';
 import { LiveFightCard } from '@/features/live/components/LiveFightCard';
-import { LiveQueuePanel } from '@/features/live/components/LiveQueuePanel';
+import { LiveProgressBoard } from '@/features/live/components/LiveProgressBoard';
+import { LiveSessionGate } from '@/features/live/components/LiveSessionGate';
 import { LiveResultDialog } from '@/features/live/components/LiveResultDialog';
+import {
+  detectSessionBoundary,
+  groupFightsBySession,
+  isLiveFightFinished,
+  SESSION_WRAP_UP_THRESHOLD,
+} from '@/lib/live/sessions';
 
 function phaseLabel(
   fight: LiveQueueFightRow | null,
@@ -114,7 +121,7 @@ export function AdminLivePageClient({ eventId }: Props) {
       apiPost(`/api/fights/${fightId}/result`, {
         winner,
         method,
-        notes: notes || null,
+        notes: notes.trim() || undefined,
         // BF-2: optimistic lock — reject if another judge already scored this.
         expectedUpdatedAt: currentFight?.updatedAt ?? undefined,
       }),
@@ -148,6 +155,36 @@ export function AdminLivePageClient({ eventId }: Props) {
   });
 
   const currentFight = liveQuery.data?.currentFight ?? null;
+  const allFights = useMemo(() => liveQuery.data?.allFights ?? [], [liveQuery.data]);
+  const sessions = useMemo(() => liveQuery.data?.sessions ?? [], [liveQuery.data]);
+  const sessionGroups = useMemo(
+    () => groupFightsBySession(allFights, sessions, currentFight?.id ?? null),
+    [allFights, sessions, currentFight?.id],
+  );
+  const sessionBoundary = useMemo(
+    () => detectSessionBoundary(allFights, sessions, currentFight),
+    [allFights, sessions, currentFight],
+  );
+  // Completed = newest first; In progress = everything still to run.
+  const completedFights = useMemo(
+    () => allFights.filter(isLiveFightFinished).reverse(),
+    [allFights],
+  );
+  const upcomingFights = useMemo(
+    () => allFights.filter((fight) => !isLiveFightFinished(fight)),
+    [allFights],
+  );
+  const wrapUp = useMemo(() => {
+    const active = sessionGroups.find((group) => group.isActive);
+    if (
+      !active ||
+      active.remaining <= 0 ||
+      active.remaining > SESSION_WRAP_UP_THRESHOLD
+    ) {
+      return null;
+    }
+    return { sessionName: active.name, remaining: active.remaining };
+  }, [sessionGroups]);
   const timerDisplay = useFightTimerDisplay(currentFight?.timerState ?? null);
   const currentPhaseLabel = phaseLabel(currentFight, (key, values) =>
     t(key as Parameters<typeof t>[0], values),
@@ -209,7 +246,24 @@ export function AdminLivePageClient({ eventId }: Props) {
           <EmptyState title={tSchedule('emptyTitle')} description={tSchedule('emptyDescription')} />
         ) : (
         <>
-          {/* ── Current fight: hero control panel ── */}
+          {/* ── Session boundary gate: pause before rolling into the next block ── */}
+          {sessionBoundary ? (
+            <LiveSessionGate
+              boundary={sessionBoundary}
+              busy={stateMutation.isPending}
+              onStart={
+                isEditable
+                  ? () =>
+                      stateMutation.mutate({
+                        id: sessionBoundary.opener.id,
+                        to: 'ON_DECK',
+                      })
+                  : null
+              }
+              t={(key, values) => t(key as Parameters<typeof t>[0], values)}
+            />
+          ) : (
+          /* ── Current fight: hero control panel ── */
           <LiveFightCard
             fight={currentFight}
             title={t('currentFight')}
@@ -253,36 +307,15 @@ export function AdminLivePageClient({ eventId }: Props) {
             tFight={(key) => tFight(key as Parameters<typeof tFight>[0])}
             tSchedule={(key) => tSchedule(key as Parameters<typeof tSchedule>[0])}
           />
+          )}
 
-          {/* ── Secondary: On Deck + Up Next + Queue ── */}
-          <div className="grid gap-4 lg:grid-cols-3">
-            <LiveFightCard
-              fight={liveQuery.data?.onDeckFight ?? null}
-              title={t('onDeck')}
-              emptyLabel={t('noUpcoming')}
-              t={(key, values) => t(key as Parameters<typeof t>[0], values)}
-              tFight={(key) => tFight(key as Parameters<typeof tFight>[0])}
-              tSchedule={(key) => tSchedule(key as Parameters<typeof tSchedule>[0])}
-            />
-            <LiveQueuePanel
-              fights={liveQuery.data?.nextFights ?? []}
-              title={t('next')}
-              emptyLabel={t('noUpcoming')}
-              t={(key, values) => t(key as Parameters<typeof t>[0], values)}
-            />
-            <LiveQueuePanel
-              fights={liveQuery.data?.queuePreview ?? []}
-              title={t('queuePreview')}
-              emptyLabel={t('noQueue')}
-              t={(key, values) => t(key as Parameters<typeof t>[0], values)}
-            />
-          </div>
-
-          {/* ── Completed fights ── */}
-          <LiveQueuePanel
-            fights={liveQuery.data?.completedFights ?? []}
-            title={t('completedHistory')}
-            emptyLabel={t('noCompleted')}
+          {/* ── Split board: Completed | In progress ── */}
+          <LiveProgressBoard
+            completed={completedFights}
+            upcoming={upcomingFights}
+            currentFightId={currentFight?.id ?? null}
+            onDeckFightId={liveQuery.data?.onDeckFight?.id ?? null}
+            wrapUp={wrapUp}
             t={(key, values) => t(key as Parameters<typeof t>[0], values)}
           />
         </>
@@ -301,7 +334,7 @@ export function AdminLivePageClient({ eventId }: Props) {
           onWinnerChange={setWinner}
           onMethodChange={setMethod}
           onNotesChange={setNotes}
-          t={(key) => t(key as Parameters<typeof t>[0])}
+          t={(key, values) => t(key as Parameters<typeof t>[0], values)}
           tCommon={(key) => tCommon(key as Parameters<typeof tCommon>[0])}
         />
       )}

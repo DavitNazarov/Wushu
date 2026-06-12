@@ -1,4 +1,4 @@
-export type PublicResultPerson = {
+type PublicResultPerson = {
   athleteId: string;
   fullName: string;
   fullNameKa?: string | null;

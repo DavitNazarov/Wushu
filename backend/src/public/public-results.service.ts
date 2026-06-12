@@ -8,7 +8,6 @@ import {
 import { resolveCompetitionFormat } from '../draw/competition-format';
 import { roundStageLabel } from '../draw/brackets.helpers';
 import { PrismaService } from '../prisma/prisma.service';
-import { buildPlacementsFromConfirmedFights } from '../results/results.logic';
 import {
   buildPublicClubStandings,
   buildPublicPlacements,
@@ -78,6 +77,7 @@ export class PublicResultsService {
             },
           },
         },
+        bracket: { select: { format: true } },
       },
       orderBy: [{ categoryCode: 'asc' }, { round: 'asc' }, { boutNo: 'asc' }],
     });
@@ -116,20 +116,6 @@ export class PublicResultsService {
         );
     }
 
-    const placements = buildPlacementsFromConfirmedFights(
-      fights
-        .filter((fight) => fight.status === 'CONFIRMED')
-        .map((fight) => ({
-          id: fight.id,
-          categoryCode: fight.categoryCode,
-          round: fight.round,
-          boutNo: fight.boutNo,
-          winnerAthleteId: fight.winnerAthleteId ?? null,
-          redAthleteId: fight.redAthleteId ?? null,
-          blueAthleteId: fight.blueAthleteId ?? null,
-        })),
-      input.bronzePolicyCode,
-    );
     const fightsByBucket = new Map<string, typeof fights>();
     for (const fight of fights) {
       const key = bucketKey(fight);
@@ -158,9 +144,13 @@ export class PublicResultsService {
         if (fight.blueAthleteId) athleteIds.add(fight.blueAthleteId);
       }
 
-      const competitionFormat = resolveCompetitionFormat({
-        athleteCount: athleteIds.size,
-      });
+      // The bracket stores the format the draw actually used; count-based
+      // inference remains only as a fallback for pre-format legacy fights.
+      const competitionFormat =
+        bucket[0]?.bracket?.format ??
+        resolveCompetitionFormat({
+          athleteCount: athleteIds.size,
+        });
       const categoryName =
         bucket[0]?.eventWeightCategory?.categoryTemplateWeight?.name ??
         bucket[0]?.categoryCode ??
@@ -334,13 +324,15 @@ export class PublicResultsService {
       total: club.total,
     }));
 
+    // The client's PublicResultsFeed consumes eventId/categories/clubs only.
+    // The old top-level `fights` (raw rows) and `placements` (single-elim-only
+    // logic that mis-medalled round-robin pools) were unconsumed payload — the
+    // real per-category placements above go through computeCategoryResults,
+    // which branches on the bracket's stored format.
     return {
       eventId: input.eventId,
       categories,
       clubs,
-      // BF-11: only CONFIRMED fights are public; COMPLETE is still provisional.
-      fights: fights.filter((fight) => fight.status === 'CONFIRMED'),
-      placements,
       medalTable,
     };
   }

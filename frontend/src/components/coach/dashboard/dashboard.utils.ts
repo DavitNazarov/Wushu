@@ -1,3 +1,4 @@
+import { localizedFullName, localizedName } from '@/lib/bilingual';
 import type { AthleteRow, EventRow, RegistrationRow } from '@/types/api';
 import type {
   CoachDashboardViewModel,
@@ -33,8 +34,11 @@ function byDateDesc(left: string | null, right: string | null): number {
   return new Date(right ?? 0).getTime() - new Date(left ?? 0).getTime();
 }
 
-function getAthleteName(athlete: Pick<AthleteRow, 'firstName' | 'lastName'>): string {
-  return `${athlete.firstName} ${athlete.lastName}`.trim();
+function getAthleteName(
+  athlete: { firstName: string; lastName: string; firstNameKa?: string | null; lastNameKa?: string | null },
+  locale: string,
+): string {
+  return localizedFullName(athlete.firstName, athlete.lastName, athlete.firstNameKa, athlete.lastNameKa, locale).trim();
 }
 
 function athleteMissingInfo(athlete: AthleteRow): boolean {
@@ -59,19 +63,21 @@ function buildPendingActions(
       id: `athlete-${athlete.id}`,
       priority: 'high',
       titleKey: 'completeAthleteProfile',
-      athleteName: getAthleteName(athlete),
+      athleteName: getAthleteName(athlete, locale),
       href: `/${locale}/coach/athletes`,
       sortAt: now.toISOString(),
     });
   });
 
   upcomingEvents.forEach((event) => {
+    const eventName = localizedName(event.name, event.nameKa, locale);
+
     if (event.availableAthletesCount > 0 && event.registrationStatus === 'OPEN') {
       actions.push({
         id: `registration-open-${event.id}`,
         priority: 'high',
         titleKey: 'registrationOpen',
-        eventName: event.name,
+        eventName,
         athleteCount: event.availableAthletesCount,
         href: event.href,
         sortAt: event.registrationClosesAt ?? event.competitionStartDate,
@@ -86,7 +92,7 @@ function buildPendingActions(
           id: `registration-deadline-${event.id}`,
           priority: 'medium',
           titleKey: 'registrationClosingSoon',
-          eventName: event.name,
+          eventName,
           dueDate: event.registrationClosesAt,
           href: event.href,
           sortAt: event.registrationClosesAt,
@@ -103,7 +109,7 @@ function buildPendingActions(
           id: `weighin-${event.id}`,
           priority: 'high',
           titleKey: 'weighInActive',
-          eventName: event.name,
+          eventName,
           registrationCount: pendingCount,
           href: event.href,
           sortAt: event.competitionStartDate,
@@ -119,9 +125,9 @@ function buildPendingActions(
           priority: 'medium',
           titleKey: 'registrationRejected',
           athleteName: registration.athlete
-            ? getAthleteName(registration.athlete)
+            ? getAthleteName(registration.athlete, locale)
             : registration.athleteId,
-          eventName: event.name,
+          eventName,
           href: event.href,
           sortAt: registration.updatedAt ?? registration.createdAt ?? event.competitionStartDate,
         });
@@ -146,8 +152,9 @@ function buildRecentUpdates(
     .flatMap((event) =>
       resolveRegistrationsForEvent(event.id, registrationsByEvent).map((registration) => {
         const athleteName = registration.athlete
-          ? getAthleteName(registration.athlete)
+          ? getAthleteName(registration.athlete, locale)
           : registration.athleteId;
+        const eventName = localizedName(event.name, event.nameKa, locale);
         const timestamp = registration.updatedAt ?? registration.createdAt ?? null;
         let textKey: DashboardRecentUpdate['textKey'] = 'registrationSubmitted';
 
@@ -163,14 +170,14 @@ function buildRecentUpdates(
         return {
           id: registration.id,
           athleteName,
-          eventName: event.name,
+          eventName,
           status: registration.status,
           lifecycle: event.lifecycle,
           href: `/${locale}/coach/events/${event.slug}/registrations`,
           timestamp,
           textKey,
           categoryCode: registration.categoryCode,
-          searchText: `${athleteName} ${event.name} ${registration.categoryCode}`.toLowerCase(),
+          searchText: `${athleteName} ${event.name} ${event.nameKa ?? ''} ${registration.categoryCode}`.toLowerCase(),
         };
       }),
     )
@@ -183,7 +190,8 @@ function buildRecentUpdates(
 
 function buildQuickActions(upcomingEvents: DashboardUpcomingEvent[], locale: string): DashboardQuickAction[] {
   const nextEvent =
-    upcomingEvents.find((event) => event.registrationStatus === 'OPEN') ??
+    upcomingEvents.find((event) => event.lifecycle === 'REG_OPEN' && event.registrationStatus === 'OPEN') ??
+    upcomingEvents.find((event) => event.lifecycle === 'REG_OPEN') ??
     upcomingEvents.find((event) => WEIGHIN_LIFECYCLES.has(event.lifecycle)) ??
     upcomingEvents[0];
   const weighInEvent = upcomingEvents.find((event) => WEIGHIN_LIFECYCLES.has(event.lifecycle));
@@ -251,6 +259,7 @@ export function buildCoachDashboardModel({
         registrationStatus: event.registrationStatus,
         competitionStartDate: event.competitionStartDate,
         competitionEndDate: event.competitionEndDate,
+        registrationOpensAt: event.registrationOpensAt,
         registrationClosesAt: event.registrationClosesAt,
         registrationsCount: activeRegistrations.length,
         availableAthletesCount: athletes.filter((athlete) => !registeredAthleteIds.has(athlete.id)).length,

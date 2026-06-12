@@ -21,9 +21,10 @@ export function useWeighInDecisionPreview(input: {
     () => normalizeWeight(input.weightInput),
     [input.weightInput],
   );
-  // PF-3: only preview after the operator stops typing for 300ms — previously
-  // this POSTed to /api/weighin/preview on every digit.
-  const debouncedWeightKg = useDebouncedValue(weightKg, 300);
+  // PF-3: only preview after the operator stops typing for 500ms — previously
+  // this POSTed to /api/weighin/preview on every digit. The longer wait
+  // coalesces a full multi-digit entry (e.g. "72.5") into a single request.
+  const debouncedWeightKg = useDebouncedValue(weightKg, 700);
 
   return useQuery({
     queryKey: ['weighin-preview', input.registrationId, debouncedWeightKg],

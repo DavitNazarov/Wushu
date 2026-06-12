@@ -88,7 +88,7 @@ export class ClubsController {
       name: parsed.data.name,
       nameKa: parsed.data.nameKa ?? null,
       city: parsed.data.city ?? null,
-      country: parsed.data.country ?? null,
+      regionId: parsed.data.regionId,
     });
   }
 }

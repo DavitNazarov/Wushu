@@ -1,7 +1,9 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { Check, CheckCircle2, Users } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { Label } from '@/components/ui/primitives/label';
 import { Input } from '@/components/ui/primitives/input';
@@ -36,6 +38,10 @@ type Props = {
   onWeightCategoryChange: (id: string) => void;
   onNotesChange: (v: string) => void;
   onSave: () => void;
+  success: { name: string; allRegistered: boolean } | null;
+  onAddAnother: () => void;
+  noAthletesAvailable: boolean;
+  hasAnyAthletes: boolean;
 };
 
 export function AddRegistrationModal({
@@ -57,9 +63,90 @@ export function AddRegistrationModal({
   onWeightCategoryChange,
   onNotesChange,
   onSave,
+  success,
+  onAddAnother,
+  noAthletesAvailable,
+  hasAnyAthletes,
 }: Props) {
   const t = useTranslations('coach.registrations');
   const tC = useTranslations('common');
+
+  // Success screen — shown after an athlete is registered. Mirrors the admin
+  // "Add athlete to event" success step, minus the multi-club actions a coach
+  // (single club) doesn't have.
+  if (success) {
+    return (
+      <Modal open={open} onClose={onClose} title={t('addRegistration')}>
+        <div className="flex flex-col items-center px-2 py-4 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-success-subtle)] text-[var(--color-success)]">
+            <Check className="h-7 w-7" strokeWidth={2.5} />
+          </div>
+          <h3 className="mt-4 text-[15px] font-semibold text-[var(--color-text)]">
+            {t('successTitle')}
+          </h3>
+          <p className="mt-1 max-w-sm text-[13px] text-[var(--color-text-muted)]">
+            {t('successBody', { name: success.name })}
+          </p>
+          {success.allRegistered && (
+            <p className="mt-2 max-w-sm text-[13px] font-medium text-[var(--color-success)]">
+              {t('successAllRegistered')}
+            </p>
+          )}
+          <div className="mt-6 flex w-full flex-col gap-2">
+            {success.allRegistered ? (
+              <PrimaryButton className="w-full" onClick={onClose}>
+                {tC('close')}
+              </PrimaryButton>
+            ) : (
+              <>
+                <PrimaryButton className="w-full" onClick={onAddAnother}>
+                  {t('addAnotherAthlete')}
+                </PrimaryButton>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="mt-1 text-[13px] font-medium text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+                >
+                  {t('done')}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  // Nothing left to register — every athlete is already entered, or the coach
+  // has no athletes yet. Informational state with only a Close action.
+  if (noAthletesAvailable) {
+    return (
+      <Modal open={open} onClose={onClose} title={t('addRegistration')}>
+        <div className="flex flex-col items-center px-2 py-4 text-center">
+          {hasAnyAthletes ? (
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-success-subtle)] text-[var(--color-success)]">
+              <CheckCircle2 className="h-7 w-7" strokeWidth={2.5} />
+            </div>
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]">
+              <Users className="h-7 w-7" strokeWidth={2} />
+            </div>
+          )}
+          <h3 className="mt-4 text-[15px] font-semibold text-[var(--color-text)]">
+            {hasAnyAthletes ? t('allRegisteredTitle') : t('noAthletesTitle')}
+          </h3>
+          <p className="mt-1 max-w-sm text-[13px] text-[var(--color-text-muted)]">
+            {hasAnyAthletes ? t('allRegisteredBody') : t('noAthletesBody')}
+          </p>
+          <div className="mt-6 w-full">
+            <PrimaryButton className="w-full" onClick={onClose}>
+              {tC('close')}
+            </PrimaryButton>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal open={open} onClose={onClose} title={t('addRegistration')}>

@@ -2,7 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { UserRole, type AthleteSex } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { extractScoreToken } from '../draw/brackets.helpers';
+import {
+  computeCategoryResults,
+  type CompetitionFight,
+} from '../competition/competition.logic';
 import type {
+  AthleteMedalSummary,
   AthleteProfileFightRow,
   AthleteProfileRegistrationRow,
   AthleteProfileResponse,
@@ -34,6 +39,7 @@ export class AthleteProfileService {
               orderBy: { displayName: 'asc' },
               select: { id: true, displayName: true },
             },
+            country: { select: { name: true } },
           },
         },
       },
@@ -58,7 +64,7 @@ export class AthleteProfileService {
               id: athlete.club.id,
               name: athlete.club.name,
               city: athlete.club.city,
-              country: athlete.club.country,
+              country: athlete.club.country?.name ?? null,
             }
           : null,
         coaches: athlete.club?.coaches ?? [],
@@ -91,6 +97,7 @@ export class AthleteProfileService {
               orderBy: { displayName: 'asc' },
               select: { id: true, displayName: true },
             },
+            country: { select: { name: true } },
           },
         },
       },
@@ -112,7 +119,7 @@ export class AthleteProfileService {
               id: athlete.club.id,
               name: athlete.club.name,
               city: athlete.club.city,
-              country: athlete.club.country,
+              country: athlete.club.country?.name ?? null,
             }
           : null,
         coaches: athlete.club?.coaches ?? [],
@@ -215,8 +222,21 @@ export class AthleteProfileService {
       input.visibility === 'private' ? true : fight.event.published,
     );
 
+    const medals = await this.computeMedalSummary({
+      organisationId: input.organisationId,
+      athleteId: input.athleteId,
+      categoryIds: [
+        ...new Set(
+          visibleFights
+            .map((fight) => fight.eventWeightCategoryId)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ],
+    });
+
     return {
       athlete: input.identity,
+      medals,
       registrations: visibleRegistrations.map(
         (registration): AthleteProfileRegistrationRow => {
           const initialName =
@@ -293,5 +313,89 @@ export class AthleteProfileService {
         };
       }),
     };
+  }
+
+  // Career medal tally. For every weight category the athlete has competed in
+  // (already visibility-filtered by the caller via `categoryIds`), we pull the
+  // *whole* bracket for that category — not just this athlete's bouts — and run
+  // the same placement logic the results page uses (computeCategoryResults).
+  // We then read off where this athlete landed:
+  //   GOLD/SILVER/BRONZE -> podium counters
+  //   no medal but the category is fully decided -> `other` (4th+/eliminated)
+  //   category still in progress -> not counted yet
+  private async computeMedalSummary(input: {
+    organisationId: string;
+    athleteId: string;
+    categoryIds: string[];
+  }): Promise<AthleteMedalSummary> {
+    const empty: AthleteMedalSummary = {
+      gold: 0,
+      silver: 0,
+      bronze: 0,
+      other: 0,
+      total: 0,
+    };
+    if (input.categoryIds.length === 0) return empty;
+
+    const fights = await this.prisma.fight.findMany({
+      where: {
+        organisationId: input.organisationId,
+        eventWeightCategoryId: { in: input.categoryIds },
+      },
+      select: {
+        eventWeightCategoryId: true,
+        id: true,
+        round: true,
+        boutNo: true,
+        status: true,
+        redAthleteId: true,
+        blueAthleteId: true,
+        winnerAthleteId: true,
+        winMethod: true,
+        notes: true,
+        event: { select: { bronzePolicyCode: true } },
+      },
+    });
+
+    const byCategory = new Map<
+      string,
+      { fights: CompetitionFight[]; bronzePolicy: 'TWO_BRONZES' }
+    >();
+    for (const fight of fights) {
+      if (!fight.eventWeightCategoryId) continue;
+      const bucket = byCategory.get(fight.eventWeightCategoryId) ?? {
+        fights: [],
+        bronzePolicy: fight.event.bronzePolicyCode,
+      };
+      bucket.fights.push({
+        id: fight.id,
+        round: fight.round,
+        boutNo: fight.boutNo,
+        status: fight.status,
+        redAthleteId: fight.redAthleteId ?? null,
+        blueAthleteId: fight.blueAthleteId ?? null,
+        winnerAthleteId: fight.winnerAthleteId ?? null,
+        winMethod: fight.winMethod ?? null,
+        notes: fight.notes ?? null,
+      });
+      byCategory.set(fight.eventWeightCategoryId, bucket);
+    }
+
+    const summary = { ...empty };
+    for (const { fights: categoryFights, bronzePolicy } of byCategory.values()) {
+      const results = computeCategoryResults({
+        fights: categoryFights,
+        bronzePolicy,
+      });
+      const placement = results.placements.find(
+        (row) => row.athleteId === input.athleteId,
+      );
+      if (placement?.medal === 'GOLD') summary.gold += 1;
+      else if (placement?.medal === 'SILVER') summary.silver += 1;
+      else if (placement?.medal === 'BRONZE') summary.bronze += 1;
+      else if (results.isComplete) summary.other += 1;
+    }
+    summary.total = summary.gold + summary.silver + summary.bronze;
+    return summary;
   }
 }

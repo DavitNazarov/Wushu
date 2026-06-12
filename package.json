@@ -39,8 +39,15 @@
     "loadtest:socket:probe": "node load-test/socket-probe.mjs",
     "loadtest:timer": "node load-test/timer-reliability.mjs"
   },
+  "dependencies": {
+    "@nestjs/platform-express": "^11.0.1",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "next": "16.2.7"
+  },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "knip": "^6.15.0"
+    "knip": "^6.15.0",
+    "socket.io-client": "^4.8.3"
   }
 }

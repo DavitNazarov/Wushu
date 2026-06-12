@@ -4,6 +4,7 @@ import { PublicCompetitionController } from './public-competition.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { EventsModule } from '../events/events.module';
 import { ClubsModule } from '../clubs/clubs.module';
+import { GeographyModule } from '../geography/geography.module';
 import { DrawModule } from '../draw/draw.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { AthletesModule } from '../athletes/athletes.module';
@@ -15,6 +16,7 @@ import { PublicResultsService } from './public-results.service';
     PrismaModule,
     EventsModule,
     ClubsModule,
+    GeographyModule,
     DrawModule,
     ScheduleModule,
     AthletesModule,

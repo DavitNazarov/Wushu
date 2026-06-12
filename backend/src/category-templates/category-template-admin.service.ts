@@ -121,6 +121,7 @@ export class CategoryTemplateAdminService {
         id: ageGroup.id,
         code: ageGroup.code,
         name: ageGroup.name,
+        nameKa: ageGroup.nameKa,
         sex: ageGroup.sex,
         minAge: ageGroup.minAge,
         maxAge: ageGroup.maxAge,

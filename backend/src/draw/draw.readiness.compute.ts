@@ -1,5 +1,6 @@
 import {
   ACTIVE_REGISTRATION_STATUSES,
+  computeCategoryReviewSignature,
   deriveCategoryStatus,
   deriveDrawOverallStatus,
   deriveExclusionReasonCode,
@@ -10,6 +11,7 @@ import {
 import type {
   DrawAthletePoolRow,
   DrawCategoryComputedRow,
+  DrawCategoryStatus,
   DrawComputedOverview,
   DrawValidationIssue,
 } from './draw.readiness.types';
@@ -35,6 +37,9 @@ type CategoryBucket = {
   excludedAthletes: DrawAthletePoolRow[];
   criticalIssueCounts: Map<string, { count: number; sampleIds: string[] }>;
   warningIssueCounts: Map<string, { count: number; sampleIds: string[] }>;
+  drawReviewedAt: Date | null;
+  drawReviewSignature: string | null;
+  reviewedByName: string | null;
 };
 
 // Increment-and-collect helper for issue tallies. We cap sampleIds at 5 so
@@ -81,9 +86,11 @@ function toAthletePoolRow(input: {
   athleteCode: string;
   registrationStatus: DrawAthletePoolRow['registrationStatus'];
   weighInStatus: DrawAthletePoolRow['weighInStatus'];
+  weighInWeightKg: number | null;
   originalCategory: string | null;
   finalCategory: string | null;
   movedUp: boolean;
+  crossesAgeGroup: boolean;
   overrideUsed: boolean;
   eligible: boolean;
   exclusionReasonCode: string | null;
@@ -96,9 +103,11 @@ function toAthletePoolRow(input: {
     athleteCode: input.athleteCode,
     registrationStatus: input.registrationStatus,
     weighInStatus: input.weighInStatus,
+    weighInWeightKg: input.weighInWeightKg,
     originalCategory: input.originalCategory,
     finalCategory: input.finalCategory,
     movedUp: input.movedUp,
+    crossesAgeGroup: input.crossesAgeGroup,
     overrideUsed: input.overrideUsed,
     eligibilityState: input.eligible ? 'ELIGIBLE' : 'EXCLUDED',
     exclusionReasonCode: input.exclusionReasonCode,
@@ -125,6 +134,9 @@ function buildBuckets(
       excludedAthletes: [],
       criticalIssueCounts: new Map(),
       warningIssueCounts: new Map(),
+      drawReviewedAt: category.drawReviewedAt,
+      drawReviewSignature: category.drawReviewSignature,
+      reviewedByName: category.drawReviewedBy?.displayName ?? null,
     });
   }
   return buckets;
@@ -135,8 +147,8 @@ function buildBuckets(
 //      eligible or excluded. Tracks orphans (missing/invalid final category id)
 //      separately so they surface as event-level critical issues, not category ones.
 //   2. After bucketing, walk each bucket once to compute category-level
-//      warnings (MOVED_UP_PRESENT, OVERRIDE_PRESENT, ONE_ATHLETE_POOL) and
-//      derive its readinessStatus.
+//      warnings (AGE_GROUP_MOVE_PRESENT, ONE_ATHLETE_POOL) and derive its
+//      readinessStatus.
 //   3. Delegate top-level validation + summary aggregation to
 //      buildValidationAndSummary, then project the final response shape.
 // The returned `categoriesById` Map lets the per-category endpoint avoid
@@ -145,10 +157,18 @@ export function computeDrawReadiness(
   input: DrawReadinessContext,
 ): DrawComputedOverview {
   const buckets = buildBuckets(input);
+  // categoryId → age-group code, so we can tell a same-age-group weight bump
+  // (not a review concern) apart from a cross-age-group move (a review concern).
+  const categoryAgeGroupCode = new Map<string, string>();
+  for (const category of input.categories) {
+    categoryAgeGroupCode.set(
+      category.id,
+      category.eventAgeGroup.categoryTemplateAgeGroup.code,
+    );
+  }
   const missingFinalCategoryIds: string[] = [];
   const invalidFinalCategoryIds: string[] = [];
   let movedUpAthletesCount = 0;
-  let overrideAthletesCount = 0;
 
   for (const registration of input.registrations) {
     if (!ACTIVE_REGISTRATION_STATUSES.has(registration.status)) continue;
@@ -170,6 +190,19 @@ export function computeDrawReadiness(
       registration.registeredEventWeightCategoryId != null &&
       registration.eventWeightCategoryId !==
         registration.registeredEventWeightCategoryId;
+    // Only a move that lands in a DIFFERENT age group flags review; a same-age
+    // weight bump is routine. If either age code is unknown, don't flag.
+    const finalAgeCode = categoryAgeGroupCode.get(
+      registration.eventWeightCategoryId,
+    );
+    const registeredAgeCode = registration.registeredEventWeightCategoryId
+      ? categoryAgeGroupCode.get(registration.registeredEventWeightCategoryId)
+      : undefined;
+    const crossesAgeGroup =
+      movedUp &&
+      registeredAgeCode != null &&
+      finalAgeCode != null &&
+      registeredAgeCode !== finalAgeCode;
     const overrideUsed =
       registration.weighInStatus === 'OVERRIDE_APPROVED' ||
       Boolean(registration.weighIns[0]?.override);
@@ -193,12 +226,14 @@ export function computeDrawReadiness(
       athleteCode: registration.athlete.documentId ?? registration.athlete.id,
       registrationStatus: registration.status,
       weighInStatus: registration.weighInStatus,
+      weighInWeightKg: registration.weighIns[0]?.weightKg ?? null,
       originalCategory:
         registration.registeredEventWeightCategory?.categoryTemplateWeight
           .name ?? null,
       finalCategory:
         registration.eventWeightCategory?.categoryTemplateWeight.name ?? null,
       movedUp,
+      crossesAgeGroup,
       overrideUsed,
       eligible,
       exclusionReasonCode,
@@ -207,7 +242,6 @@ export function computeDrawReadiness(
     if (eligible) {
       bucket.eligibleAthletes.push(athleteRow);
       if (movedUp) movedUpAthletesCount += 1;
-      if (overrideUsed) overrideAthletesCount += 1;
     } else {
       bucket.excludedAthletes.push(athleteRow);
       pushIssueCount(
@@ -218,24 +252,48 @@ export function computeDrawReadiness(
     }
   }
 
-  let oneAthletePoolsCount = 0;
   const categoriesComputed: DrawCategoryComputedRow[] = [];
 
   for (const bucket of buckets.values()) {
-    if (bucket.eligibleAthletes.some((row) => row.movedUp)) {
-      pushIssueCount(bucket.warningIssueCounts, 'MOVED_UP_PRESENT', bucket.id);
+    // A cross-age-group move is the only move-up that flags review now; a
+    // same-age-group weight bump is routine and no longer flagged.
+    if (bucket.eligibleAthletes.some((row) => row.crossesAgeGroup)) {
+      pushIssueCount(
+        bucket.warningIssueCounts,
+        'AGE_GROUP_MOVE_PRESENT',
+        bucket.id,
+      );
     }
-    if (bucket.eligibleAthletes.some((row) => row.overrideUsed)) {
-      pushIssueCount(bucket.warningIssueCounts, 'OVERRIDE_PRESENT', bucket.id);
-    }
+    // Override is intentionally NOT flagged — it was already decided at weigh-in.
     if (bucket.eligibleAthletes.length === 1) {
-      oneAthletePoolsCount += 1;
       pushIssueCount(bucket.warningIssueCounts, 'ONE_ATHLETE_POOL', bucket.id);
     }
 
     const criticalIssues = toIssueArray(bucket.criticalIssueCounts, 'CRITICAL');
     const warningIssues = toIssueArray(bucket.warningIssueCounts, 'WARNING');
     const issues = [...criticalIssues, ...warningIssues];
+
+    const rawStatus = deriveCategoryStatus({
+      bracketDrawn: bucket.bracketDrawn,
+      eligibleCount: bucket.eligibleAthletes.length,
+      excludedCount: bucket.excludedAthletes.length,
+      criticalIssueCount: criticalIssues.length,
+      warningIssueCount: warningIssues.length,
+    });
+    // A stored review sign-off promotes SOLO/NEEDS_REVIEW to READY, but only
+    // while its signature still matches the current pool — otherwise it has
+    // auto-expired (a late registration / re-weigh / reassignment changed it).
+    const reviewActive =
+      bucket.drawReviewedAt != null &&
+      bucket.drawReviewSignature ===
+        computeCategoryReviewSignature(bucket.eligibleAthletes) &&
+      (rawStatus === 'SOLO' || rawStatus === 'NEEDS_REVIEW');
+    const reviewed = reviewActive;
+    const reviewedAt = reviewActive ? bucket.drawReviewedAt : null;
+    const reviewedByName = reviewActive ? bucket.reviewedByName : null;
+    const readinessStatus: DrawCategoryStatus = reviewActive
+      ? 'READY'
+      : rawStatus;
 
     categoriesComputed.push({
       id: bucket.id,
@@ -245,26 +303,33 @@ export function computeDrawReadiness(
       categoryName: bucket.categoryName,
       sortOrder: bucket.sortOrder,
       bracketStatus: bucket.bracketDrawn ? 'DRAWN' : 'NOT_DRAWN',
-      readinessStatus: deriveCategoryStatus({
-        bracketDrawn: bucket.bracketDrawn,
-        eligibleCount: bucket.eligibleAthletes.length,
-        excludedCount: bucket.excludedAthletes.length,
-        criticalIssueCount: criticalIssues.length,
-        warningIssueCount: warningIssues.length,
-      }),
+      readinessStatus,
       eligibleAthletesCount: bucket.eligibleAthletes.length,
       excludedAthletesCount: bucket.excludedAthletes.length,
       criticalIssueCount: criticalIssues.length,
       warningIssueCount: warningIssues.length,
       issueCount: issues.length,
       hasMovedUpAthletes: bucket.eligibleAthletes.some((row) => row.movedUp),
-      hasOverrideAthletes: bucket.eligibleAthletes.some(
-        (row) => row.overrideUsed,
+      hasAgeGroupMove: bucket.eligibleAthletes.some(
+        (row) => row.crossesAgeGroup,
       ),
+      reviewed,
+      reviewedAt,
+      reviewedByName,
       issues,
       eligibleAthletes: bucket.eligibleAthletes,
       excludedAthletes: bucket.excludedAthletes,
     });
+  }
+
+  // Event-wide athlete tally for the cross-age-group warning, excluding any
+  // category that's been reviewed away.
+  let ageGroupMoveAthletesCount = 0;
+  for (const row of categoriesComputed) {
+    if (row.reviewed) continue;
+    ageGroupMoveAthletesCount += row.eligibleAthletes.filter(
+      (a) => a.crossesAgeGroup,
+    ).length;
   }
 
   const drawStatus = deriveDrawOverallStatus({
@@ -291,9 +356,7 @@ export function computeDrawReadiness(
     }),
     missingFinalCategoryIds,
     invalidFinalCategoryIds,
-    movedUpAthletesCount,
-    overrideAthletesCount,
-    oneAthletePoolsCount,
+    ageGroupMoveAthletesCount,
     bracketCount: input.bracketCount,
   });
 
@@ -310,6 +373,7 @@ export function computeDrawReadiness(
         publishTimingPolicyCode: input.event.publishTimingPolicyCode,
         drawStatus,
         registrationLocked: input.event.lifecycle !== 'REG_OPEN',
+        weighInResultsPublic: input.event.weighInResultsPublic,
       },
       summary: {
         totalCategories: categoriesComputed.length,
@@ -319,6 +383,7 @@ export function computeDrawReadiness(
         emptyCategoriesCount: validationResult.summary.emptyCategoriesCount,
         needsReviewCategoriesCount:
           validationResult.summary.needsReviewCategoriesCount,
+        soloCategoriesCount: validationResult.summary.soloCategoriesCount,
         eligibleAthletesCount: validationResult.summary.eligibleAthletesCount,
         movedUpAthletesCount,
         outstandingIssuesCount:

@@ -14,13 +14,13 @@ import type {
 
 // Slim coach summary shown in the profile header (one row per active coach
 // in the athlete's club).
-export type AthleteProfileCoachRow = {
+type AthleteProfileCoachRow = {
   id: string;
   displayName: string;
 };
 
 // Slim club summary shown in the profile header.
-export type AthleteProfileClubRow = {
+type AthleteProfileClubRow = {
   id: string;
   name: string;
   city: string | null;
@@ -75,6 +75,19 @@ export type AthleteProfileFightRow = {
   winnerAthleteId: string | null;
 };
 
+// Career medal tally aggregated across every category the athlete has
+// competed in (only published events on the public view). `gold`/`silver`/
+// `bronze` are podium counts; `other` counts completed categories where the
+// athlete competed but finished off the podium (4th+ / eliminated). `total`
+// is the medal count (gold + silver + bronze).
+export type AthleteMedalSummary = {
+  gold: number;
+  silver: number;
+  bronze: number;
+  other: number;
+  total: number;
+};
+
 // Top-level response shape returned by AthleteProfileService.
 // `dateOfBirth` and `coaches` are optional because the public flavor omits
 // them — anyone with a published-event link to the athlete should not be
@@ -92,4 +105,5 @@ export type AthleteProfileResponse = {
   };
   registrations: AthleteProfileRegistrationRow[];
   fights: AthleteProfileFightRow[];
+  medals: AthleteMedalSummary;
 };

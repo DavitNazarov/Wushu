@@ -4,7 +4,9 @@ import { useState, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { UserPlus } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost } from '@/lib/api/client';
@@ -19,6 +21,7 @@ import { RegistrationConfirmModal, type ConfirmModalState } from './Registration
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 import { RegistrationBulkActions } from './RegistrationBulkActions';
 import { RegistrationFilters } from './RegistrationFilters';
+import { AddAthleteToEventModal } from './AddAthleteToEventModal';
 import { getEligibleRegistrationIds, type RowAction } from './registrationStatusActions';
 
 const EMPTY_REGISTRATIONS: RegistrationRow[] = [];
@@ -85,6 +88,7 @@ export function RegistrationsPageClient({ eventId }: Props) {
   });
 
   const [confirmModal, setConfirmModal] = useState<ConfirmModalState | null>(null);
+  const [addAthleteOpen, setAddAthleteOpen] = useState(false);
 
   const statusMut = useMutation({
     mutationFn: ({ id, status: s, reason }: { id: string; status: string; reason?: string }) =>
@@ -162,7 +166,17 @@ export function RegistrationsPageClient({ eventId }: Props) {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('title')} />
+      <PageHeader
+        title={t('title')}
+        actions={
+          showContent && eventId ? (
+            <PrimaryButton onClick={() => setAddAthleteOpen(true)}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              {t('addAthlete.button')}
+            </PrimaryButton>
+          ) : undefined
+        }
+      />
 
       <RegistrationFilters
         eventId={eventId}
@@ -247,6 +261,12 @@ export function RegistrationsPageClient({ eventId }: Props) {
           }
         />
       ) : null}
+
+      <AddAthleteToEventModal
+        open={addAthleteOpen}
+        onClose={() => setAddAthleteOpen(false)}
+        eventId={eventId}
+      />
 
       <RegistrationConfirmModal
         state={confirmModal}

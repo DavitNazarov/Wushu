@@ -36,16 +36,16 @@ export function WeighInAthleteSummaryCard({ entry, t }: Props) {
     (entry.athlete.lastName?.[0] ?? '').toUpperCase();
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex items-start gap-4">
       {/* Large initials avatar */}
       <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-[18px] font-bold text-white">
         {initials}
       </div>
 
       {/* Info */}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 pt-0.5">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-[18px] font-bold text-[var(--color-text)] leading-tight">
+          <h2 className="text-[18px] font-bold leading-snug text-[var(--color-text)]">
             {localizedFullName(entry.athlete.firstName, entry.athlete.lastName, entry.athlete.firstNameKa, entry.athlete.lastNameKa, locale)}
           </h2>
           <span

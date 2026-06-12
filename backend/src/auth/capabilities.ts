@@ -1,4 +1,4 @@
-export const ROLES = {
+const ROLES = {
   admin: 'admin',
   coach: 'coach',
   athlete: 'athlete',
@@ -21,7 +21,7 @@ export const CAPABILITIES = {
   CONTENT_MANAGE: 'CONTENT_MANAGE',
 } as const;
 
-export type CapabilityCode = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
+type CapabilityCode = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
 
 const ADMIN_CAPABILITIES: CapabilityCode[] = [
   CAPABILITIES.EVENTS_MANAGE,

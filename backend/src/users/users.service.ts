@@ -107,11 +107,17 @@ export class UsersService {
 
     await this.assertRoleClubRules(input.organisationId, nextRole, nextClubId);
 
+    // Keep the coach's denormalised region/country aligned with their club
+    // (cleared when promoted to admin / club removed).
+    const geo = await this.resolveClubGeo(input.organisationId, nextClubId);
+
     const data: Prisma.UserUncheckedUpdateInput = {
       email: input.email?.trim(),
       displayName: input.displayName?.trim(),
       role: nextRole,
       clubId: nextClubId,
+      regionId: geo.regionId,
+      countryId: geo.countryId,
       nationality:
         input.nationality !== undefined
           ? input.nationality?.trim() || null
@@ -396,6 +402,24 @@ export class UsersService {
       where: { id: userId, organisationId, role: { in: ['admin', 'coach'] } },
       select: userSelect,
     });
+  }
+
+  // Resolve a club's region/country for the denormalised copy on the user.
+  // Returns nulls when there's no club (admins). Club existence is validated
+  // separately by assertRoleClubRules.
+  private async resolveClubGeo(
+    organisationId: string,
+    clubId: string | null | undefined,
+  ): Promise<{ regionId: string | null; countryId: string | null }> {
+    if (!clubId) return { regionId: null, countryId: null };
+    const club = await this.prisma.club.findFirst({
+      where: { id: clubId, organisationId },
+      select: { regionId: true, countryId: true },
+    });
+    return {
+      regionId: club?.regionId ?? null,
+      countryId: club?.countryId ?? null,
+    };
   }
 
   // Invariant enforcement for create/update paths:

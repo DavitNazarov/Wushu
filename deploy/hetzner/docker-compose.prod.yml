@@ -14,10 +14,21 @@
 # socket.io rooms, rate limiter, exports). See README.md before raising it.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Default docker json-file logging is UNBOUNDED — on a single VPS that fills
+# the disk and takes Postgres down with it. Cap every service's log file.
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
 services:
   db:
     image: postgres:16
     restart: unless-stopped
+    logging: *bounded-logging
+    # Tunable for the box size; 1g is comfortable for a federation-scale DB.
+    mem_limit: 1g
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -51,6 +62,11 @@ services:
       context: ../..
       dockerfile: deploy/hetzner/Dockerfile
     restart: unless-stopped
+    logging: *bounded-logging
+    # Next + Nest + the shared Chromium (PDF exports) live in this one process.
+    # The cap turns a Chromium memory spike into a container restart instead of
+    # a whole-box OOM. Tune upward with the VPS size.
+    mem_limit: 1536m
     # DO NOT set `deploy.replicas > 1` — see README.md "Scaling".
     environment:
       NODE_ENV: production
@@ -74,6 +90,7 @@ services:
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
+    logging: *bounded-logging
     ports:
       - "80:80"
       - "443:443"

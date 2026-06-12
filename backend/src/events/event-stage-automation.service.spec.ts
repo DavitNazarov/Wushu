@@ -23,8 +23,14 @@ function makeEvent(overrides: Record<string, unknown> = {}) {
     name: 'Test Event',
     timezone: 'Asia/Tbilisi',
     lifecycle: 'REG_OPEN',
+    // registrationOpensAt must be non-null for getRegistrationStatus to evaluate
+    // the close date; without it the helper short-circuits to 'OPEN' for REG_OPEN
+    // events and the auto-advance never fires.
+    registrationOpensAt: new Date('2026-03-01T00:00:00.000Z'),
     registrationClosesAt: new Date('2026-03-04T00:00:00.000Z'),
     registrationEndDate: new Date('2026-03-04T00:00:00.000Z'),
+    competitionStartDate: new Date('2026-03-07T00:00:00.000Z'),
+    competitionEndDate: new Date('2026-03-08T00:00:00.000Z'),
     weighInStartDate: new Date('2026-03-05T00:00:00.000Z'),
     autoAdvanceStage: true,
     organisationId: 'org-1',

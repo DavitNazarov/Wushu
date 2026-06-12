@@ -8,7 +8,7 @@ export type EventControlPageKey =
   | 'schedule'
   | 'live';
 
-export type EventControlGateMode =
+type EventControlGateMode =
   | 'unselected'
   | 'active'
   | 'upcoming'
