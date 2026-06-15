@@ -45,8 +45,10 @@ type TopClub = {
   city: string | null;
   country: string | null;
   athletes: number;
-  wins: number;
-  losses: number;
+  gold: number;
+  silver: number;
+  bronze: number;
+  medals: number;
 };
 
 type PublicNewsRow = {
@@ -68,6 +70,22 @@ const RANK_PALETTE: Record<number, { accent: string; icon: React.ElementType; la
   4: { accent: 'var(--color-primary)' as unknown as string, icon: TrendingUp, label: '4th' },
   5: { accent: 'var(--color-primary)' as unknown as string, icon: TrendingUp, label: '5th' },
 };
+
+/* ─── medal palette ──────────────────────────────────────────────────────── */
+
+const MEDAL_COLORS = { gold: '#f5b301', silver: '#9aa6b2', bronze: '#cd7f32' } as const;
+
+/** Single colored medal count (icon + number), used in the top-clubs ranking. */
+function MedalCount({ color, value }: { color: string; value: number }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Medal className="h-4 w-4 shrink-0" style={{ color }} />
+      <span className="text-[14px] font-bold tabular-nums leading-none text-[var(--color-text)]">
+        {value}
+      </span>
+    </span>
+  );
+}
 
 /* ─── section header ──────────────────────────────────────────────────────── */
 
@@ -277,9 +295,13 @@ function TopClubRow({ c, idx, locale }: { c: TopClub; idx: number; locale: strin
 
             <div className="hidden shrink-0 items-center gap-5 sm:flex">
               <div className="text-center">
-                <p className="text-[20px] font-bold tabular-nums leading-none text-[var(--color-text)]">{c.wins}</p>
-                <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-                  {tPublic('clubsHomeWins')}
+                <div className="flex items-center justify-center gap-2.5">
+                  <MedalCount color={MEDAL_COLORS.gold} value={c.gold} />
+                  <MedalCount color={MEDAL_COLORS.silver} value={c.silver} />
+                  <MedalCount color={MEDAL_COLORS.bronze} value={c.bronze} />
+                </div>
+                <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+                  {tPublic('clubsHomeMedals')}
                 </p>
               </div>
               <div className="h-8 w-px bg-[var(--color-border)]" />
@@ -296,11 +318,10 @@ function TopClubRow({ c, idx, locale }: { c: TopClub; idx: number; locale: strin
 
           {/* Mobile */}
           <div className="relative mt-3.5 flex items-center gap-3 sm:hidden">
-            <div className="flex items-center gap-1.5 rounded-full bg-[var(--color-surface-alt)] px-3 py-1">
-              <Flame className="h-3 w-3" style={{ color: palette.accent }} />
-              <span className="text-[11px] font-semibold tabular-nums text-[var(--color-text)]">
-                {c.wins} {tPublic('clubsHomeWins')}
-              </span>
+            <div className="flex items-center gap-2.5 rounded-full bg-[var(--color-surface-alt)] px-3 py-1">
+              <MedalCount color={MEDAL_COLORS.gold} value={c.gold} />
+              <MedalCount color={MEDAL_COLORS.silver} value={c.silver} />
+              <MedalCount color={MEDAL_COLORS.bronze} value={c.bronze} />
             </div>
             <span className="text-[11px] tabular-nums text-[var(--color-text-muted)]">
               {c.athletes} {tPublic('clubsHomeAthletes')}

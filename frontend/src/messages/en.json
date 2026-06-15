@@ -161,8 +161,8 @@
     "eventsHomeStartedOn": "Held {date}",
     "clubsEyebrow": "Team Standings",
     "clubsHomeTitle": "Top 5 Clubs",
-    "clubsHomeSubtitle": "The clubs leading the federation by athlete victories.",
-    "clubsHomeWins": "Wins",
+    "clubsHomeSubtitle": "The clubs leading the federation by medals won.",
+    "clubsHomeMedals": "Medals",
     "clubsHomeAthletes": "Athletes",
     "clubsHomeViewAll": "View all clubs",
     "newsEyebrow": "Federation News",
@@ -197,6 +197,7 @@
     "clubsSubtitle": "Registered clubs and coaches participating in Geo Wushu events.",
     "clubAthletes": "Athletes",
     "clubCoaches": "Coaches",
+    "clubMedals": "Medals",
     "countries": "Countries",
     "countriesTitle": "Countries",
     "countriesSubtitle": "Countries and regions participating in Geo Wushu events.",
@@ -2578,5 +2579,29 @@
       "WEIGHIN_NOT_FINALIZED": "Weigh-in not finalized",
       "ONE_HOUR_UNRESOLVED": "One-hour reweigh still unresolved"
     }
+  },
+  "seo": {
+    "defaultDescription": "Official competition platform of the Georgian Wushu Federation — live results, brackets, schedules, and rankings for Wushu (Sanda) tournaments across Georgia.",
+    "homeTitle": "Georgian Wushu Federation — Live Wushu Results, Brackets & Schedules",
+    "homeDescription": "Follow Georgian Wushu Federation competitions live: real-time brackets, fight schedules, weigh-in results, and final standings for Sanda tournaments.",
+    "eventsTitle": "Competitions & Events",
+    "eventsDescription": "Browse upcoming and past Wushu competitions run by the Georgian Wushu Federation — dates, locations, brackets, schedules, and results.",
+    "newsTitle": "News & Announcements",
+    "newsDescription": "Latest news, announcements, and updates from the Georgian Wushu Federation.",
+    "clubsTitle": "Member Clubs",
+    "clubsDescription": "Directory of Wushu clubs affiliated with the Georgian Wushu Federation, their coaches, and registered athletes.",
+    "countriesTitle": "Countries & Regions",
+    "countriesDescription": "Countries and regions taking part in Georgian Wushu Federation competitions.",
+    "aboutTitle": "About the Federation",
+    "aboutDescription": "About the Georgian Wushu Federation — our mission, organisation, and role in developing Wushu and Sanda across Georgia.",
+    "rulesTitle": "Competition Rules",
+    "rulesDescription": "Competition rules, weight categories, and procedures for Georgian Wushu Federation Sanda tournaments.",
+    "contactTitle": "Contact Us",
+    "contactDescription": "Get in touch with the Georgian Wushu Federation — membership enquiries, club affiliation, and general contact.",
+    "athleteTitleSuffix": "Athlete Profile",
+    "athleteDescription": "Competition history, results, and medals for {name} at Georgian Wushu Federation events.",
+    "clubDescription": "{name} — coaches, athletes, and competition record at the Georgian Wushu Federation.",
+    "eventEyebrow": "Wushu Competition",
+    "newsEyebrow": "Federation News"
   }
 }

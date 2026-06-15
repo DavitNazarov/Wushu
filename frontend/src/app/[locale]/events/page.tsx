@@ -1,8 +1,25 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { getServerApiUrl } from '@/lib/api';
+import { buildPageMetadata } from '@/lib/seo/metadata';
 import type { PublicEvent } from '@/lib/api/public';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'seo' });
+  return buildPageMetadata({
+    locale,
+    path: '/events',
+    title: t('eventsTitle'),
+    description: t('eventsDescription'),
+  });
+}
 
 /* ─── helpers ────────────────────────────────────────────────────────────── */
 

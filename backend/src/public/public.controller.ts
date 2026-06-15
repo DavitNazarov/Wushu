@@ -132,9 +132,10 @@ export class PublicController {
   }
 
   /**
-   * Top clubs by total wins across their athletes' completed fights.
-   * Refreshes naturally as fights are confirmed; falls back to the most
-   * recently created clubs so the section is never empty.
+   * Top clubs by total podium medals (gold/silver/bronze) won by their
+   * athletes across published events. Refreshes naturally as categories are
+   * decided; falls back to the most recently created clubs so the section is
+   * never empty.
    */
   @Get('clubs/top')
   @Header('Cache-Control', CACHE_LONG)
@@ -142,36 +143,17 @@ export class PublicController {
     const org = await resolvePublicOrg(this.prisma);
     if (!org) return [];
 
-    const wonFights = await this.prisma.fight.findMany({
-      where: {
-        organisationId: org.id,
-        winnerAthleteId: { not: null },
-        status: { in: ['COMPLETE', 'CONFIRMED'] },
-      },
-      select: { winnerAthlete: { select: { clubId: true } } },
-    });
-    const lostFights = await this.prisma.fight.findMany({
-      where: {
-        organisationId: org.id,
-        loserAthleteId: { not: null },
-        status: { in: ['COMPLETE', 'CONFIRMED'] },
-      },
-      select: { loserAthlete: { select: { clubId: true } } },
-    });
+    const medalsByClub = await this.clubs.computeMedalsByClub(org.id);
 
-    const winsByClub = new Map<string, number>();
-    for (const f of wonFights) {
-      const cid = f.winnerAthlete?.clubId;
-      if (cid) winsByClub.set(cid, (winsByClub.get(cid) ?? 0) + 1);
-    }
-    const lossesByClub = new Map<string, number>();
-    for (const f of lostFights) {
-      const cid = f.loserAthlete?.clubId;
-      if (cid) lossesByClub.set(cid, (lossesByClub.get(cid) ?? 0) + 1);
-    }
-
-    const ranked = [...winsByClub.entries()]
-      .sort((a, b) => b[1] - a[1])
+    // Rank by total medals, breaking ties by gold, then silver, then bronze.
+    const ranked = [...medalsByClub.entries()]
+      .sort(
+        ([, a], [, b]) =>
+          b.total - a.total ||
+          b.gold - a.gold ||
+          b.silver - a.silver ||
+          b.bronze - a.bronze,
+      )
       .slice(0, 5);
 
     if (ranked.length > 0) {
@@ -189,7 +171,7 @@ export class PublicController {
       const byId = new Map(clubs.map((c) => [c.id, c]));
 
       return ranked
-        .map(([id, wins], idx) => {
+        .map(([id, medals], idx) => {
           const c = byId.get(id);
           if (!c) return null;
           return {
@@ -200,8 +182,10 @@ export class PublicController {
             city: c.city,
             country: c.country.name,
             athletes: c._count.athletes,
-            wins,
-            losses: lossesByClub.get(id) ?? 0,
+            gold: medals.gold,
+            silver: medals.silver,
+            bronze: medals.bronze,
+            medals: medals.total,
           };
         })
         .filter((x) => x !== null);
@@ -228,8 +212,10 @@ export class PublicController {
       city: c.city,
       country: c.country.name,
       athletes: c._count.athletes,
-      wins: 0,
-      losses: 0,
+      gold: 0,
+      silver: 0,
+      bronze: 0,
+      medals: 0,
     }));
   }
 

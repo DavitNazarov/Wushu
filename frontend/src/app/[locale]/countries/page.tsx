@@ -1,8 +1,25 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { getServerApiUrl } from '@/lib/api';
 import { localizedName } from '@/lib/bilingual';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'seo' });
+  return buildPageMetadata({
+    locale,
+    path: '/countries',
+    title: t('countriesTitle'),
+    description: t('countriesDescription'),
+  });
+}
 
 type CountryRow = {
   id: string;

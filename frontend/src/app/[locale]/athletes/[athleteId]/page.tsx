@@ -1,9 +1,14 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { getServerApiUrl } from '@/lib/api';
 import { localizedFullName, localizedName } from '@/lib/bilingual';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import { fetchPublicJson } from '@/lib/seo/fetchPublic';
+import { JsonLd } from '@/lib/seo/jsonLd';
+import { SITE_NAME, resolveSiteUrl, localeUrl } from '@/lib/seo/site';
 import type {
   AthleteProfileFightRow,
   AthleteProfileRegistrationRow,
@@ -11,8 +16,40 @@ import type {
 } from '@/types/api';
 
 type Props = {
-  params: Promise<{ athleteId: string }>;
+  params: Promise<{ locale: string; athleteId: string }>;
 };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale, athleteId } = await params;
+  const t = await getTranslations({ locale, namespace: 'seo' });
+  const data = await fetchPublicJson<AthleteProfileResponse>(
+    `/api/public/athletes/${athleteId}`,
+  );
+  if (!data) {
+    return buildPageMetadata({
+      locale,
+      path: `/athletes/${athleteId}`,
+      title: t('athleteTitleSuffix'),
+      description: t('defaultDescription'),
+      index: false,
+    });
+  }
+  const name = localizedFullName(
+    data.athlete.firstName,
+    data.athlete.lastName,
+    data.athlete.firstNameKa,
+    data.athlete.lastNameKa,
+    locale,
+  );
+  return buildPageMetadata({
+    locale,
+    path: `/athletes/${athleteId}`,
+    title: `${name} — ${t('athleteTitleSuffix')}`,
+    ogTitle: `${name} | ${SITE_NAME}`,
+    description: t('athleteDescription', { name }),
+    type: 'profile',
+  });
+}
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -162,8 +199,34 @@ export default async function PublicAthleteProfilePage({ params }: Props) {
   const backHref = athlete.club?.id ? `/${locale}/clubs/${athlete.club.id}` : `/${locale}/clubs`;
   const backLabel = athlete.club ? localizedName(athlete.club.name, athlete.club.nameKa, locale) : 'Clubs';
 
+  const athleteFullName = localizedFullName(
+    athlete.firstName,
+    athlete.lastName,
+    athlete.firstNameKa,
+    athlete.lastNameKa,
+    locale,
+  );
+  const siteUrl = await resolveSiteUrl();
+  const athleteJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: athleteFullName,
+    url: localeUrl(siteUrl, locale, `/athletes/${athlete.id}`),
+    ...(athlete.club
+      ? {
+          memberOf: {
+            '@type': 'SportsTeam',
+            name: localizedName(athlete.club.name, athlete.club.nameKa, locale),
+          },
+        }
+      : {}),
+    knowsAbout: 'Wushu',
+    nationality: athlete.club?.country ?? undefined,
+  };
+
   return (
     <PublicLayout>
+      <JsonLd data={athleteJsonLd} />
       <div className="space-y-8 py-2">
 
         {/* Back */}

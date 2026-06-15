@@ -900,11 +900,42 @@ export class ScheduleService {
       fights: [],
     }));
 
+    // BF-4 (cont.): the clear step below leaves COMPLETE/CONFIRMED/IN_PROGRESS/
+    // PAUSED fights where they are. Their session slots are still occupied, so
+    // new orderInSession values must start AFTER the highest slot they hold and
+    // they must consume session capacity — otherwise a newly-ready fight (e.g. a
+    // final that just became playable mid-event) is numbered from 1 and collides
+    // with / is ordered ahead of already-played bouts in the same session.
+    const retainedMaxOrderBySession = new Map<string, number>();
+    const retainedCountBySession = new Map<string, number>();
+    for (const f of fights) {
+      const reschedulable =
+        (f.status === 'QUEUED' || f.status === 'ON_DECK') &&
+        f.winnerAthleteId == null;
+      if (reschedulable || f.sessionId == null) continue;
+      retainedCountBySession.set(
+        f.sessionId,
+        (retainedCountBySession.get(f.sessionId) ?? 0) + 1,
+      );
+      if (f.orderInSession != null) {
+        retainedMaxOrderBySession.set(
+          f.sessionId,
+          Math.max(
+            retainedMaxOrderBySession.get(f.sessionId) ?? 0,
+            f.orderInSession,
+          ),
+        );
+      }
+    }
+
     let sessionIdx = 0;
     for (const fight of orderedFights) {
-      // Find a session with remaining capacity
+      // Find a session with remaining capacity (capacity already taken by
+      // retained, still-placed fights is subtracted).
       while (sessionIdx < assignments.length) {
-        const cap = sessionCapacity(sessionList[sessionIdx]);
+        const retained =
+          retainedCountBySession.get(assignments[sessionIdx].sessionId) ?? 0;
+        const cap = sessionCapacity(sessionList[sessionIdx]) - retained;
         if (assignments[sessionIdx].fights.length < cap) break;
         sessionIdx++;
       }
@@ -953,11 +984,16 @@ export class ScheduleService {
       }),
     ];
     for (const assignment of assignments) {
+      // Start numbering after the slots retained (still-placed) fights occupy.
+      const offset = retainedMaxOrderBySession.get(assignment.sessionId) ?? 0;
       for (let i = 0; i < assignment.fights.length; i++) {
         writes.push(
           this.prisma.fight.update({
             where: { id: assignment.fights[i] },
-            data: { sessionId: assignment.sessionId, orderInSession: i + 1 },
+            data: {
+              sessionId: assignment.sessionId,
+              orderInSession: offset + i + 1,
+            },
           }),
         );
       }

@@ -5,6 +5,11 @@ dist/
 build/
 .next/
 coverage/
+# Playwright run artifacts — must stay ignored so Tailwind v4's content
+# scanner never ingests the serialized RSC HTML inside them (corrupts CSS).
+/test-results/
+/playwright-report/
+/e2e/.test-results/
 .env
 .env.*
 .env.sentry-build-plugin

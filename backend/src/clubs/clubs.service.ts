@@ -3,6 +3,27 @@ import type { Club, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { resolvePublicOrg } from '../common/public-org';
+import {
+  computeCategoryResults,
+  type CompetitionFight,
+} from '../competition/competition.logic';
+
+// A club's career podium tally, aggregated across every decided category in
+// published events. Each medal is an athlete-level result credited to the
+// medalist's *current* club. `total` is gold + silver + bronze.
+export type ClubMedalTally = {
+  gold: number;
+  silver: number;
+  bronze: number;
+  total: number;
+};
+
+export const EMPTY_CLUB_MEDALS: ClubMedalTally = {
+  gold: 0,
+  silver: 0,
+  bronze: 0,
+  total: 0,
+};
 
 // Club CRUD + public-facing club page assembly. The "public" methods
 // (listPublic, getPublicDetails) intentionally don't take an organisationId —
@@ -203,6 +224,9 @@ export class ClubsService {
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
 
+    const medals =
+      (await this.computeMedalsByClub(org.id)).get(club.id) ?? EMPTY_CLUB_MEDALS;
+
     return {
       club: {
         id: club.id,
@@ -214,6 +238,7 @@ export class ClubsService {
         regionName: club.region.name,
         regionNameKa: club.region.nameKa,
       },
+      medals,
       coaches: coaches.map((c) => ({
         id: c.id,
         displayName: c.displayName,
@@ -244,5 +269,99 @@ export class ClubsService {
         athleteCount: athletes.length,
       },
     };
+  }
+
+  // Aggregate podium medals (gold/silver/bronze) per club across every weight
+  // category that has fights in a *published* event. We run the same placement
+  // logic the public results page uses (computeCategoryResults) per category,
+  // read off the medalists, and credit each medal to that athlete's current
+  // club — the same attribution the old wins ranking used. Returns a map keyed
+  // by clubId; clubs with no medals are simply absent.
+  async computeMedalsByClub(
+    organisationId: string,
+  ): Promise<Map<string, ClubMedalTally>> {
+    const fights = await this.prisma.fight.findMany({
+      where: {
+        organisationId,
+        eventWeightCategoryId: { not: null },
+        event: { published: true },
+      },
+      select: {
+        id: true,
+        eventWeightCategoryId: true,
+        round: true,
+        boutNo: true,
+        status: true,
+        redAthleteId: true,
+        blueAthleteId: true,
+        winnerAthleteId: true,
+        winMethod: true,
+        notes: true,
+        event: { select: { bronzePolicyCode: true } },
+      },
+    });
+
+    // Map every athlete appearing in these fights to their current club.
+    const athleteIds = new Set<string>();
+    for (const f of fights) {
+      if (f.redAthleteId) athleteIds.add(f.redAthleteId);
+      if (f.blueAthleteId) athleteIds.add(f.blueAthleteId);
+    }
+    const athletes = await this.prisma.athlete.findMany({
+      where: { organisationId, id: { in: [...athleteIds] } },
+      select: { id: true, clubId: true },
+    });
+    const clubByAthlete = new Map(athletes.map((a) => [a.id, a.clubId]));
+
+    // Bucket fights per category so each bracket is scored as a unit.
+    const byCategory = new Map<
+      string,
+      { fights: CompetitionFight[]; bronzePolicy: 'TWO_BRONZES' }
+    >();
+    for (const f of fights) {
+      if (!f.eventWeightCategoryId) continue;
+      const bucket = byCategory.get(f.eventWeightCategoryId) ?? {
+        fights: [],
+        bronzePolicy: f.event.bronzePolicyCode,
+      };
+      bucket.fights.push({
+        id: f.id,
+        round: f.round,
+        boutNo: f.boutNo,
+        status: f.status,
+        redAthleteId: f.redAthleteId ?? null,
+        blueAthleteId: f.blueAthleteId ?? null,
+        winnerAthleteId: f.winnerAthleteId ?? null,
+        winMethod: f.winMethod ?? null,
+        notes: f.notes ?? null,
+      });
+      byCategory.set(f.eventWeightCategoryId, bucket);
+    }
+
+    const tally = new Map<string, ClubMedalTally>();
+    const credit = (
+      clubId: string | null | undefined,
+      medal: 'GOLD' | 'SILVER' | 'BRONZE',
+    ) => {
+      if (!clubId) return;
+      const row = tally.get(clubId) ?? { ...EMPTY_CLUB_MEDALS };
+      if (medal === 'GOLD') row.gold += 1;
+      else if (medal === 'SILVER') row.silver += 1;
+      else row.bronze += 1;
+      row.total += 1;
+      tally.set(clubId, row);
+    };
+
+    for (const { fights: categoryFights, bronzePolicy } of byCategory.values()) {
+      const results = computeCategoryResults({
+        fights: categoryFights,
+        bronzePolicy,
+      });
+      for (const placement of results.placements) {
+        if (!placement.medal || !placement.athleteId) continue;
+        credit(clubByAthlete.get(placement.athleteId), placement.medal);
+      }
+    }
+    return tally;
   }
 }

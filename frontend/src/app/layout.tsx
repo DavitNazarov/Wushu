@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import { ReactNode } from 'react';
 import { Geist, Geist_Mono } from 'next/font/google';
+import { getLocale } from 'next-intl/server';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { QueryProvider } from '@/lib/api/query-provider';
+import { SITE_NAME, SITE_SHORT_NAME, resolveSiteUrl } from '@/lib/seo/site';
 import './globals.css';
 
 const geistSans = Geist({
@@ -15,18 +17,43 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
-export const metadata: Metadata = {
-  title: 'Geo Wushu Competition System',
-  description: 'Geo Wushu competition management',
-};
+// Root metadata sets the site-wide defaults every page inherits:
+//   - metadataBase: makes the file-convention OpenGraph images (and any
+//     relative URLs) absolute. Resolved per-request from env/Host so it's
+//     correct on any domain without a rebuild.
+//   - title.template: deeper pages set a bare title; this appends the brand.
+//   - default OG/Twitter so even un-annotated pages share a branded card.
+export async function generateMetadata(): Promise<Metadata> {
+  const siteUrl = await resolveSiteUrl();
+  return {
+    metadataBase: new URL(siteUrl),
+    title: {
+      default: SITE_NAME,
+      template: `%s | ${SITE_NAME}`,
+    },
+    description:
+      'Official competition platform of the Georgian Wushu Federation — live results, brackets, schedules, and rankings.',
+    applicationName: SITE_SHORT_NAME,
+    formatDetection: { telephone: false },
+    openGraph: {
+      type: 'website',
+      siteName: SITE_NAME,
+      title: SITE_NAME,
+    },
+    twitter: { card: 'summary_large_image' },
+    robots: { index: true, follow: true },
+  };
+}
 
 type RootLayoutProps = {
   children: ReactNode;
 };
 
-export default function RootLayout({ children }: RootLayoutProps) {
+export default async function RootLayout({ children }: RootLayoutProps) {
+  // Correct <html lang> per locale (Georgian pages previously reported lang=en).
+  const locale = await getLocale();
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{

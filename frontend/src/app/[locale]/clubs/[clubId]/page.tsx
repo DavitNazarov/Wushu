@@ -1,9 +1,15 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { Medal, Trophy } from 'lucide-react';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { getServerApiUrl } from '@/lib/api';
 import { localizedName } from '@/lib/bilingual';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import { fetchPublicJson } from '@/lib/seo/fetchPublic';
+import { JsonLd } from '@/lib/seo/jsonLd';
+import { SITE_NAME, resolveSiteUrl, localeUrl } from '@/lib/seo/site';
 
 type ClubPublicDetails = {
   club: {
@@ -15,12 +21,38 @@ type ClubPublicDetails = {
   };
   coaches: { id: string; displayName: string }[];
   athletes: { id: string; name: string; nameKa?: string | null; category: string | null }[];
+  medals: { gold: number; silver: number; bronze: number; total: number };
   stats: { coachCount: number; athleteCount: number };
 };
 
+const MEDAL_COLORS = { gold: '#f5b301', silver: '#9aa6b2', bronze: '#cd7f32' } as const;
+
 type Props = {
-  params: Promise<{ clubId: string }>;
+  params: Promise<{ locale: string; clubId: string }>;
 };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale, clubId } = await params;
+  const t = await getTranslations({ locale, namespace: 'seo' });
+  const data = await fetchPublicJson<ClubPublicDetails>(
+    `/api/public/clubs/${clubId}`,
+  );
+  if (!data) {
+    return buildPageMetadata({
+      locale,
+      path: `/clubs/${clubId}`,
+      title: t('clubsTitle'),
+      description: t('clubsDescription'),
+    });
+  }
+  const name = localizedName(data.club.name, data.club.nameKa, locale);
+  return buildPageMetadata({
+    locale,
+    path: `/clubs/${clubId}`,
+    title: name,
+    description: t('clubDescription', { name }),
+  });
+}
 
 export default async function PublicClubPage({ params }: Props) {
   const { clubId } = await params;
@@ -33,12 +65,26 @@ export default async function PublicClubPage({ params }: Props) {
 
   const data = (await res.json()) as ClubPublicDetails;
   const { club, coaches, athletes, stats } = data;
+  const medals = data.medals ?? { gold: 0, silver: 0, bronze: 0, total: 0 };
 
   const location = [club.city, club.country].filter(Boolean).join(', ');
   const clubDisplayName = localizedName(club.name, club.nameKa, locale);
 
+  const siteUrl = await resolveSiteUrl();
+  const clubJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SportsTeam',
+    name: clubDisplayName,
+    sport: 'Wushu',
+    url: localeUrl(siteUrl, locale, `/clubs/${club.id}`),
+    memberOf: { '@type': 'SportsOrganization', name: SITE_NAME, url: siteUrl },
+    ...(location ? { location: { '@type': 'Place', name: location } } : {}),
+    numberOfEmployees: stats.coachCount,
+  };
+
   return (
     <PublicLayout>
+      <JsonLd data={clubJsonLd} />
       <div className="space-y-8 py-2">
 
         {/* Back link */}
@@ -78,6 +124,19 @@ export default async function PublicClubPage({ params }: Props) {
           <StatCard value={stats.athleteCount} label={tPublic('clubAthletes')} />
           <StatCard value={stats.coachCount} label={tPublic('clubCoaches')} />
         </div>
+
+        {/* Medals */}
+        <section className="space-y-3">
+          <h2 className="text-[13px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+            {tPublic('clubMedals')}
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 max-w-2xl">
+            <MedalStatCard value={medals.total} label={tPublic('resultsClubColumns.total')} />
+            <MedalStatCard value={medals.gold} label={tPublic('resultsClubColumns.gold')} color={MEDAL_COLORS.gold} />
+            <MedalStatCard value={medals.silver} label={tPublic('resultsClubColumns.silver')} color={MEDAL_COLORS.silver} />
+            <MedalStatCard value={medals.bronze} label={tPublic('resultsClubColumns.bronze')} color={MEDAL_COLORS.bronze} />
+          </div>
+        </section>
 
         {/* Coaches */}
         {coaches.length > 0 && (
@@ -163,6 +222,32 @@ function StatCard({ value, label }: { value: number; label: string }) {
   return (
     <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
       <p className="text-[24px] font-bold tabular-nums text-[var(--color-text)]">{value}</p>
+      <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">{label}</p>
+    </div>
+  );
+}
+
+// Medal tally card. A colored Medal icon flags the gold/silver/bronze cards;
+// the total card (no `color`) uses the neutral trophy + primary accent.
+function MedalStatCard({
+  value,
+  label,
+  color,
+}: {
+  value: number;
+  label: string;
+  color?: string;
+}) {
+  return (
+    <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+      <div className="flex items-center gap-2">
+        {color ? (
+          <Medal className="h-5 w-5 shrink-0" style={{ color }} />
+        ) : (
+          <Trophy className="h-5 w-5 shrink-0 text-[var(--color-primary)]" />
+        )}
+        <p className="text-[24px] font-bold tabular-nums text-[var(--color-text)]">{value}</p>
+      </div>
       <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">{label}</p>
     </div>
   );
