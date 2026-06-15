@@ -77,12 +77,17 @@ export class IntegrityService {
       });
     }
 
-    const failWeighins = registrations.filter(
-      (r) =>
+    const failWeighins = registrations.filter((r) => {
+      // A REJECTED/WITHDRAWN registration is the resolved end-state of a failed
+      // weigh-in (e.g. a 1-hour reweigh settled as DQ) — it's no longer
+      // "unresolved", so exclude it like the pending-weigh-in check below does.
+      if (r.status === 'REJECTED' || r.status === 'WITHDRAWN') return false;
+      return (
         r.weighInStatus === 'FAILED' ||
         r.weighInStatus === 'DISQUALIFIED' ||
-        r.weighIns[0]?.decision === 'FAIL',
-    );
+        r.weighIns[0]?.decision === 'FAIL'
+      );
+    });
     if (failWeighins.length > 0) {
       issues.push({
         code: 'UNRESOLVED_FAIL_WEIGHIN',
