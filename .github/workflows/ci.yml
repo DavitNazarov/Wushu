@@ -1,0 +1,58 @@
+name: CI
+
+# Runs the checks on every push to main and every pull request, on a clean
+# machine — so breakage is caught before it reaches the server.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A newer push to the same branch/PR cancels the older still-running job.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — lint · test · build
+    runs-on: ubuntu-latest
+    env:
+      # Dummy values so env-validation / Prisma client construction don't fail.
+      # The unit tests never open a real DB connection.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/test
+      JWT_SECRET: ci_dummy_jwt_secret_at_least_32_chars_long_000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Prisma generate
+        run: npm run prisma:generate -w backend
+      - name: Lint
+        run: npm run lint:backend
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npm run build:backend
+
+  frontend:
+    name: Frontend — lint · build
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      API_URL: http://localhost:4000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build:frontend
