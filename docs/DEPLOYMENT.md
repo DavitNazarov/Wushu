@@ -150,8 +150,9 @@ After the first launch (schema is live but empty):
 ## 5. Database & migrations
 
 - Migrations live in `backend/prisma/migrations/`. The compose **`migrate`**
-  service runs `npm run db:deploy` (idempotent `repair-schema` + lock-free,
-  transactional `migrate-deploy`) on every `up`, before `app` starts.
+  service runs `npm run db:deploy` (lock-free, transactional `migrate-deploy`
+  first — so a brand-new DB builds its full schema from migrations — then the
+  idempotent `repair-schema` drift-patch) on every `up`, before `app` starts.
 - New migration during development (on your laptop, not the VPS):
   ```bash
   cd backend && npm run prisma:migrate
