@@ -5,6 +5,7 @@ dist/
 build/
 .next/
 coverage/
+test-results/
 .env
 .env.*
 *.tsbuildinfo
