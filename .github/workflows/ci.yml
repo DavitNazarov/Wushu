@@ -35,14 +35,67 @@ jobs:
       # Lint is informational for now — the codebase has many pre-existing
       # strict-type-aware violations. continue-on-error surfaces them without
       # blocking. Tests + build are the hard gates. Remove continue-on-error
-      # once the backlog is cleaned up.
+      # once the backlog is cleaned up. lint:backend:check is the non-mutating
+      # variant (plain lint runs eslint --fix, which mutates files — wrong for
+      # a verification step).
       - name: Lint (informational)
-        run: npm run lint:backend
+        run: npm run lint:backend:check
         continue-on-error: true
       - name: Unit tests
         run: npm test
       - name: Build
         run: npm run build:backend
+
+  backend-e2e:
+    name: Backend — DB-backed e2e
+    runs-on: ubuntu-latest
+    # Postgres 16 matches production. The job applies real migrations and seeds
+    # the mock org/admin, then runs the supertest specs against the live API —
+    # the integration coverage the unit job can't provide.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wushu_e2e
+        ports:
+          - 5432:5432
+        # Hold the job until Postgres accepts connections.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/wushu_e2e
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/wushu_e2e
+      JWT_SECRET: ci_dummy_jwt_secret_at_least_32_chars_long_000
+      # Must match seed-mock-data's ORG_SLUG — two e2e specs hit /api/public,
+      # which is scoped to this slug.
+      PUBLIC_ORG_SLUG: georgian-wushu-federation
+      # Test-only: the supertest specs fire many requests back-to-back; the
+      # rate limiter would otherwise reject them. Never set this in prod.
+      THROTTLE_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Prisma generate
+        run: npm run prisma:generate -w backend
+      - name: Apply migrations (fresh DB)
+        run: npm run prisma:migrate:deploy -w backend
+      # Seeds the organisation + first admin user the e2e test-context reads via
+      # prisma.user.findFirst. SEED_MOCK_DATA=1 is what creates the org/admin.
+      - name: Seed org + admin
+        run: SEED_MOCK_DATA=1 npm run prisma:seed -w backend
+      # --runInBand: the specs share one seeded org/admin; serial execution
+      # avoids cross-file DB contention and keeps failures deterministic.
+      - name: E2E tests
+        run: npm run test:e2e -w backend -- --runInBand
 
   frontend:
     name: Frontend — lint · build
