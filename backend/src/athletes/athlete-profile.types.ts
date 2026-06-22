@@ -23,6 +23,7 @@ type AthleteProfileCoachRow = {
 type AthleteProfileClubRow = {
   id: string;
   name: string;
+  nameKa: string | null;
   city: string | null;
   country: string | null;
 };
@@ -96,7 +97,9 @@ export type AthleteProfileResponse = {
   athlete: {
     id: string;
     firstName: string;
+    firstNameKa: string | null;
     lastName: string;
+    lastNameKa: string | null;
     fullName: string;
     sex: AthleteSex | null;
     dateOfBirth?: string | null;

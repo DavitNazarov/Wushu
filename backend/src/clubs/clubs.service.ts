@@ -283,11 +283,13 @@ export class ClubsService {
     const fights = await this.prisma.fight.findMany({
       where: {
         organisationId,
-        eventWeightCategoryId: { not: null },
         event: { published: true },
       },
       select: {
         id: true,
+        bracketId: true,
+        eventId: true,
+        categoryCode: true,
         eventWeightCategoryId: true,
         round: true,
         boutNo: true,
@@ -313,14 +315,21 @@ export class ClubsService {
     });
     const clubByAthlete = new Map(athletes.map((a) => [a.id, a.clubId]));
 
-    // Bucket fights per category so each bracket is scored as a unit.
-    const byCategory = new Map<
+    // Bucket fights per bracket so each category draw is scored as a unit.
+    // Key by bracketId (always set at draw/seed time); fall back to an
+    // event-scoped category key for any fight missing a bracket so we never
+    // merge same-named categories across different events. Keying off
+    // eventWeightCategoryId alone used to drop every fight where that column is
+    // NULL (seeded/legacy data) — the cause of the empty medal tables.
+    const byBracket = new Map<
       string,
       { fights: CompetitionFight[]; bronzePolicy: 'TWO_BRONZES' }
     >();
     for (const f of fights) {
-      if (!f.eventWeightCategoryId) continue;
-      const bucket = byCategory.get(f.eventWeightCategoryId) ?? {
+      const key =
+        f.bracketId ??
+        `${f.eventId}:${f.eventWeightCategoryId ?? f.categoryCode}`;
+      const bucket = byBracket.get(key) ?? {
         fights: [],
         bronzePolicy: f.event.bronzePolicyCode,
       };
@@ -335,7 +344,7 @@ export class ClubsService {
         winMethod: f.winMethod ?? null,
         notes: f.notes ?? null,
       });
-      byCategory.set(f.eventWeightCategoryId, bucket);
+      byBracket.set(key, bucket);
     }
 
     const tally = new Map<string, ClubMedalTally>();
@@ -352,7 +361,7 @@ export class ClubsService {
       tally.set(clubId, row);
     };
 
-    for (const { fights: categoryFights, bronzePolicy } of byCategory.values()) {
+    for (const { fights: categoryFights, bronzePolicy } of byBracket.values()) {
       const results = computeCategoryResults({
         fights: categoryFights,
         bronzePolicy,

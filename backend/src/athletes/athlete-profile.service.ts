@@ -55,7 +55,9 @@ export class AthleteProfileService {
       identity: {
         id: athlete.id,
         firstName: athlete.firstName,
+        firstNameKa: athlete.firstNameKa,
         lastName: athlete.lastName,
+        lastNameKa: athlete.lastNameKa,
         fullName: `${athlete.firstName} ${athlete.lastName}`.trim(),
         sex: athlete.sex,
         dateOfBirth: athlete.dateOfBirth.toISOString(),
@@ -63,6 +65,7 @@ export class AthleteProfileService {
           ? {
               id: athlete.club.id,
               name: athlete.club.name,
+              nameKa: athlete.club.nameKa,
               city: athlete.club.city,
               country: athlete.club.country?.name ?? null,
             }
@@ -72,14 +75,14 @@ export class AthleteProfileService {
     });
   }
 
-  // Public view used by the unauthenticated /athletes/:id pages. Two
-  // differences from getPrivateProfile:
+  // Public view used by the unauthenticated /athletes/:id pages. Differences
+  // from getPrivateProfile:
   //   1. dateOfBirth is intentionally omitted from the identity payload
   //      (PII — public callers don't need it).
-  //   2. If after filtering to only-published events the athlete has no
-  //      visible registrations OR fights, we 404. We don't want to expose
-  //      "this athlete exists but you can't see anything" — that leaks the
-  //      org's roster.
+  //   2. registrations/fights tied to unpublished events are filtered out.
+  // Every athlete that exists (in the public org) gets a profile — an athlete
+  // with no published-event history simply renders with empty events/fights and
+  // a zeroed medal tally. We 404 only when the id doesn't resolve to an athlete.
   async getPublicProfile(
     athleteId: string,
     organisationId?: string,
@@ -111,13 +114,16 @@ export class AthleteProfileService {
       identity: {
         id: athlete.id,
         firstName: athlete.firstName,
+        firstNameKa: athlete.firstNameKa,
         lastName: athlete.lastName,
+        lastNameKa: athlete.lastNameKa,
         fullName: `${athlete.firstName} ${athlete.lastName}`.trim(),
         sex: athlete.sex,
         club: athlete.club
           ? {
               id: athlete.club.id,
               name: athlete.club.name,
+              nameKa: athlete.club.nameKa,
               city: athlete.club.city,
               country: athlete.club.country?.name ?? null,
             }
@@ -125,10 +131,6 @@ export class AthleteProfileService {
         coaches: athlete.club?.coaches ?? [],
       },
     });
-
-    if (profile.registrations.length === 0 && profile.fights.length === 0) {
-      return null;
-    }
 
     return profile;
   }
@@ -225,10 +227,16 @@ export class AthleteProfileService {
     const medals = await this.computeMedalSummary({
       organisationId: input.organisationId,
       athleteId: input.athleteId,
-      categoryIds: [
+      // Group by bracket, not eventWeightCategoryId. A fight always carries a
+      // bracketId (set at draw + seed time), whereas eventWeightCategoryId is
+      // only populated once a registration has a final weigh-in category and is
+      // NULL for seeded/legacy data — keying off it dropped every such fight,
+      // zeroing the medal tally. bracketId mirrors the results-page bucketKey,
+      // so profile medals stay in sync with the public results page.
+      bracketIds: [
         ...new Set(
           visibleFights
-            .map((fight) => fight.eventWeightCategoryId)
+            .map((fight) => fight.bracketId)
             .filter((id): id is string => Boolean(id)),
         ),
       ],
@@ -315,18 +323,21 @@ export class AthleteProfileService {
     };
   }
 
-  // Career medal tally. For every weight category the athlete has competed in
-  // (already visibility-filtered by the caller via `categoryIds`), we pull the
-  // *whole* bracket for that category — not just this athlete's bouts — and run
-  // the same placement logic the results page uses (computeCategoryResults).
-  // We then read off where this athlete landed:
+  // Career medal tally. For every bracket the athlete has competed in (already
+  // visibility-filtered by the caller via `bracketIds`), we pull the *whole*
+  // bracket — not just this athlete's bouts — and run the same placement logic
+  // the results page uses (computeCategoryResults). We then read off where this
+  // athlete landed:
   //   GOLD/SILVER/BRONZE -> podium counters
   //   no medal but the category is fully decided -> `other` (4th+/eliminated)
   //   category still in progress -> not counted yet
+  // Keyed by bracketId (always present on a fight) rather than
+  // eventWeightCategoryId (NULL for seeded/legacy data) so the tally matches
+  // the public results page.
   private async computeMedalSummary(input: {
     organisationId: string;
     athleteId: string;
-    categoryIds: string[];
+    bracketIds: string[];
   }): Promise<AthleteMedalSummary> {
     const empty: AthleteMedalSummary = {
       gold: 0,
@@ -335,15 +346,15 @@ export class AthleteProfileService {
       other: 0,
       total: 0,
     };
-    if (input.categoryIds.length === 0) return empty;
+    if (input.bracketIds.length === 0) return empty;
 
     const fights = await this.prisma.fight.findMany({
       where: {
         organisationId: input.organisationId,
-        eventWeightCategoryId: { in: input.categoryIds },
+        bracketId: { in: input.bracketIds },
       },
       select: {
-        eventWeightCategoryId: true,
+        bracketId: true,
         id: true,
         round: true,
         boutNo: true,
@@ -357,13 +368,13 @@ export class AthleteProfileService {
       },
     });
 
-    const byCategory = new Map<
+    const byBracket = new Map<
       string,
       { fights: CompetitionFight[]; bronzePolicy: 'TWO_BRONZES' }
     >();
     for (const fight of fights) {
-      if (!fight.eventWeightCategoryId) continue;
-      const bucket = byCategory.get(fight.eventWeightCategoryId) ?? {
+      if (!fight.bracketId) continue;
+      const bucket = byBracket.get(fight.bracketId) ?? {
         fights: [],
         bronzePolicy: fight.event.bronzePolicyCode,
       };
@@ -378,13 +389,13 @@ export class AthleteProfileService {
         winMethod: fight.winMethod ?? null,
         notes: fight.notes ?? null,
       });
-      byCategory.set(fight.eventWeightCategoryId, bucket);
+      byBracket.set(fight.bracketId, bucket);
     }
 
     const summary = { ...empty };
-    for (const { fights: categoryFights, bronzePolicy } of byCategory.values()) {
+    for (const { fights: bracketFights, bronzePolicy } of byBracket.values()) {
       const results = computeCategoryResults({
-        fights: categoryFights,
+        fights: bracketFights,
         bronzePolicy,
       });
       const placement = results.placements.find(
