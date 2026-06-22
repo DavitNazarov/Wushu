@@ -28,6 +28,10 @@ import {
   hasRecordedResult,
   isDownstreamFightLocked,
 } from './result-safeguards';
+import {
+  isFightPlayable,
+  isScheduleVisibleFight,
+} from '../competition/fight-visibility';
 import { buildScheduleRows } from '../schedule/schedule-order.logic';
 import {
   buildTimerView,
@@ -86,48 +90,6 @@ export class FightsService {
     if (canRunLiveCompetition(lifecycle)) return;
     if (!override) throw new Error('EVENT_NOT_LIVE');
     if (!reason) throw new Error('OVERRIDE_REASON_REQUIRED');
-  }
-
-  private isFightPlayable(fight: {
-    redAthleteId: string | null;
-    blueAthleteId: string | null;
-    winnerAthleteId?: string | null;
-    status:
-      | 'QUEUED'
-      | 'ON_DECK'
-      | 'IN_PROGRESS'
-      | 'PAUSED'
-      | 'COMPLETE'
-      | 'CONFIRMED';
-  }): boolean {
-    if (!fight.redAthleteId || !fight.blueAthleteId) return false;
-    if (fight.redAthleteId === fight.blueAthleteId) return false;
-    if (fight.winnerAthleteId) return false;
-    return (
-      fight.status === 'QUEUED' ||
-      fight.status === 'ON_DECK' ||
-      fight.status === 'IN_PROGRESS' ||
-      fight.status === 'PAUSED'
-    );
-  }
-
-  private isScheduleVisibleFight(input: {
-    fight: {
-      redAthleteId: string | null;
-      blueAthleteId: string | null;
-      round: number;
-    };
-    openingRound: number;
-    hasSourceDependencies: boolean;
-  }): boolean {
-    const redKnown = !!input.fight.redAthleteId;
-    const blueKnown = !!input.fight.blueAthleteId;
-
-    if (!redKnown && !blueKnown && !input.hasSourceDependencies) return false;
-    if (input.fight.round === input.openingRound && redKnown !== blueKnown) {
-      return false;
-    }
-    return true;
   }
 
   private computeCompletionState(input: {
@@ -643,7 +605,7 @@ export class FightsService {
             redSourceFightId,
             blueSourceFightId,
           });
-          return this.isScheduleVisibleFight({
+          return isScheduleVisibleFight({
             fight,
             openingRound,
             hasSourceDependencies: !!redSourceFightId || !!blueSourceFightId,
@@ -682,7 +644,7 @@ export class FightsService {
           const timerState = fight.timerState
             ? this.toTimerStateView(fight.timerState)
             : null;
-          const isPlayable = this.isFightPlayable({
+          const isPlayable = isFightPlayable({
             redAthleteId: fight.redAthleteId,
             blueAthleteId: fight.blueAthleteId,
             winnerAthleteId: fight.winnerAthleteId,
