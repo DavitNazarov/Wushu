@@ -268,6 +268,8 @@ export class WeighinService {
             OR: [
               { firstName: { contains: search, mode: 'insensitive' } },
               { lastName: { contains: search, mode: 'insensitive' } },
+              { firstNameKa: { contains: search, mode: 'insensitive' } },
+              { lastNameKa: { contains: search, mode: 'insensitive' } },
               { documentId: { contains: search, mode: 'insensitive' } },
               { id: { contains: search, mode: 'insensitive' } },
             ],

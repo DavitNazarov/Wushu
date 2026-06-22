@@ -69,9 +69,12 @@ export class AthletesService {
 
     if (filters.search?.trim()) {
       const search = filters.search.trim();
+      // Match EN + KA names so Georgian-language search hits bilingual names.
       where.OR = [
         { firstName: { contains: search, mode: 'insensitive' } },
         { lastName: { contains: search, mode: 'insensitive' } },
+        { firstNameKa: { contains: search, mode: 'insensitive' } },
+        { lastNameKa: { contains: search, mode: 'insensitive' } },
         { documentId: { contains: search, mode: 'insensitive' } },
       ];
     }
