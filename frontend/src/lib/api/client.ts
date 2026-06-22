@@ -118,6 +118,36 @@ export function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   return api<T>(path, { method: 'GET', signal });
 }
 
+// GET that also surfaces the `X-Total-Count` response header alongside the
+// parsed body — used for server-side pagination, where the body is one page of
+// rows and the header is the full filtered count. Falls back to the body length
+// when the header is absent (so non-paginated endpoints still behave sanely).
+export async function apiGetWithTotal<T>(
+  path: string,
+  signal?: AbortSignal,
+): Promise<{ rows: T; total: number }> {
+  const res = await fetchWithRefresh(path, {
+    method: 'GET',
+    credentials: 'include',
+    signal,
+  });
+
+  if (res.status === 403) {
+    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+  }
+
+  const rows = await handleResponse<T>(res);
+  const header = res.headers.get('X-Total-Count');
+  const parsed = header ? Number.parseInt(header, 10) : Number.NaN;
+  const total = Number.isFinite(parsed)
+    ? parsed
+    : Array.isArray(rows)
+      ? (rows as unknown[]).length
+      : 0;
+
+  return { rows, total };
+}
+
 // Fetch a binary response (e.g. a generated PDF) as a Blob, with the same
 // cookie auth + 401-refresh behaviour as api(). Throws ApiError on failure.
 export async function apiBlob(path: string): Promise<Blob> {

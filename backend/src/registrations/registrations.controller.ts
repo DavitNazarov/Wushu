@@ -8,9 +8,11 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { z } from 'zod';
 import { RegistrationsService } from './registrations.service';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
@@ -70,6 +72,7 @@ export class RegistrationsController {
   @Get()
   async list(
     @Req() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: Response,
     @Query('eventId') eventId?: string,
     @Query('clubId') clubId?: string,
     @Query('status') status?: string,
@@ -119,7 +122,7 @@ export class RegistrationsController {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
     const parsedOffset = offset ? Number.parseInt(offset, 10) : undefined;
 
-    return this.registrations.list({
+    const { rows, total } = await this.registrations.list({
       organisationId: auth.organisationId,
       eventId,
       clubId: effectiveClubId,
@@ -129,6 +132,53 @@ export class RegistrationsController {
       actorClubId,
       limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
       offset: Number.isFinite(parsedOffset) ? parsedOffset : undefined,
+    });
+
+    // Full filtered count for client-side page controls. Same-origin in both
+    // dev (Next rewrite proxy) and prod (combined server), so the header is
+    // always readable without CORS expose-headers config.
+    res.setHeader('X-Total-Count', String(total));
+    return rows;
+  }
+
+  // GET /api/registrations/category-codes?eventId&clubId
+  // Distinct category codes for an event, powering the admin Category filter
+  // dropdown without dragging the whole registration list across the wire.
+  // Coach tenancy mirrors list(): a coach's own clubId is forced server-side.
+  @Get('category-codes')
+  async categoryCodes(
+    @Req() req: AuthenticatedRequest,
+    @Query('eventId') eventId?: string,
+    @Query('clubId') clubId?: string,
+  ): Promise<string[]> {
+    const auth = req.auth!;
+
+    if (!eventId) {
+      throw new BadRequestException({
+        code: 'EVENT_ID_REQUIRED',
+        message: 'eventId is required',
+      });
+    }
+
+    if (auth.role === 'coach' && !auth.clubId) {
+      throw new HttpException(
+        {
+          code: 'COACH_NO_CLUB',
+          message: 'Coach must be assigned to a club to manage registrations',
+        },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    const actorClubId = auth.role === 'coach' ? (auth.clubId ?? null) : null;
+    const effectiveClubId =
+      actorClubId ?? (auth.role === 'admin' ? clubId : undefined);
+
+    return this.registrations.listCategoryCodes({
+      organisationId: auth.organisationId,
+      eventId,
+      clubId: effectiveClubId,
+      actorClubId,
     });
   }
 

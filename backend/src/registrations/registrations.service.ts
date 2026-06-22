@@ -222,71 +222,111 @@ export class RegistrationsService {
     if (params.categoryCode) where.categoryCode = params.categoryCode;
 
     if (params.q) {
+      // Match both EN and KA name fields so a Georgian-language search hits the
+      // bilingual names too (athletes registered with KA-only display names).
       where.athlete = {
         OR: [
           { firstName: { contains: params.q, mode: 'insensitive' } },
           { lastName: { contains: params.q, mode: 'insensitive' } },
+          { firstNameKa: { contains: params.q, mode: 'insensitive' } },
+          { lastNameKa: { contains: params.q, mode: 'insensitive' } },
         ],
       };
     }
 
-    return this.prisma.registration.findMany({
-      where,
-      include: {
-        athlete: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            firstNameKa: true,
-            lastNameKa: true,
-            dateOfBirth: true,
-          },
-        },
-        club: { select: { id: true, name: true } },
-        eventWeightCategory: {
-          include: {
-            categoryTemplateWeight: {
-              select: {
-                name: true,
-                minWeightKgExcl: true,
-                maxWeightKgIncl: true,
-              },
+    // Server-side pagination: `total` is the full filtered count (ignores
+    // take/skip) so the client can render page controls without pulling every
+    // row. Both queries share the same `where`.
+    const [rows, total] = await Promise.all([
+      this.prisma.registration.findMany({
+        where,
+        include: {
+          athlete: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              firstNameKa: true,
+              lastNameKa: true,
+              dateOfBirth: true,
             },
-            eventAgeGroup: {
-              include: {
-                categoryTemplateAgeGroup: {
-                  select: {
-                    id: true,
-                    name: true,
-                    minAge: true,
-                    maxAge: true,
-                    sex: true,
+          },
+          club: { select: { id: true, name: true } },
+          eventWeightCategory: {
+            include: {
+              categoryTemplateWeight: {
+                select: {
+                  name: true,
+                  minWeightKgExcl: true,
+                  maxWeightKgIncl: true,
+                },
+              },
+              eventAgeGroup: {
+                include: {
+                  categoryTemplateAgeGroup: {
+                    select: {
+                      id: true,
+                      name: true,
+                      minAge: true,
+                      maxAge: true,
+                      sex: true,
+                    },
                   },
                 },
               },
             },
           },
-        },
-        registeredEventWeightCategory: {
-          include: {
-            categoryTemplateWeight: {
-              select: {
-                name: true,
-                minWeightKgExcl: true,
-                maxWeightKgIncl: true,
+          registeredEventWeightCategory: {
+            include: {
+              categoryTemplateWeight: {
+                select: {
+                  name: true,
+                  minWeightKgExcl: true,
+                  maxWeightKgIncl: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: [{ categoryCode: 'asc' }, { createdAt: 'asc' }],
-      // Hard row cap: one national-event registration list fits comfortably,
-      // but an unbounded org-wide query must not pull every season through
-      // Node. Clients can page with limit/offset.
-      take: Math.min(Math.max(params.limit ?? 1000, 1), 1000),
-      skip: Math.max(params.offset ?? 0, 0),
+        orderBy: [{ categoryCode: 'asc' }, { createdAt: 'asc' }],
+        // Hard row cap: one national-event registration list fits comfortably,
+        // but an unbounded org-wide query must not pull every season through
+        // Node. Clients can page with limit/offset.
+        take: Math.min(Math.max(params.limit ?? 1000, 1), 1000),
+        skip: Math.max(params.offset ?? 0, 0),
+      }),
+      this.prisma.registration.count({ where }),
+    ]);
+
+    return { rows, total };
+  }
+
+  // Distinct categoryCode values for an event's registrations, used to populate
+  // the admin Category filter dropdown independently of pagination (the paged
+  // list only ever holds one page of rows). Tenant- + coach-scoped exactly like
+  // list(): a coach only ever sees their own club's category codes.
+  async listCategoryCodes(params: {
+    organisationId: string;
+    eventId: string;
+    clubId?: string;
+    actorClubId?: string | null;
+  }): Promise<string[]> {
+    const where: Prisma.RegistrationWhereInput = {
+      organisationId: params.organisationId,
+      eventId: params.eventId,
+    };
+
+    const effectiveClubId = params.actorClubId ?? params.clubId;
+    if (effectiveClubId) where.clubId = effectiveClubId;
+
+    const rows = await this.prisma.registration.findMany({
+      where,
+      distinct: ['categoryCode'],
+      select: { categoryCode: true },
+      orderBy: { categoryCode: 'asc' },
     });
+
+    return rows.map((r) => r.categoryCode);
   }
 
   // Register an athlete in an event. The pipeline:

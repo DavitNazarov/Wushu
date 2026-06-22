@@ -1623,6 +1623,7 @@
     "eventLabel": "Event",
     "noResults": "No registrations found",
     "noResultsHint": "Try adjusting filters or select a different event.",
+    "pageSummary": "Showing {from}–{to} of {total}",
     "filterStatus": "Status",
     "filterStatusAll": "All statuses",
     "filterClub": "Club",
@@ -1666,8 +1667,8 @@
     "confirmWithdraw": "Withdraw registration?",
     "bulk": {
       "title": "Bulk status actions",
-      "description": "Apply one status to all registrations in the current filtered result.",
-      "scopeFiltered": "Current filters",
+      "description": "Apply one status to all eligible registrations on the current page.",
+      "scopeFiltered": "Current page",
       "confirmDescription": "{count} registrations will be updated.",
       "successSummary": "{action}: {updated} updated, {skipped} skipped, {failed} failed.",
       "updateFailed": "Failed to update registrations"

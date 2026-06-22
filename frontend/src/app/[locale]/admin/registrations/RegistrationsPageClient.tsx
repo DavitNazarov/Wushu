@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -8,8 +8,9 @@ import { UserPlus } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { Pagination } from '@/components/ui/pagination/Pagination';
 import { useToast } from '@/components/ui/Toast';
-import { apiGet, apiPost } from '@/lib/api/client';
+import { apiGet, apiGetWithTotal, apiPost } from '@/lib/api/client';
 import { localizedFullName, localizedName } from '@/lib/bilingual';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import type { ClubRow, RegistrationBulkStatusResponse, RegistrationRow } from '@/types/api';
@@ -25,6 +26,8 @@ import { AddAthleteToEventModal } from './AddAthleteToEventModal';
 import { getEligibleRegistrationIds, type RowAction } from './registrationStatusActions';
 
 const EMPTY_REGISTRATIONS: RegistrationRow[] = [];
+const EMPTY_CATEGORIES: string[] = [];
+const PAGE_SIZE = 10;
 
 type Props = {
   eventId: string;
@@ -46,6 +49,8 @@ export function RegistrationsPageClient({ eventId }: Props) {
   const clubId = searchParams.get('clubId') ?? '';
   const q = searchParams.get('q') ?? '';
   const categoryCode = searchParams.get('categoryCode') ?? '';
+  const parsedPage = Number.parseInt(searchParams.get('page') ?? '1', 10);
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
   const setParams = useCallback(
     (updates: Record<string, string>) => {
@@ -58,6 +63,18 @@ export function RegistrationsPageClient({ eventId }: Props) {
       router.replace(qs ? `${pathname}?${qs}` : pathname);
     },
     [searchParams, router, pathname],
+  );
+
+  // Any filter change resets to page 1 — otherwise a narrowed result set could
+  // leave you stranded on a now-empty page.
+  const setFilter = useCallback(
+    (updates: Record<string, string>) => setParams({ ...updates, page: '' }),
+    [setParams],
+  );
+
+  const goToPage = useCallback(
+    (next: number) => setParams({ page: next > 1 ? String(next) : '' }),
+    [setParams],
   );
 
   const { events, selectedEvent, setSelectedEventId } = useAdminEventRoute({
@@ -74,16 +91,29 @@ export function RegistrationsPageClient({ eventId }: Props) {
   const isLocked = gate.mode !== 'active';
   const showContent = gate.mode === 'active' || gate.mode === 'locked';
 
-  const { data: regs, isLoading, error, refetch } = useQuery({
-    queryKey: ['registrations', eventId, status || undefined, clubId || undefined, q || undefined, categoryCode || undefined],
+  const { data, isLoading, error, refetch, isPlaceholderData } = useQuery({
+    queryKey: ['registrations', eventId, status || undefined, clubId || undefined, q || undefined, categoryCode || undefined, page],
     queryFn: () => {
       const params = new URLSearchParams({ eventId });
       if (status) params.set('status', status);
       if (clubId) params.set('clubId', clubId);
       if (q) params.set('q', q);
       if (categoryCode) params.set('categoryCode', categoryCode);
-      return apiGet<RegistrationRow[]>(`/api/registrations?${params.toString()}`);
+      params.set('limit', String(PAGE_SIZE));
+      params.set('offset', String((page - 1) * PAGE_SIZE));
+      return apiGetWithTotal<RegistrationRow[]>(`/api/registrations?${params.toString()}`);
     },
+    enabled: !!eventId && showContent,
+    // Keep the previous page on screen while the next one loads — no flash of
+    // the skeleton/empty state when stepping through pages.
+    placeholderData: (prev) => prev,
+  });
+
+  // Full distinct category list for the filter dropdown — fetched separately so
+  // it stays complete regardless of which page of rows is loaded.
+  const { data: categoryCodes } = useQuery({
+    queryKey: ['registrations', eventId, 'category-codes'],
+    queryFn: () => apiGet<string[]>(`/api/registrations/category-codes?eventId=${eventId}`),
     enabled: !!eventId && showContent,
   });
 
@@ -143,9 +173,22 @@ export function RegistrationsPageClient({ eventId }: Props) {
     },
   });
 
-  const rows = regs ?? EMPTY_REGISTRATIONS;
-  const categories = useMemo(() => [...new Set(rows.map((r) => r.categoryCode))].sort(), [rows]);
+  const rows = data?.rows ?? EMPTY_REGISTRATIONS;
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const categories = categoryCodes ?? EMPTY_CATEGORIES;
   const hasActiveFilters = status || clubId || q || categoryCode;
+
+  // If the loaded data shrinks below the current page (e.g. after withdrawing
+  // the last rows on the final page), step back into range.
+  useEffect(() => {
+    if (data && !isPlaceholderData && page > totalPages) {
+      goToPage(totalPages);
+    }
+  }, [data, isPlaceholderData, page, totalPages, goToPage]);
+
+  const fromRow = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const toRow = Math.min(page * PAGE_SIZE, total);
   const bulkCounts = useMemo(
     () => ({
       APPROVED: getEligibleRegistrationIds(rows, 'APPROVED').length,
@@ -190,11 +233,11 @@ export function RegistrationsPageClient({ eventId }: Props) {
         showFilters={showContent}
         hasActiveFilters={Boolean(hasActiveFilters)}
         onEventChange={setSelectedEventId}
-        onStatusChange={(value) => setParams({ status: value })}
-        onClubChange={(value) => setParams({ clubId: value })}
-        onCategoryChange={(value) => setParams({ categoryCode: value })}
-        onQueryChange={(value) => setParams({ q: value })}
-        onClearFilters={() => setParams({ status: '', clubId: '', q: '', categoryCode: '' })}
+        onStatusChange={(value) => setFilter({ status: value })}
+        onClubChange={(value) => setFilter({ clubId: value })}
+        onCategoryChange={(value) => setFilter({ categoryCode: value })}
+        onQueryChange={(value) => setFilter({ q: value })}
+        onClearFilters={() => setFilter({ status: '', clubId: '', q: '', categoryCode: '' })}
       />
 
       {gate.mode !== 'active' && (
@@ -261,6 +304,19 @@ export function RegistrationsPageClient({ eventId }: Props) {
           }
         />
       ) : null}
+
+      {showContent && total > 0 && (
+        <div className="flex flex-col items-center gap-3 pt-1 sm:flex-row sm:justify-between">
+          <p className="text-[13px] text-[var(--color-text-muted)]">
+            {t('pageSummary', { from: fromRow, to: toRow, total })}
+          </p>
+          <Pagination
+            currentPage={Math.min(page, totalPages)}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+          />
+        </div>
+      )}
 
       <AddAthleteToEventModal
         open={addAthleteOpen}

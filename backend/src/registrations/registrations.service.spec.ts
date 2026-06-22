@@ -7,6 +7,7 @@ const createPrismaMock = () => {
   const prisma: any = {
     registration: {
       findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
     },
   };
   return prisma;
