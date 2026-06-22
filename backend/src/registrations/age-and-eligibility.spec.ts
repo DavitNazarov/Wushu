@@ -1,37 +1,32 @@
 import { RegistrationsService } from './registrations.service';
 import { WeighinService } from '../weighin/weighin.service';
+import { computeAgeOnDate } from '../competition/athlete-age';
 
-// Characterization tests spanning the two services that independently encode
-// age + category-eligibility rules. They lock CURRENT behaviour ahead of the
-// Tier-2 consolidation into a shared pure policy. Two things are pinned:
+// Characterization tests spanning the two services that encode age +
+// category-eligibility rules. They pin behaviour around the Tier-2
+// consolidation. Two things are covered:
 //
-//   1. The UTC `computeAgeOnDate` math is byte-identical in both services
-//      (the source comment says "if you change one, change both"). The first
-//      block asserts both copies agree on a battery of boundary dates, so the
-//      extraction provably preserves every result.
+//   1. The UTC `computeAgeOnDate` math, now extracted to one shared helper
+//      (../competition/athlete-age) that both RegistrationsService and
+//      WeighinService import — previously a byte-identical private copy in
+//      each, with a "if you change one, change both" comment. The expectations
+//      below are unchanged from before the extraction, so they prove the
+//      single source still produces every original result.
 //
-//   2. The eligibility rules DIVERGE today: RegistrationsService applies the
+//   2. The eligibility rules still DIVERGE: RegistrationsService applies the
 //      federation's 15-17 -> adult(18+) exception, while WeighinService's
 //      reconciliation matcher does NOT. This is pinned, not "fixed" — making
-//      them consistent is a product decision for Tier 2, and this test is the
-//      tripwire that forces that decision to be deliberate.
+//      them consistent is a product decision, and this test is the tripwire
+//      that forces that decision to be deliberate. Both predicates now compute
+//      age through the shared helper, so the divergence is purely in the
+//      surrounding age-window logic.
 //
-// `private` is compile-time only in TS, so we reach the real methods via the
-// instances. The methods under test don't touch the injected deps, so stub
-// constructors are safe.
+// `private` is compile-time only in TS, so we reach the eligibility methods
+// via the instances. The methods under test don't touch the injected deps, so
+// stub constructors are safe.
 
 const reg = new RegistrationsService({} as never, {} as never);
 const weighin = new WeighinService({} as never, {} as never, {} as never);
-
-const regAge = (dob: Date, on: Date): number =>
-  (reg as unknown as {
-    computeAgeOnDate(d: Date, o: Date): number;
-  }).computeAgeOnDate(dob, on);
-
-const weighinAge = (dob: Date, on: Date): number =>
-  (weighin as unknown as {
-    computeAgeOnDate(d: Date, o: Date): number;
-  }).computeAgeOnDate(dob, on);
 
 // Date.UTC months are 0-indexed; these helpers keep the test cases readable.
 const utc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d));
@@ -49,15 +44,8 @@ describe('computeAgeOnDate (characterization)', () => {
   ];
 
   it.each(cases)('$name -> $age', ({ dob, on, age }) => {
-    expect(regAge(dob, on)).toBe(age);
+    expect(computeAgeOnDate(dob, on)).toBe(age);
   });
-
-  it.each(cases)(
-    'both service copies agree: $name',
-    ({ dob, on }) => {
-      expect(weighinAge(dob, on)).toBe(regAge(dob, on));
-    },
-  );
 });
 
 // --- eligibility predicates -------------------------------------------------
