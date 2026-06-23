@@ -11,6 +11,7 @@ import { isEventReadOnly } from '../events/lifecycle-rules';
 import { DrawReadinessService } from './draw.readiness.service';
 import { computeCategoryReviewSignature } from './draw.readiness.helpers';
 import { resolveCompetitionFormat } from './competition-format';
+import { propagateWinnerToNextFight } from '../fights/fight-progression';
 
 // Build a human-readable + globally-unique category code for a bracket.
 // Format: AGE_DIVISION_WEIGHT_<EWCID>. We tail the eventWeightCategory id so
@@ -693,10 +694,7 @@ export class DrawService {
           },
         });
 
-        const nextFight = await this.propagateWinnerToNextFight(
-          tx,
-          updatedByeFight,
-        );
+        const nextFight = await propagateWinnerToNextFight(tx, updatedByeFight);
         if (nextFight && nextFight.status === 'QUEUED') {
           moreToProcess = true;
         }
@@ -742,44 +740,6 @@ export class DrawService {
         });
       }),
     );
-  }
-
-  // Used by autoConfirmByes: take a freshly-decided fight (BYE walkover) and
-  // copy the winner into the next round's matching slot. Idempotent — if the
-  // slot already holds the winner, we no-op. Returns null when there's no
-  // next fight (already at the final) or the data is incomplete.
-  private async propagateWinnerToNextFight(
-    tx: Prisma.TransactionClient,
-    fight: {
-      winnerAthleteId: string | null;
-      nextFightId: string | null;
-      nextFightSlot: 'RED' | 'BLUE' | null;
-    },
-  ) {
-    if (!fight.winnerAthleteId || !fight.nextFightId || !fight.nextFightSlot) {
-      return null;
-    }
-
-    const nextFight = await tx.fight.findUnique({
-      where: { id: fight.nextFightId },
-    });
-    if (!nextFight) return null;
-
-    const isRedSlot = fight.nextFightSlot === 'RED';
-    const targetField = isRedSlot ? 'redAthleteId' : 'blueAthleteId';
-    const existingAthleteId = isRedSlot
-      ? nextFight.redAthleteId
-      : nextFight.blueAthleteId;
-    if (existingAthleteId === fight.winnerAthleteId) {
-      return nextFight;
-    }
-
-    return tx.fight.update({
-      where: { id: nextFight.id },
-      data: {
-        [targetField]: fight.winnerAthleteId,
-      },
-    });
   }
 
   // Greedy reordering pass that prevents two adjacent athletes in the seed

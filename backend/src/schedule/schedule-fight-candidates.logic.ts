@@ -1,12 +1,17 @@
-import type { FightStatus } from '@prisma/client';
 import {
   resolveCompetitionFormat,
   type CompetitionFormat,
 } from '../draw/competition-format';
+import { isScheduleVisibleFight } from '../competition/fight-visibility';
 import type {
   ScheduleDisplayAthlete,
   ScheduleSourceFight,
 } from './schedule-order.types';
+
+// isFightPlayable is part of this module's public surface — schedule-order
+// and auto-schedule-order import it from here. Re-export the canonical impl
+// so those callers stay unchanged.
+export { isFightPlayable } from '../competition/fight-visibility';
 
 // Pure schedule-ordering primitives used by buildScheduleRows and the
 // auto-scheduler. No Prisma — all data comes in as plain objects.
@@ -84,46 +89,6 @@ function bracketRoundLabel(input: {
   if (distanceToFinal === 2) return 'Quarterfinal';
   if (distanceToFinal === 3) return 'Round of 16';
   return `Round ${input.round}`;
-}
-
-// Same playability gate ScheduleService uses, replicated here so this file
-// stays standalone. Both sides filled with distinct athletes, no winner yet,
-// status is QUEUED / ON_DECK / IN_PROGRESS / PAUSED.
-export function isFightPlayable(fight: {
-  redAthleteId: string | null;
-  blueAthleteId: string | null;
-  winnerAthleteId?: string | null;
-  status: FightStatus;
-}): boolean {
-  if (!fight.redAthleteId || !fight.blueAthleteId) return false;
-  if (fight.redAthleteId === fight.blueAthleteId) return false;
-  if (fight.winnerAthleteId) return false;
-  return (
-    fight.status === 'QUEUED' ||
-    fight.status === 'ON_DECK' ||
-    fight.status === 'IN_PROGRESS' ||
-    fight.status === 'PAUSED'
-  );
-}
-
-// Decide whether a fight should show in the schedule view. Hides:
-//   - dead nodes (no athletes AND no upstream dependency),
-//   - first-round BYEs (one side filled in the opening round).
-// Same rules as ScheduleService.isScheduleVisibleFight — duplicated to keep
-// this module pure.
-function isScheduleVisibleFight(input: {
-  fight: ScheduleSourceFight;
-  openingRound: number;
-  hasSourceDependencies: boolean;
-}): boolean {
-  const redKnown = !!input.fight.redAthleteId;
-  const blueKnown = !!input.fight.blueAthleteId;
-
-  if (!redKnown && !blueKnown && !input.hasSourceDependencies) return false;
-  if (input.fight.round === input.openingRound && redKnown !== blueKnown)
-    return false;
-
-  return true;
 }
 
 // Turn raw fights into FightCandidate entries:

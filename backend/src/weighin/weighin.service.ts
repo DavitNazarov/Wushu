@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { isWeighInStage } from '../events/lifecycle-rules';
 import { EventStageAutomationService } from '../events/event-stage-automation.service';
+import { computeAgeOnDate } from '../competition/athlete-age';
 import {
   computeManualDecisionOutcome,
   computePolicyWeighInOutcome,
@@ -187,19 +188,6 @@ export class WeighinService {
     return 'OVERRIDE_APPROVED';
   }
 
-  // Same UTC age math used by RegistrationsService — duplicated here rather
-  // than imported to keep this service standalone for tests. If you change
-  // one, change both (or extract to a shared helper).
-  private computeAgeOnDate(dateOfBirth: Date, onDate: Date): number {
-    let age = onDate.getUTCFullYear() - dateOfBirth.getUTCFullYear();
-    const monthDiff = onDate.getUTCMonth() - dateOfBirth.getUTCMonth();
-    const dayDiff = onDate.getUTCDate() - dateOfBirth.getUTCDate();
-    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-      age--;
-    }
-    return age;
-  }
-
   // Eligibility helper used by reconcileCategoryMapping to filter
   // categoryCode candidates down to ones the athlete actually qualifies for.
   // Unlike RegistrationsService.assertAthleteEligibleForCategory this returns
@@ -214,10 +202,7 @@ export class WeighinService {
       sex: AthleteSex | null;
     };
   }): boolean {
-    const age = this.computeAgeOnDate(
-      input.athleteDob,
-      input.competitionStartDate,
-    );
+    const age = computeAgeOnDate(input.athleteDob, input.competitionStartDate);
     if (input.ageGroup.minAge != null && age < input.ageGroup.minAge) {
       return false;
     }

@@ -13,6 +13,7 @@ import {
   isEventReadOnly,
   isRegistrationMutableLifecycle,
 } from '../events/lifecycle-rules';
+import { computeAgeOnDate } from '../competition/athlete-age';
 
 // State-machine table for the Registration.status enum. Any transition NOT
 // listed here requires admin override (with a reason) — direct transitions
@@ -74,19 +75,6 @@ export class RegistrationsService {
     }
   }
 
-  // Age as of `onDate`. All in UTC so we don't get off-by-one near midnight
-  // in the event timezone. Standard "have they had their birthday this year"
-  // logic (subtract 1 if month/day hasn't reached the DOB yet).
-  private computeAgeOnDate(dateOfBirth: Date, onDate: Date): number {
-    let age = onDate.getUTCFullYear() - dateOfBirth.getUTCFullYear();
-    const monthDiff = onDate.getUTCMonth() - dateOfBirth.getUTCMonth();
-    const dayDiff = onDate.getUTCDate() - dateOfBirth.getUTCDate();
-    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-      age--;
-    }
-    return age;
-  }
-
   // Eligibility gate for "is this athlete allowed in this category?"
   // Combines an age window (with the federation's youth→adult exception:
   // 15–17 year olds may compete in 18+ groups) and a sex match. Throws
@@ -106,7 +94,7 @@ export class RegistrationsService {
     },
   ): void {
     const ageGroup = category.eventAgeGroup.categoryTemplateAgeGroup;
-    const athleteAge = this.computeAgeOnDate(
+    const athleteAge = computeAgeOnDate(
       athlete.dateOfBirth,
       event.competitionStartDate,
     );

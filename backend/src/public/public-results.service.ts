@@ -34,7 +34,26 @@ export class PublicResultsService {
         organisationId: input.organisationId,
         eventId: input.eventId,
       },
-      include: {
+      // Explicit projection (not `include`) so this high-traffic public
+      // endpoint only pulls the columns the results page actually uses — the
+      // Fight row also carries timer FKs, scoring blobs, and propagation
+      // fields that are pure waste here. The winnerAthlete relation was also
+      // fetched but never read (winner is derived from red/blue + winnerId).
+      select: {
+        id: true,
+        round: true,
+        boutNo: true,
+        status: true,
+        redAthleteId: true,
+        blueAthleteId: true,
+        winnerAthleteId: true,
+        winMethod: true,
+        notes: true,
+        orderInMat: true,
+        scheduledStartTime: true,
+        categoryCode: true,
+        bracketId: true,
+        eventWeightCategoryId: true,
         mat: { select: { name: true } },
         redAthlete: {
           select: {
@@ -46,15 +65,6 @@ export class PublicResultsService {
           },
         },
         blueAthlete: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            firstNameKa: true,
-            lastNameKa: true,
-          },
-        },
-        winnerAthlete: {
           select: {
             id: true,
             firstName: true,

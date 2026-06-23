@@ -9,6 +9,7 @@ import {
 import type { Event } from '@prisma/client';
 import { BracketsService } from '../draw/brackets.service';
 import type {
+  BracketFightListRow,
   BracketParticipantView,
   BracketRoundColumn,
 } from '../draw/brackets.types';
@@ -139,7 +140,7 @@ export class PublicCompetitionController {
         category: details.category,
         summary: details.summary,
         rounds: this.redactParticipantDocumentIds(details.rounds),
-        fights: details.fights,
+        fights: this.redactFightListDocumentIds(details.fights),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'UNKNOWN';
@@ -443,10 +444,35 @@ export class PublicCompetitionController {
         id: { in: scheduleRows.map((row) => row.id) },
       },
       include: {
-        redAthlete: { select: { id: true, firstName: true, lastName: true } },
-        blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+        // KA name fields are required: the public mat board renders names via
+        // localizedFullName, so without them the Georgian (/ka) scoreboard
+        // silently falls back to English.
+        redAthlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
+        blueAthlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
         winnerAthlete: {
-          select: { id: true, firstName: true, lastName: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
         },
         timerState: true,
       },
@@ -509,6 +535,26 @@ export class PublicCompetitionController {
           },
         },
       })),
+    }));
+  }
+
+  /**
+   * Same national-ID redaction as redactParticipantDocumentIds, but for the
+   * flat `fights` list. Each fight row embeds redSlot/blueSlot whose `athlete`
+   * carries athleteCode (= documentId). The rounds redaction deep-copies a
+   * separate tree, so without this the public bracket-category response leaks
+   * national IDs via fights[].redSlot.athlete.athleteCode.
+   */
+  private redactFightListDocumentIds(
+    fights: BracketFightListRow[],
+  ): BracketFightListRow[] {
+    const redact = (p: BracketParticipantView | null) =>
+      p ? { ...p, athleteCode: p.athleteId } : null;
+
+    return fights.map((fight) => ({
+      ...fight,
+      redSlot: { ...fight.redSlot, athlete: redact(fight.redSlot.athlete) },
+      blueSlot: { ...fight.blueSlot, athlete: redact(fight.blueSlot.athlete) },
     }));
   }
 }

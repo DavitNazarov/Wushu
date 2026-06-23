@@ -9,6 +9,7 @@ import {
 } from '../fights/live-queue.logic';
 import { buildScheduleRows } from './schedule-order.logic';
 import { planAutoScheduleOrder } from './auto-schedule-order.logic';
+import { isFightPlayable } from '../competition/fight-visibility';
 
 // Schedule service: mats, sessions, fight ordering, and the auto-scheduler.
 // Big surface area because the running order is the day-of operational core.
@@ -82,63 +83,6 @@ export class ScheduleService {
     if (distanceToFinal === 2) return 'Quarterfinal';
     if (distanceToFinal === 3) return 'Round of 16';
     return `Round ${round}`;
-  }
-
-  // "Could this fight actually be run right now?"
-  // Both sides must be filled with distinct athletes (BYEs/duplicates can't),
-  // it must not already have a winner attached, and it must be in a
-  // pre/in-progress state. Used by auto-scheduler + per-mat queue computation.
-  private isFightPlayable(fight: {
-    redAthleteId: string | null;
-    blueAthleteId: string | null;
-    winnerAthleteId?: string | null;
-    status:
-      | 'QUEUED'
-      | 'ON_DECK'
-      | 'IN_PROGRESS'
-      | 'PAUSED'
-      | 'COMPLETE'
-      | 'CONFIRMED';
-  }): boolean {
-    if (!fight.redAthleteId || !fight.blueAthleteId) return false;
-    if (fight.redAthleteId === fight.blueAthleteId) return false;
-    if (fight.winnerAthleteId) return false;
-    return (
-      fight.status === 'QUEUED' ||
-      fight.status === 'ON_DECK' ||
-      fight.status === 'IN_PROGRESS' ||
-      fight.status === 'PAUSED'
-    );
-  }
-
-  // Decide whether a fight should show up in the schedule view at all.
-  // Hidden:
-  //   - "Dead nodes": neither athlete AND no upstream dependency
-  //     (structural placeholders that exist only to make tree math work).
-  //   - First-round BYEs (one side filled, one empty in the opening round).
-  // Everything else is visible — even "Winner of N" cells with no real
-  // athletes yet, because admins want to see where the bout will land.
-  private isScheduleVisibleFight(input: {
-    fight: {
-      redAthleteId: string | null;
-      blueAthleteId: string | null;
-      round: number;
-    };
-    openingRound: number;
-    hasSourceDependencies: boolean;
-  }): boolean {
-    const redKnown = !!input.fight.redAthleteId;
-    const blueKnown = !!input.fight.blueAthleteId;
-
-    // Hide only structural dead nodes (no athletes and no dependency source).
-    if (!redKnown && !blueKnown && !input.hasSourceDependencies) return false;
-
-    // Hide first-round BYE auto-paths from schedule numbering.
-    if (input.fight.round === input.openingRound && redKnown !== blueKnown) {
-      return false;
-    }
-
-    return true;
   }
 
   // List all mats in an event sorted by their display `order`. Drives the
@@ -689,7 +633,7 @@ export class ScheduleService {
     });
     if (!fight) throw new Error('FIGHT_NOT_FOUND');
     if (
-      !this.isFightPlayable({
+      !isFightPlayable({
         redAthleteId: fight.redAthleteId,
         blueAthleteId: fight.blueAthleteId,
         winnerAthleteId: fight.winnerAthleteId,
