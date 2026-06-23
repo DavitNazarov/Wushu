@@ -28,6 +28,7 @@ import {
   hasRecordedResult,
   isDownstreamFightLocked,
 } from './result-safeguards';
+import { propagateWinnerToNextFight } from './fight-progression';
 import {
   isFightPlayable,
   isScheduleVisibleFight,
@@ -942,7 +943,7 @@ export class FightsService {
       });
     }
 
-    const advanced = await this.propagateWinnerToNextFight(tx, updated);
+    const advanced = await propagateWinnerToNextFight(tx, updated);
 
     // Auto-complete the event when all playable fights are done
     if (input.fight.event.lifecycle === 'LIVE') {
@@ -1567,7 +1568,7 @@ export class FightsService {
 
       let advanced: typeof updated | null = null;
       if (input.to === 'CONFIRMED' && updated.winnerAthleteId) {
-        advanced = await this.propagateWinnerToNextFight(tx, updated);
+        advanced = await propagateWinnerToNextFight(tx, updated);
       }
 
       return { fight: updated, advanced };
@@ -1839,48 +1840,4 @@ export class FightsService {
     return result;
   }
 
-  private async propagateWinnerToNextFight(
-    tx: Prisma.TransactionClient,
-    fight: {
-      winnerAthleteId: string | null;
-      nextFightId: string | null;
-      nextFightSlot: 'RED' | 'BLUE' | null;
-    },
-  ) {
-    if (!fight.winnerAthleteId || !fight.nextFightId || !fight.nextFightSlot) {
-      return null;
-    }
-
-    const nextFight = await tx.fight.findUnique({
-      where: { id: fight.nextFightId },
-      include: { timerState: { select: { state: true } } },
-    });
-    if (!nextFight) return null;
-
-    const isRedSlot = fight.nextFightSlot === 'RED';
-    const targetField = isRedSlot ? 'redAthleteId' : 'blueAthleteId';
-    const existingAthleteId = isRedSlot
-      ? nextFight.redAthleteId
-      : nextFight.blueAthleteId;
-
-    if (existingAthleteId === fight.winnerAthleteId) {
-      return nextFight;
-    }
-
-    // BF-3: never overwrite a downstream slot once that fight has already
-    // started or been scored — propagating into a live/decided bout corrupts
-    // it. This guard lives inside propagation so EVERY caller (setResult,
-    // recordRoundResult, finishFight) is protected, not just the ones with a
-    // preamble lock check. Leave the slot for manual review instead.
-    if (isDownstreamFightLocked(nextFight)) {
-      return nextFight;
-    }
-
-    return tx.fight.update({
-      where: { id: nextFight.id },
-      data: {
-        [targetField]: fight.winnerAthleteId,
-      },
-    });
-  }
 }
