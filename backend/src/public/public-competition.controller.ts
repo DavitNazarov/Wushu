@@ -443,10 +443,35 @@ export class PublicCompetitionController {
         id: { in: scheduleRows.map((row) => row.id) },
       },
       include: {
-        redAthlete: { select: { id: true, firstName: true, lastName: true } },
-        blueAthlete: { select: { id: true, firstName: true, lastName: true } },
+        // KA name fields are required: the public mat board renders names via
+        // localizedFullName, so without them the Georgian (/ka) scoreboard
+        // silently falls back to English.
+        redAthlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
+        blueAthlete: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
+        },
         winnerAthlete: {
-          select: { id: true, firstName: true, lastName: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            firstNameKa: true,
+            lastNameKa: true,
+          },
         },
         timerState: true,
       },
