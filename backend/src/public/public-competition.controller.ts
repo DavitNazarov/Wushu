@@ -9,6 +9,7 @@ import {
 import type { Event } from '@prisma/client';
 import { BracketsService } from '../draw/brackets.service';
 import type {
+  BracketFightListRow,
   BracketParticipantView,
   BracketRoundColumn,
 } from '../draw/brackets.types';
@@ -139,7 +140,7 @@ export class PublicCompetitionController {
         category: details.category,
         summary: details.summary,
         rounds: this.redactParticipantDocumentIds(details.rounds),
-        fights: details.fights,
+        fights: this.redactFightListDocumentIds(details.fights),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'UNKNOWN';
@@ -534,6 +535,26 @@ export class PublicCompetitionController {
           },
         },
       })),
+    }));
+  }
+
+  /**
+   * Same national-ID redaction as redactParticipantDocumentIds, but for the
+   * flat `fights` list. Each fight row embeds redSlot/blueSlot whose `athlete`
+   * carries athleteCode (= documentId). The rounds redaction deep-copies a
+   * separate tree, so without this the public bracket-category response leaks
+   * national IDs via fights[].redSlot.athlete.athleteCode.
+   */
+  private redactFightListDocumentIds(
+    fights: BracketFightListRow[],
+  ): BracketFightListRow[] {
+    const redact = (p: BracketParticipantView | null) =>
+      p ? { ...p, athleteCode: p.athleteId } : null;
+
+    return fights.map((fight) => ({
+      ...fight,
+      redSlot: { ...fight.redSlot, athlete: redact(fight.redSlot.athlete) },
+      blueSlot: { ...fight.blueSlot, athlete: redact(fight.blueSlot.athlete) },
     }));
   }
 }
