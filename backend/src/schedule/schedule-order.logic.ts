@@ -65,6 +65,8 @@ export function buildScheduleRows(
       bracketRoundLabel: candidate.bracketRoundLabel,
       bracketFightNumber: candidate.fight.boutNo,
       scheduleOrder: scheduleOrderByFightId.get(candidate.fight.id) ?? null,
+      redAthleteId: candidate.fight.redAthleteId,
+      blueAthleteId: candidate.fight.blueAthleteId,
       redDisplayName: displayName({
         athlete: candidate.fight.redAthlete,
         sourceScheduleOrder: redSourceScheduleOrder,

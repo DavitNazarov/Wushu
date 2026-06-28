@@ -75,6 +75,8 @@ export type BuiltScheduleRow = {
   bracketRoundLabel: string;
   bracketFightNumber: number;
   scheduleOrder: number | null;
+  redAthleteId: string | null;
+  blueAthleteId: string | null;
   redDisplayName: string;
   blueDisplayName: string;
   redDisplayNameKa: string | null;

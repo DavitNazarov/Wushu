@@ -13,6 +13,7 @@ import { FormsModule } from './forms/forms.module';
 import { AthletesModule } from './athletes/athletes.module';
 import { ClubsModule } from './clubs/clubs.module';
 import { GeographyModule } from './geography/geography.module';
+import { CoachesModule } from './coaches/coaches.module';
 import { RegistrationsModule } from './registrations/registrations.module';
 import { WeighinModule } from './weighin/weighin.module';
 import { IntegrityModule } from './integrity/integrity.module';
@@ -63,6 +64,7 @@ import { THROTTLE } from './config/throttle-config';
     AthletesModule,
     ClubsModule,
     GeographyModule,
+    CoachesModule,
     RegistrationsModule,
     WeighinModule,
     IntegrityModule,

@@ -32,6 +32,7 @@ const registrationStatusSchema = z.enum(RegistrationStatus);
 const createRegistrationSchema = z.object({
   eventId: z.string().cuid(),
   athleteId: z.string().cuid(),
+  clubId: z.string().cuid().nullable().optional(),
   eventWeightCategoryId: z.string().cuid(),
   notes: z.string().trim().max(10_000).nullable().optional(),
   override: z.boolean().optional(),
@@ -227,6 +228,7 @@ export class RegistrationsController {
         actorUserId: auth.sub,
         eventId: parsed.data.eventId,
         athleteId: parsed.data.athleteId,
+        clubId: auth.role === 'coach' ? actorClubId : (parsed.data.clubId ?? null),
         eventWeightCategoryId: parsed.data.eventWeightCategoryId,
         notes: parsed.data.notes ?? null,
         actorClubId,
@@ -246,6 +248,15 @@ export class RegistrationsController {
           {
             code: 'REGISTRATION_CLOSED',
             message: 'Registration is not open for this event.',
+          },
+          HttpStatus.FORBIDDEN,
+        );
+      }
+      if (msg === 'EVENT_CLOSED_UNOFFICIAL_CLUB') {
+        throw new HttpException(
+          {
+            code: 'EVENT_CLOSED_UNOFFICIAL_CLUB',
+            message: 'This event is closed to unofficial clubs.',
           },
           HttpStatus.FORBIDDEN,
         );

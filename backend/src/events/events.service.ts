@@ -197,8 +197,10 @@ export class EventsService {
       nameKa,
       slug,
       location,
+      entryFee,
       timezone,
       autoAdvanceStage,
+      accessType,
       policies,
     } = dto;
     const normalized = this.normalizeDates(dto, timezone);
@@ -226,8 +228,10 @@ export class EventsService {
           nameKa: nameKa?.trim() || null,
           slug,
           location,
+          entryFee: entryFee ?? null,
           timezone,
           autoAdvanceStage: autoAdvanceStage ?? false,
+          accessType,
           registrationStartDate: normalized.registrationStartDate,
           registrationEndDate: normalized.registrationEndDate,
           weighInStartDate: normalized.weighInStartDate,
@@ -298,8 +302,10 @@ export class EventsService {
       nameKa,
       slug,
       location,
+      entryFee,
       timezone,
       autoAdvanceStage,
+      accessType,
       policies,
     } = dto;
     const normalized = this.normalizeDates(dto, timezone);
@@ -316,8 +322,10 @@ export class EventsService {
           nameKa: nameKa?.trim() || null,
           slug,
           location,
+          entryFee: entryFee ?? null,
           timezone,
           autoAdvanceStage: autoAdvanceStage ?? existing.autoAdvanceStage,
+          accessType: accessType ?? existing.accessType,
           registrationStartDate: normalized.registrationStartDate,
           registrationEndDate: normalized.registrationEndDate,
           weighInStartDate: normalized.weighInStartDate,

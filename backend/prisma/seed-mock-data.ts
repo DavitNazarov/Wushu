@@ -22,9 +22,9 @@ const DEFAULT_PASSWORD = 'Password123!';
 // Static data tables
 // ---------------------------------------------------------------------------
 
-// Countries referenced by clubs (keyed by ISO-3166 alpha-2 code). One default
-// Region (named after the country) is created per country, matching the
-// Country → Region → Club hierarchy backfilled by the add_country_region migration.
+// Countries referenced by clubs (keyed by ISO-3166 alpha-2 code). Cities are
+// created from the club table below, matching the Country → City → Club
+// hierarchy used by the current schema.
 const COUNTRIES: Record<string, { name: string; nameKa: string | null; code: string }> = {
   GE: { name: 'Georgia',    nameKa: 'საქართველო', code: 'GE' },
   AZ: { name: 'Azerbaijan', nameKa: null,          code: 'AZ' },
@@ -361,9 +361,8 @@ export async function runMockDataSeed() {
   });
   console.log(`  ✓ Organisation: ${org.name}`);
 
-  // 2. Countries + default regions (one region per country, named after it)
+  // 2. Countries + cities
   const countryMap = new Map<string, string>(); // code → countryId
-  const regionMap = new Map<string, string>();   // code → default regionId
   const usedCountryCodes = [...new Set(CLUBS.map((c) => c.country))];
   for (const code of usedCountryCodes) {
     const meta = COUNTRIES[code];
@@ -372,32 +371,46 @@ export async function runMockDataSeed() {
       data: { organisationId: org.id, name: meta.name, nameKa: meta.nameKa, code: meta.code },
     });
     countryMap.set(code, country.id);
-    const region = await prisma.region.create({
-      data: { organisationId: org.id, countryId: country.id, name: meta.name, nameKa: meta.nameKa },
-    });
-    regionMap.set(code, region.id);
   }
-  console.log(`  ✓ Countries: ${usedCountryCodes.length}`);
+
+  const cityMap = new Map<string, string>(); // `${countryCode}:${cityName}` → cityId
+  const usedCities = new Map<string, { country: string; name: string }>();
+  for (const c of CLUBS) {
+    usedCities.set(`${c.country}:${c.city}`, { country: c.country, name: c.city });
+  }
+  for (const [key, cityMeta] of usedCities) {
+    const countryId = countryMap.get(cityMeta.country);
+    if (!countryId) throw new Error(`Country not found for city: ${key}`);
+    const city = await prisma.city.create({
+      data: {
+        organisationId: org.id,
+        countryId,
+        name: cityMeta.name,
+        nameKa: null,
+      },
+    });
+    cityMap.set(key, city.id);
+  }
+  console.log(`  ✓ Countries: ${usedCountryCodes.length}, cities: ${usedCities.size}`);
 
   // 3. Clubs
   const clubMap = new Map<string, string>(); // key → id
-  const clubGeoByKey = new Map<string, { countryId: string; regionId: string }>();
+  const clubGeoByKey = new Map<string, { countryId: string; cityId: string }>();
   for (const c of CLUBS) {
     const countryId = countryMap.get(c.country);
-    const regionId = regionMap.get(c.country);
-    if (!countryId || !regionId) throw new Error(`Geography not found for country: ${c.country}`);
+    const cityId = cityMap.get(`${c.country}:${c.city}`);
+    if (!countryId || !cityId) throw new Error(`Geography not found for club: ${c.key}`);
     const club = await prisma.club.create({
       data: {
         organisationId: org.id,
         name: c.name,
         nameKa: c.nameKa ?? null,
-        city: c.city,
         countryId,
-        regionId,
+        cityId,
       },
     });
     clubMap.set(c.key, club.id);
-    clubGeoByKey.set(c.key, { countryId, regionId });
+    clubGeoByKey.set(c.key, { countryId, cityId });
   }
   console.log(`  ✓ Clubs: ${CLUBS.length}`);
 
@@ -429,7 +442,7 @@ export async function runMockDataSeed() {
         role: 'coach',
         clubId,
         countryId: geo.countryId,
-        regionId: geo.regionId,
+        cityId: geo.cityId,
         nationality: c.nationality,
       },
     });
@@ -447,7 +460,7 @@ export async function runMockDataSeed() {
         organisationId: org.id,
         clubId,
         countryId:   geo.countryId,
-        regionId:    geo.regionId,
+        cityId:      geo.cityId,
         firstName:   a.firstName,
         firstNameKa: a.firstNameKa,
         lastName:    a.lastName,
@@ -456,6 +469,9 @@ export async function runMockDataSeed() {
         documentId:  a.docId,
         sex:         a.sex,
       },
+    });
+    await prisma.athleteClub.create({
+      data: { athleteId: athlete.id, clubId },
     });
     athleteMap.set(a.docId, athlete.id);
   }

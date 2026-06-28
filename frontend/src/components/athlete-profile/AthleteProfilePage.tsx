@@ -98,6 +98,7 @@ export function AthleteProfilePage({ athleteId, scope }: Props) {
   const [documentId, setDocumentId] = useState('');
   const [sex, setSex] = useState<'MALE' | 'FEMALE' | ''>('');
   const [clubId, setClubId] = useState('');
+  const [clubIds, setClubIds] = useState<string[]>([]);
   const [docIdError, setDocIdError] = useState<string | null>(null);
 
   const query = useQuery({
@@ -144,6 +145,15 @@ export function AthleteProfilePage({ athleteId, scope }: Props) {
     setDocumentId(athlete.documentId ?? '');
     setSex(athlete.sex ?? '');
     setClubId(athlete.club?.id ?? '');
+    setClubIds(
+      Array.from(
+        new Set(
+          [athlete.club?.id, ...(athlete.clubs ?? []).map((club) => club.id)].filter(
+            (id): id is string => Boolean(id),
+          ),
+        ),
+      ),
+    );
     setDocIdError(null);
     setEditOpen(true);
   }
@@ -157,7 +167,7 @@ export function AthleteProfilePage({ athleteId, scope }: Props) {
     }
 
     const effectiveClubId =
-      scope === 'admin' ? clubId : (query.data?.athlete.club?.id ?? '');
+      scope === 'admin' ? (clubId || null) : (query.data?.athlete.club?.id ?? null);
 
     const body: Record<string, unknown> = {
       id: athleteId,
@@ -171,8 +181,11 @@ export function AthleteProfilePage({ athleteId, scope }: Props) {
       documentId: documentId.trim(),
       sex: sex || undefined,
     };
-    if (scope === 'admin' && effectiveClubId) {
+    if (scope === 'admin') {
       body.clubId = effectiveClubId;
+      body.clubIds = Array.from(
+        new Set([effectiveClubId, ...clubIds].filter((id): id is string => Boolean(id))),
+      );
     }
 
     saveMutation.mutate(body);
@@ -185,6 +198,28 @@ export function AthleteProfilePage({ athleteId, scope }: Props) {
   const showKaFields = isGeorgianClub(effectiveClubForEdit?.country);
 
   const formValid = !!firstName.trim() && !!lastName.trim() && !!dateOfBirth && !!documentId.trim();
+  const selectedClubIds = new Set(
+    [clubId, ...clubIds].filter((id): id is string => Boolean(id)),
+  );
+
+  function setPrimaryClub(nextClubId: string) {
+    const next = nextClubId === EMPTY_SEX ? '' : nextClubId;
+    setClubId(next);
+    setClubIds((current) =>
+      next
+        ? Array.from(new Set([next, ...current]))
+        : current.filter((id) => id !== clubId),
+    );
+  }
+
+  function toggleClubMembership(nextClubId: string, checked: boolean) {
+    if (nextClubId === clubId) return;
+    setClubIds((current) =>
+      checked
+        ? Array.from(new Set([...current, nextClubId]))
+        : current.filter((id) => id !== nextClubId),
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -324,10 +359,10 @@ export function AthleteProfilePage({ athleteId, scope }: Props) {
           {/* Club selector — admin only */}
           {scope === 'admin' && (
             <div className="space-y-1.5">
-              <Label>{tAthletes('fields.club')}</Label>
+              <Label>{tAthletes('fields.primaryClub')}</Label>
               <Select
                 value={clubId || EMPTY_SEX}
-                onValueChange={(v) => setClubId(v === EMPTY_SEX ? '' : v)}
+                onValueChange={setPrimaryClub}
               >
                 <SelectTrigger className="h-10 w-full">
                   <SelectValue placeholder="—" />
@@ -339,6 +374,40 @@ export function AthleteProfilePage({ athleteId, scope }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {scope === 'admin' && (clubs ?? []).length > 0 && (
+            <div className="space-y-2">
+              <Label>{tAthletes('fields.clubMemberships')}</Label>
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                {(clubs ?? []).map((club) => {
+                  const checked = selectedClubIds.has(club.id);
+                  const primary = clubId === club.id;
+                  return (
+                    <label
+                      key={club.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-[var(--radius-input)] px-2 py-1.5 text-[13px] text-[var(--color-text)] hover:bg-[var(--color-surface-alt)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={primary}
+                        onChange={(e) => toggleClubMembership(club.id, e.target.checked)}
+                        className="h-4 w-4 accent-[var(--color-primary)]"
+                      />
+                      <span className="min-w-0 flex-1 truncate">
+                        {localizedName(club.name, club.nameKa, locale)}
+                      </span>
+                      {primary && (
+                        <span className="shrink-0 text-[11px] text-[var(--color-text-muted)]">
+                          {tAthletes('fields.primaryClub')}
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           )}
 

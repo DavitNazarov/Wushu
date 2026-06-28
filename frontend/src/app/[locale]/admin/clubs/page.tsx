@@ -14,15 +14,15 @@ import { useToast } from '@/components/ui/Toast';
 import { apiGet, apiPost } from '@/lib/api/client';
 import { getCompactErrorMessage } from '@/lib/api/error';
 import { localizedName } from '@/lib/bilingual';
-import type { ClubRow, CountryRow, RegionRow } from '@/types/api';
+import type { ClubRow, CountryRow, CityRow, FederationRow } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
 
 const INPUT_CLASS =
   'h-10 w-full rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[13px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/30';
 const SELECT_CLASS = `${INPUT_CLASS} disabled:cursor-not-allowed disabled:opacity-60`;
 
-type FormState = { name: string; nameKa: string; city: string; countryId: string; regionId: string };
-const EMPTY_FORM: FormState = { name: '', nameKa: '', city: '', countryId: '', regionId: '' };
+type FormState = { name: string; nameKa: string; city: string; countryId: string; cityId: string; federationId: string; isOfficial: boolean };
+const EMPTY_FORM: FormState = { name: '', nameKa: '', city: '', countryId: '', cityId: '', federationId: '', isOfficial: true };
 
 export default function ClubsPage() {
   const t = useTranslations('clubs');
@@ -48,15 +48,21 @@ export default function ClubsPage() {
     queryKey: ['countries'],
     queryFn: () => apiGet<CountryRow[]>('/api/countries'),
   });
-  const { data: regions } = useQuery({
-    queryKey: ['regions'],
-    queryFn: () => apiGet<RegionRow[]>('/api/regions'),
+  const { data: cities } = useQuery({
+    queryKey: ['cities'],
+    queryFn: () => apiGet<CityRow[]>('/api/cities'),
+  });
+  // Federations in the form's selected city — drives the optional parent picker.
+  const { data: formFederations } = useQuery({
+    queryKey: ['federations', form.cityId],
+    queryFn: () => apiGet<FederationRow[]>(`/api/federations?cityId=${form.cityId}`),
+    enabled: Boolean(form.cityId),
   });
 
-  // Region options for the form's cascading select (filtered to the chosen country).
+  // City options for the form's cascading select (filtered to the chosen country).
   const formRegions = useMemo(
-    () => (regions ?? []).filter((r) => r.countryId === form.countryId),
-    [regions, form.countryId],
+    () => (cities ?? []).filter((r) => r.countryId === form.countryId),
+    [cities, form.countryId],
   );
   const selectedCountry = countries?.find((c) => c.id === form.countryId) ?? null;
   const isGeorgianCountry = selectedCountry?.code === 'GE';
@@ -66,13 +72,13 @@ export default function ClubsPage() {
     const q = search.trim().toLowerCase();
     return clubs.filter((c) => {
       if (filterCountryId && c.countryId !== filterCountryId) return false;
-      if (filterRegionId && c.regionId !== filterRegionId) return false;
+      if (filterRegionId && c.cityId !== filterRegionId) return false;
       if (!q) return true;
       return (
         c.name.toLowerCase().includes(q) ||
         c.city?.toLowerCase().includes(q) ||
         c.country?.toLowerCase().includes(q) ||
-        c.regionName?.toLowerCase().includes(q)
+        c.cityName?.toLowerCase().includes(q)
       );
     });
   }, [clubs, search, filterCountryId, filterRegionId]);
@@ -90,9 +96,9 @@ export default function ClubsPage() {
     onError: (error) => toast(getCompactErrorMessage(error, tCommon('saveFailed')), 'error'),
   });
 
-  function openNew(preset?: { countryId?: string; regionId?: string }) {
+  function openNew(preset?: { countryId?: string; cityId?: string }) {
     setEditingClub(null);
-    setForm({ ...EMPTY_FORM, countryId: preset?.countryId ?? '', regionId: preset?.regionId ?? '' });
+    setForm({ ...EMPTY_FORM, countryId: preset?.countryId ?? '', cityId: preset?.cityId ?? '' });
     setModalOpen(true);
   }
 
@@ -103,7 +109,9 @@ export default function ClubsPage() {
       nameKa: club.nameKa ?? '',
       city: club.city ?? '',
       countryId: club.countryId ?? '',
-      regionId: club.regionId ?? '',
+      cityId: club.cityId ?? '',
+      federationId: club.federationId ?? '',
+      isOfficial: club.isOfficial,
     });
     setModalOpen(true);
   }
@@ -114,13 +122,13 @@ export default function ClubsPage() {
     setForm(EMPTY_FORM);
   }
 
-  // Deep-link from a region page: /admin/clubs?countryId=…&regionId=… opens the
-  // create modal with that region preselected.
+  // Deep-link from a city page: /admin/clubs?countryId=…&cityId=… opens the
+  // create modal with that city preselected.
   useEffect(() => {
     const countryId = searchParams.get('countryId');
-    const regionId = searchParams.get('regionId');
-    if (countryId || regionId) {
-      openNew({ countryId: countryId ?? '', regionId: regionId ?? '' });
+    const cityId = searchParams.get('cityId');
+    if (countryId || cityId) {
+      openNew({ countryId: countryId ?? '', cityId: cityId ?? '' });
       router.replace(`/${locale}/admin/clubs`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,14 +142,16 @@ export default function ClubsPage() {
     const body: Record<string, unknown> = {
       name: form.name.trim(),
       city: form.city.trim() || null,
-      regionId: form.regionId,
+      cityId: form.cityId,
+      federationId: form.federationId || null,
       nameKa: isGeorgianCountry ? form.nameKa.trim() || null : null,
+      isOfficial: form.isOfficial,
     };
     if (editingClub) body.id = editingClub.id;
     saveMutation.mutate(body);
   }
 
-  const canSave = Boolean(form.name.trim() && form.regionId);
+  const canSave = Boolean(form.name.trim() && form.cityId);
 
   return (
     <div className="space-y-6">
@@ -185,8 +195,8 @@ export default function ClubsPage() {
           onChange={(e) => setFilterRegionId(e.target.value)}
           className={`${SELECT_CLASS} max-w-[180px]`}
         >
-          <option value="">{t('columns.region')}</option>
-          {(regions ?? [])
+          <option value="">{t('columns.city')}</option>
+          {(cities ?? [])
             .filter((r) => !filterCountryId || r.countryId === filterCountryId)
             .map((r) => (
               <option key={r.id} value={r.id}>{localizedName(r.name, r.nameKa, locale)}</option>
@@ -210,8 +220,8 @@ export default function ClubsPage() {
                 <tr className="bg-[var(--color-surface-alt)]">
                   <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.name')}</th>
                   <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.country')}</th>
-                  <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.region')}</th>
                   <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.city')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.federation')}</th>
                   <th className="px-4 py-3 text-right font-medium text-[var(--color-text-muted)]">{tCommon('actions')}</th>
                 </tr>
               </thead>
@@ -238,8 +248,8 @@ export default function ClubsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-[var(--color-text-muted)]">{club.country || '—'}</td>
-                    <td className="px-4 py-3 text-[var(--color-text-muted)]">{club.regionName ? localizedName(club.regionName, club.regionNameKa, locale) : '—'}</td>
-                    <td className="px-4 py-3 text-[var(--color-text-muted)]">{club.city || '—'}</td>
+                    <td className="px-4 py-3 text-[var(--color-text-muted)]">{club.cityName ? localizedName(club.cityName, club.cityNameKa, locale) : '—'}</td>
+                    <td className="px-4 py-3 text-[var(--color-text-muted)]">{club.federationName ? localizedName(club.federationName, club.federationNameKa, locale) : '—'}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-3">
                         <button
@@ -284,7 +294,7 @@ export default function ClubsPage() {
                     <div className="min-w-0">
                       <p className="truncate text-[13px] font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{localizedName(club.name, club.nameKa, locale)}</p>
                       <p className="text-[12px] text-[var(--color-text-muted)]">
-                        {[club.country, club.regionName ? localizedName(club.regionName, club.regionNameKa, locale) : null, club.city].filter(Boolean).join(' · ') || '—'}
+                        {[club.country, club.cityName ? localizedName(club.cityName, club.cityNameKa, locale) : null, club.federationName ? localizedName(club.federationName, club.federationNameKa, locale) : null].filter(Boolean).join(' · ') || '—'}
                       </p>
                     </div>
                   </div>
@@ -332,7 +342,7 @@ export default function ClubsPage() {
             <select
               className={SELECT_CLASS}
               value={form.countryId}
-              onChange={(e) => setForm((f) => ({ ...f, countryId: e.target.value, regionId: '' }))}
+              onChange={(e) => setForm((f) => ({ ...f, countryId: e.target.value, cityId: '' }))}
             >
               <option value="">{t('fields.selectCountry')}</option>
               {countries?.map((c) => (
@@ -342,12 +352,12 @@ export default function ClubsPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">{t('fields.region')}</label>
+            <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">{t('fields.city')}</label>
             <select
               className={SELECT_CLASS}
-              value={form.regionId}
+              value={form.cityId}
               disabled={!form.countryId}
-              onChange={(e) => setForm((f) => ({ ...f, regionId: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, cityId: e.target.value, federationId: '' }))}
             >
               <option value="">
                 {!form.countryId
@@ -360,6 +370,35 @@ export default function ClubsPage() {
                 <option key={r.id} value={r.id}>{localizedName(r.name, r.nameKa, locale)}</option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[13px] font-medium text-[var(--color-text)]">{t('fields.federation')}</label>
+            <select
+              className={SELECT_CLASS}
+              value={form.federationId}
+              disabled={!form.cityId}
+              onChange={(e) => setForm((f) => ({ ...f, federationId: e.target.value }))}
+            >
+              <option value="">{t('fields.noFederation')}</option>
+              {(formFederations ?? []).map((fed) => (
+                <option key={fed.id} value={fed.id}>{localizedName(fed.name, fed.nameKa, locale)}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-start gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-alt)]/40 p-3">
+            <input
+              id="club-is-official"
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 cursor-pointer accent-[var(--color-primary)]"
+              checked={form.isOfficial}
+              onChange={(e) => setForm((f) => ({ ...f, isOfficial: e.target.checked }))}
+            />
+            <label htmlFor="club-is-official" className="cursor-pointer select-none">
+              <span className="block text-[13px] font-medium text-[var(--color-text)]">{t('fields.isOfficial')}</span>
+              <span className="block text-[12px] text-[var(--color-text-muted)]">{t('fields.isOfficialDesc')}</span>
+            </label>
           </div>
 
           {isGeorgianCountry && (

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { assertId } from '../common/assert-id';
 
 export type IntegrityIssue = {
   code: string;
@@ -133,6 +134,7 @@ export class IntegrityService {
     override?: boolean;
     reason?: string | null;
   }) {
+    assertId(input.eventId, 'EVENT_ID_REQUIRED');
     const event = await this.prisma.event.findFirst({
       where: { id: input.eventId, organisationId: input.organisationId },
     });

@@ -20,6 +20,12 @@ type Props = {
   max?: string;
   hint?: string;
   popoverAlign?: 'start' | 'end';
+  /**
+   * When set (non-empty), only these `YYYY-MM-DD` dates are selectable — every
+   * other day in the calendar is disabled. Used to restrict a picker to the
+   * event's fight days. Empty/undefined keeps the full min/max range.
+   */
+  allowedDays?: string[];
   onChange: (value: string) => void;
 };
 
@@ -33,6 +39,7 @@ export function EventDateField({
   max,
   hint,
   popoverAlign = 'start',
+  allowedDays,
   onChange,
 }: Props) {
   const locale = useLocale();
@@ -42,8 +49,17 @@ export function EventDateField({
   const maxDate = parseIsoDate(max ?? '');
   const today = new Date();
   const todayIso = toIsoDate(today);
+  const allowedSet = useMemo(() => new Set(allowedDays ?? []), [allowedDays]);
+  // First selectable day, so the calendar opens on the right month even when
+  // nothing is picked yet (fight days can be months away from "today").
+  const firstAllowedDate = useMemo(
+    () => (allowedSet.size > 0 ? parseIsoDate([...allowedSet].sort()[0]) : null),
+    [allowedSet],
+  );
   const [open, setOpen] = useState(false);
-  const [cursorMonth, setCursorMonth] = useState(() => selectedDate ?? minDate ?? today);
+  const [cursorMonth, setCursorMonth] = useState(
+    () => selectedDate ?? firstAllowedDate ?? minDate ?? today,
+  );
   const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
   const [mounted, setMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -112,6 +128,7 @@ export function EventDateField({
   function isDisabled(date: Date) {
     if (minDate && date < minDate) return true;
     if (maxDate && date > maxDate) return true;
+    if (allowedSet.size > 0 && !allowedSet.has(toIsoDate(date))) return true;
     return false;
   }
 
@@ -138,7 +155,7 @@ export function EventDateField({
         ref={triggerRef}
         type="button"
         onClick={() => {
-          setCursorMonth(selectedDate ?? minDate ?? today);
+          setCursorMonth(selectedDate ?? firstAllowedDate ?? minDate ?? today);
           setOpen((current) => !current);
         }}
         className={[

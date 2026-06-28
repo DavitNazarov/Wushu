@@ -9,6 +9,13 @@ const createPrismaMock = () => {
   const prisma: any = {
     club: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
+    athleteClub: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      createMany: jest.fn(),
+      deleteMany: jest.fn(),
     },
     athlete: {
       findFirst: jest.fn(),
@@ -46,7 +53,7 @@ describe('AthletesService', () => {
   // all) must surface as INVALID_CLUB, not bleed across organisations.
   it('throws INVALID_CLUB when clubId does not exist for organisation', async () => {
     const prisma = createPrismaMock();
-    prisma.club.findFirst.mockResolvedValue(null);
+    prisma.club.findMany.mockResolvedValue([]);
     const audit = createAuditMock();
 
     const service = new AthletesService(prisma, audit as any);
@@ -80,22 +87,26 @@ describe('AthletesService', () => {
   // that accidentally narrow the return shape.
   it('creates athlete successfully when clubId is valid', async () => {
     const prisma = createPrismaMock();
-    prisma.club.findFirst.mockResolvedValue({
+    prisma.club.findMany.mockResolvedValue([{
       id: 'club_1',
       organisationId,
       name: 'Club',
-      city: null,
-      country: null,
+      cityId: 'city_1',
+      countryId: 'country_1',
       createdAt: new Date(),
       updatedAt: new Date(),
-    });
+    }]);
 
     const createdAthlete: Athlete = {
       id: 'athlete_1',
       organisationId,
       clubId: 'club_1',
+      cityId: 'city_1',
+      countryId: 'country_1',
       firstName: 'Nika',
+      firstNameKa: null,
       lastName: 'Mchedlishvili',
+      lastNameKa: null,
       dateOfBirth: new Date('2008-03-14T00:00:00.000Z'),
       documentId: 'GE-ATH-0001',
       sex: 'MALE',
@@ -138,6 +149,7 @@ describe('AthletesService', () => {
         organisationId,
         clubId: 'club_2',
       });
+    prisma.athleteClub.findUnique.mockResolvedValue(null);
 
     const service = new AthletesService(prisma, createAuditMock() as any);
 

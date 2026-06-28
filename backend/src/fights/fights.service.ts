@@ -10,6 +10,7 @@ import type {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { CAPABILITIES } from '../auth/capabilities';
 import { canRunLiveCompetition } from '../events/lifecycle-rules';
 import {
   buildBracketOrCompetitionViewModel,
@@ -64,6 +65,19 @@ const FIGHT_STATE_TRANSITIONS: Record<FightStatus, FightStatus[]> = {
 // from many mat displays without going visibly stale.
 const LIVE_BOARD_CACHE_TTL_MS = 800;
 
+// Terminal fight states. Once a fight is COMPLETE or CONFIRMED its result is
+// final — NO path (override or otherwise) may mutate it. A genuine correction
+// has to go through a dedicated, audited admin flow (not built yet); until then
+// we hard-block so override can never silently rewrite a recorded outcome.
+const FINALIZED_FIGHT_STATUSES: ReadonlySet<FightStatus> = new Set([
+  'COMPLETE',
+  'CONFIRMED',
+]);
+
+function isFightFinalized(status: FightStatus): boolean {
+  return FINALIZED_FIGHT_STATUSES.has(status);
+}
+
 // Big service: scoring + timer + status + live boards for one fight at a time.
 // Subscribes to FIGHT_STATE_TRANSITIONS for direct moves and falls back to
 // override+reason for anything else. The `liveBoardCache` shaves load when
@@ -91,6 +105,22 @@ export class FightsService {
     if (canRunLiveCompetition(lifecycle)) return;
     if (!override) throw new Error('EVENT_NOT_LIVE');
     if (!reason) throw new Error('OVERRIDE_REASON_REQUIRED');
+  }
+
+  // Override is a privileged escape hatch, not a property of LIVE_RUN. Any
+  // request that sets override=true must come from a caller holding
+  // RESULTS_OVERRIDE (admin-only) — judges/timekeepers can run fights but
+  // cannot waive result/stage guards. Callers that never override (override
+  // falsey) pass straight through, so the common live-scoring path is
+  // unaffected.
+  private assertOverridePermitted(
+    override: boolean | undefined,
+    actorCapabilities: readonly string[] | undefined,
+  ): void {
+    if (!override) return;
+    if (!actorCapabilities?.includes(CAPABILITIES.RESULTS_OVERRIDE)) {
+      throw new Error('OVERRIDE_NOT_PERMITTED');
+    }
   }
 
   private computeCompletionState(input: {
@@ -883,6 +913,11 @@ export class FightsService {
         blueAthleteId: string | null;
         nextFightId: string | null;
         nextFightSlot: 'RED' | 'BLUE' | null;
+        // Snapshot observed by the pre-transaction read; the compare-and-swap
+        // below rejects the write if the live row no longer matches.
+        status: FightStatus;
+        updatedAt: Date;
+        winnerAthleteId: string | null;
       };
       actorUserId: string;
       winner: FightSlot;
@@ -900,9 +935,33 @@ export class FightsService {
     );
     if (!winnerAthleteId) throw new Error('WINNER_NOT_PRESENT');
 
-    const now = new Date();
-    const updated = await tx.fight.update({
+    // Lost-update guard. setResult/recordRoundResult validate hasRecordedResult
+    // against a PRE-transaction read; re-assert it against the live row INSIDE the
+    // transaction so two concurrent submissions that both passed the pre-checks
+    // can't both finalize.
+    const live = await tx.fight.findUnique({
       where: { id: input.fight.id },
+      select: { status: true, winnerAthleteId: true },
+    });
+    if (!live) throw new Error('FIGHT_NOT_FOUND');
+    if (hasRecordedResult(live) && !input.override) {
+      throw new Error('RESULT_ALREADY_RECORDED');
+    }
+
+    const now = new Date();
+    // Compare-and-swap on the exact (status, updatedAt, winner) observed before the
+    // transaction — mirrors the setState() updateMany guard. This runs
+    // UNCONDITIONALLY (not gated on expectedUpdatedAt) so the race is closed even
+    // when the client omits the optimistic-lock stamp. On the amend path (override)
+    // the row already has a winner, so match the observed winnerAthleteId; otherwise
+    // require it to still be null so a racing finalize loses the swap.
+    const swap = await tx.fight.updateMany({
+      where: {
+        id: input.fight.id,
+        status: input.fight.status,
+        updatedAt: input.fight.updatedAt,
+        winnerAthleteId: input.override ? input.fight.winnerAthleteId : null,
+      },
       data: {
         winnerAthleteId,
         loserAthleteId:
@@ -916,6 +975,14 @@ export class FightsService {
         confirmedAt: now,
       },
     });
+    if (swap.count === 0) {
+      throw new Error('FIGHT_STALE_UPDATE');
+    }
+
+    const updated = await tx.fight.findUnique({
+      where: { id: input.fight.id },
+    });
+    if (!updated) throw new Error('FIGHT_NOT_FOUND');
 
     const timer =
       input.timerState ??
@@ -1384,6 +1451,7 @@ export class FightsService {
     override?: boolean;
     reason?: string | null;
     expectedUpdatedAt?: string | null;
+    actorCapabilities?: string[];
   }) {
     const { fight, advanced } = await this.setResult({
       organisationId: input.organisationId,
@@ -1395,6 +1463,7 @@ export class FightsService {
       override: input.override ?? false,
       reason: input.reason ?? null,
       expectedUpdatedAt: input.expectedUpdatedAt ?? null,
+      actorCapabilities: input.actorCapabilities,
     });
     return { fight, advanced };
   }
@@ -1406,6 +1475,7 @@ export class FightsService {
     to: FightStatus;
     override?: boolean;
     reason?: string | null;
+    actorCapabilities?: string[];
   }): Promise<{
     fight: Prisma.FightGetPayload<object>;
     advanced: Prisma.FightGetPayload<object> | null;
@@ -1430,7 +1500,16 @@ export class FightsService {
     });
     if (!fight) throw new Error('FIGHT_NOT_FOUND');
 
+    this.assertOverridePermitted(input.override, input.actorCapabilities);
     this.assertLiveStage(fight.event.lifecycle, input.override, input.reason);
+
+    // Terminal fights are immutable. The only legitimate move out of a finalized
+    // state would be the direct COMPLETE→CONFIRMED confirm (override falsey), so
+    // every override touching a COMPLETE/CONFIRMED fight is a terminal-state edit
+    // — hard-block it regardless of capability.
+    if (input.override && isFightFinalized(fight.status)) {
+      throw new Error('FIGHT_ALREADY_FINALIZED');
+    }
 
     const allowed = FIGHT_STATE_TRANSITIONS[fight.status] ?? [];
     const isDirect = allowed.includes(input.to);
@@ -1766,12 +1845,23 @@ export class FightsService {
     override?: boolean;
     reason?: string | null;
     expectedUpdatedAt?: string | null;
+    actorCapabilities?: string[];
   }) {
     const fight = await this.prisma.fight.findFirst({
       where: { id: input.fightId, organisationId: input.organisationId },
       include: { event: true },
     });
     if (!fight) throw new Error('FIGHT_NOT_FOUND');
+
+    this.assertOverridePermitted(input.override, input.actorCapabilities);
+
+    // A finalized fight's result is locked. Recording a result here is only ever
+    // legitimate for a not-yet-finalized fight; once COMPLETE/CONFIRMED the only
+    // way back in was override, which we now refuse outright (corrections must go
+    // through a future audited admin flow).
+    if (isFightFinalized(fight.status)) {
+      throw new Error('FIGHT_ALREADY_FINALIZED');
+    }
 
     // BF-2: optimistic lock. The client echoes the fight.updatedAt it last saw;
     // if the row changed since (another judge already scored it), reject the

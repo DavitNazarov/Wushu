@@ -24,7 +24,6 @@ export function useScheduleMutations(
     onSessionSaved: () => void;
     onSessionDeleted: () => void;
     onGenerated: () => void;
-    onMoveResolved: (gapViolations: string[]) => void;
   },
   generateForm: { avgBoutSeconds: number; bufferSeconds: number },
 ) {
@@ -33,7 +32,7 @@ export function useScheduleMutations(
   const { toast } = useToast();
 
   const upsertSession = useMutation({
-    mutationFn: (data: { id?: string; name: string; startTime: string; endTime: string; order: number }) =>
+    mutationFn: (data: { id?: string; name: string; nameKa: string | null; startTime: string; endTime: string; order: number }) =>
       apiPost('/api/schedule-sessions', { eventId, ...data }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.sessionsQK });
@@ -74,11 +73,9 @@ export function useScheduleMutations(
   const moveFight = useMutation({
     mutationFn: (data: { fightId: string; toSessionId: string | null; insertAfterOrder: number }) =>
       apiPost<{ ok: boolean; gapViolations: string[] }>('/api/schedule/move-session-fight', data),
-    onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: keys.scheduleQK });
-      callbacks.onMoveResolved(result.gapViolations);
-      if (result.gapViolations.length > 0) toast(t('gapWarning'), 'error');
-    },
+    // Schedule issues are recomputed inline from the refetched schedule
+    // (see computeScheduleIssues), so no move-time banner is needed here.
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.scheduleQK }),
     onError: (e) => toast(getCompactErrorMessage(e, t('errorGeneric')), 'error'),
   });
 

@@ -32,15 +32,13 @@ jobs:
       - run: npm ci
       - name: Prisma generate
         run: npm run prisma:generate -w backend
-      # Lint is informational for now — the codebase has many pre-existing
-      # strict-type-aware violations. continue-on-error surfaces them without
-      # blocking. Tests + build are the hard gates. Remove continue-on-error
-      # once the backlog is cleaned up. lint:backend:check is the non-mutating
-      # variant (plain lint runs eslint --fix, which mutates files — wrong for
-      # a verification step).
-      - name: Lint (informational)
-        run: npm run lint:backend:check
-        continue-on-error: true
+      # Lint ratchet (M4): the codebase carries a backlog of pre-existing
+      # strict-type-aware violations captured in backend/.lint-baseline.json.
+      # Rather than block on the whole backlog (or hide it behind
+      # continue-on-error, which also masked NEW violations), this gate fails
+      # only when the error count INCREASES — so the count can only ratchet down.
+      - name: Lint ratchet (no new errors)
+        run: npm run lint:ratchet -w backend
       - name: Unit tests
         run: npm test
       - name: Build

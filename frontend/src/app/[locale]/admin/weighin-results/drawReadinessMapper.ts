@@ -24,27 +24,6 @@ const STATUS_ORDER: Record<DrawCategoryOverviewRow['readinessStatus'], number> =
   EMPTY: 6,
 };
 
-// Pill classes for a category readiness status. Palette mirrors
-// bracketStatusBadgeClasses (features/brackets/lib/bracketDisplayMapper.ts)
-// so the draw page and brackets page stay visually consistent.
-export function statusBadgeClasses(
-  status: DrawCategoryOverviewRow['readinessStatus'],
-): string {
-  if (status === 'READY') {
-    return 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
-  }
-  if (status === 'DRAWN') {
-    return 'border border-sky-500/30 bg-sky-500/10 text-sky-300';
-  }
-  if (status === 'NEEDS_REVIEW' || status === 'SOLO') {
-    return 'border border-amber-500/30 bg-amber-500/10 text-amber-300';
-  }
-  if (status === 'BLOCKED') {
-    return 'border border-red-500/30 bg-red-500/10 text-red-300';
-  }
-  return 'border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]';
-}
-
 export function filterAndSortCategories(input: {
   categories: DrawCategoryOverviewRow[];
   filter: DrawCategoryFilter;

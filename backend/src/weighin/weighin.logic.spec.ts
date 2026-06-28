@@ -47,6 +47,25 @@ describe('weighin policy engine', () => {
     expect(outcome.weighInStatus).toBe('PASSED');
   });
 
+  // DATA-1: a weight sitting exactly on an inclusive cap — including one carrying
+  // sub-gram IEEE-754 noise from upstream arithmetic — must classify as inside
+  // the category, never spill into a needless move-up. Without gram-grid
+  // rounding, 56 + 1e-9 <= 56 is false and the athlete is wrongly moved up.
+  it('treats a weight on the inclusive cap as inside despite float noise', () => {
+    const outcome = computePolicyWeighInOutcome({
+      policyCode: 'IWUF_STRICT_ONE_HOUR',
+      weightKg: 56 + 1e-9,
+      currentCategory: categories[1], // 56kg class: 52 < w ≤ 56
+      categoriesInAgeGroup: categories,
+      attemptHistory: [],
+      reweighWindowMinutes: 60,
+      now: new Date('2026-03-07T10:00:00Z'),
+    });
+
+    expect(outcome.decision).toBe('PASS');
+    expect(outcome.weighInStatus).toBe('PASSED');
+  });
+
   it('opens one-hour window on first strict-policy failure', () => {
     const now = new Date('2026-03-07T10:00:00Z');
     const outcome = computePolicyWeighInOutcome({

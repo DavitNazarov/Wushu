@@ -44,7 +44,7 @@ export default function CountryDetailPage() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (body: Record<string, unknown>) => apiPost('/api/regions', body),
+    mutationFn: (body: Record<string, unknown>) => apiPost('/api/cities', body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['country', countryId] });
       queryClient.invalidateQueries({ queryKey: ['countries'] });
@@ -55,7 +55,7 @@ export default function CountryDetailPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => apiDelete(`/api/regions/${id}`),
+    mutationFn: (id: string) => apiDelete(`/api/cities/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['country', countryId] });
       queryClient.invalidateQueries({ queryKey: ['countries'] });
@@ -70,9 +70,9 @@ export default function CountryDetailPage() {
     setModalOpen(true);
   }
 
-  function openEdit(region: CountryRegionRow) {
-    setEditing(region);
-    setForm({ name: region.name, nameKa: region.nameKa ?? '' });
+  function openEdit(city: CountryRegionRow) {
+    setEditing(city);
+    setForm({ name: city.name, nameKa: city.nameKa ?? '' });
     setModalOpen(true);
   }
 
@@ -92,13 +92,13 @@ export default function CountryDetailPage() {
     saveMutation.mutate(body);
   }
 
-  function handleDelete(region: CountryRegionRow) {
+  function handleDelete(city: CountryRegionRow) {
     if (!window.confirm(t('deleteRegionConfirm'))) return;
-    deleteMutation.mutate(region.id);
+    deleteMutation.mutate(city.id);
   }
 
-  function goToRegion(regionId: string) {
-    router.push(`/${locale}/admin/countries/${countryId}/regions/${regionId}`);
+  function goToRegion(cityId: string) {
+    router.push(`/${locale}/admin/countries/${countryId}/cities/${cityId}`);
   }
 
   const countryLabel = country
@@ -131,7 +131,7 @@ export default function CountryDetailPage() {
 
       {isLoading ? (
         <SkeletonRows rows={4} cols={2} />
-      ) : !country || country.regions.length === 0 ? (
+      ) : !country || country.cities.length === 0 ? (
         <EmptyState
           title={t('emptyRegionsTitle')}
           description={t('emptyRegionsDescription')}
@@ -148,30 +148,30 @@ export default function CountryDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
-              {country.regions.map((region) => (
+              {country.cities.map((city) => (
                 <tr
-                  key={region.id}
+                  key={city.id}
                   tabIndex={0}
-                  onClick={() => goToRegion(region.id)}
+                  onClick={() => goToRegion(city.id)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      goToRegion(region.id);
+                      goToRegion(city.id);
                     }
                   }}
                   className="group cursor-pointer bg-[var(--color-surface)] transition hover:bg-[var(--color-surface-alt)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40"
                 >
                   <td className="px-4 py-3">
-                    <span className="font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{localizedName(region.name, region.nameKa, locale)}</span>
+                    <span className="font-medium text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">{localizedName(city.name, city.nameKa, locale)}</span>
                   </td>
-                  <td className="px-4 py-3 text-[var(--color-text-muted)]">{t('clubsCount', { count: region.clubCount })}</td>
+                  <td className="px-4 py-3 text-[var(--color-text-muted)]">{t('clubsCount', { count: city.clubCount })}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-3">
                       <button
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          openEdit(region);
+                          openEdit(city);
                         }}
                         className="text-[12px] font-medium text-[var(--color-primary)] hover:underline"
                       >
@@ -181,7 +181,7 @@ export default function CountryDetailPage() {
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          handleDelete(region);
+                          handleDelete(city);
                         }}
                         className="text-[12px] font-medium text-[var(--color-danger)] hover:underline"
                       >

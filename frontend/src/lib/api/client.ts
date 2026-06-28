@@ -106,11 +106,9 @@ async function api<T = unknown>(
   init?: RequestInit & { signal?: AbortSignal },
 ): Promise<T> {
   const res = await fetchWithRefresh(path, { ...init, credentials: 'include' });
-
-  if (res.status === 403) {
-    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
-  }
-
+  // Let handleResponse parse every non-ok status (including 403) so the server's
+  // structured { code, message } reaches the UI instead of a flattened
+  // 'FORBIDDEN'. Callers that want blanket handling key off `e.status === 403`.
   return handleResponse<T>(res);
 }
 
@@ -132,10 +130,8 @@ export async function apiGetWithTotal<T>(
     signal,
   });
 
-  if (res.status === 403) {
-    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
-  }
-
+  // 403 (and every other non-ok) flows through handleResponse so the server's
+  // structured { code, message } is preserved; callers key off `e.status`.
   const rows = await handleResponse<T>(res);
   const header = res.headers.get('X-Total-Count');
   const parsed = header ? Number.parseInt(header, 10) : Number.NaN;

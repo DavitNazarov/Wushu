@@ -42,16 +42,17 @@ export class RegistrationsService {
 
   // Shared write-guard for any mutation tied to an event. Coaches MUST be
   // inside the registration window (lifecycle=REG_OPEN AND the date range
-  // is currently open). Admins can mutate at almost any lifecycle but need
-  // `override=true` + `reason` once the event leaves the mutable phases.
-  private assertEventAllowsRegistrationChanges(
+  // is currently open) AND their club must be official when the event is CLOSED.
+  // Admins can mutate at almost any lifecycle but need `override=true` + `reason`
+  // once the event leaves the mutable phases; they are never blocked by accessType.
+  private async assertEventAllowsRegistrationChanges(
     event: Event,
     input: {
       actorClubId?: string | null;
       override?: boolean;
       reason?: string | null;
     },
-  ): void {
+  ): Promise<void> {
     const isCoach = input.actorClubId != null;
     const override = input.override ?? false;
     const reason = input.reason ?? null;
@@ -59,6 +60,15 @@ export class RegistrationsService {
     if (isCoach) {
       if (event.lifecycle !== 'REG_OPEN' || !isRegistrationOpen(event)) {
         throw new Error('REGISTRATION_CLOSED');
+      }
+      if ((event as Event & { accessType: string }).accessType === 'CLOSED') {
+        const club = await this.prisma.club.findUnique({
+          where: { id: input.actorClubId! },
+          select: { isOfficial: true },
+        });
+        if (!club?.isOfficial) {
+          throw new Error('EVENT_CLOSED_UNOFFICIAL_CLUB');
+        }
       }
       return;
     }
@@ -317,6 +327,20 @@ export class RegistrationsService {
     return rows.map((r) => r.categoryCode);
   }
 
+  private athleteBelongsToClub(
+    athlete: Pick<Athlete, 'clubId'> & {
+      clubMemberships?: Array<{ clubId: string }>;
+    },
+    clubId: string,
+  ): boolean {
+    return (
+      athlete.clubId === clubId ||
+      (athlete.clubMemberships ?? []).some(
+        (membership) => membership.clubId === clubId,
+      )
+    );
+  }
+
   // Register an athlete in an event. The pipeline:
   //   1. Athlete must exist in this org; coaches' athletes must belong to
   //      their club (ATHLETE_NOT_IN_COACH_CLUB).
@@ -331,6 +355,7 @@ export class RegistrationsService {
     actorUserId: string;
     eventId: string;
     athleteId: string;
+    clubId?: string | null;
     eventWeightCategoryId?: string | null;
     notes?: string | null;
     actorClubId?: string | null;
@@ -339,10 +364,17 @@ export class RegistrationsService {
   }): Promise<Registration> {
     const athlete = await this.prisma.athlete.findFirst({
       where: { id: input.athleteId, organisationId: input.organisationId },
+      include: { clubMemberships: { select: { clubId: true } } },
     });
     if (!athlete) throw new Error('ATHLETE_NOT_FOUND');
 
-    if (input.actorClubId && athlete.clubId !== input.actorClubId) {
+    const registrationClubId =
+      input.actorClubId ?? input.clubId ?? athlete.clubId ?? null;
+
+    if (
+      registrationClubId &&
+      !this.athleteBelongsToClub(athlete, registrationClubId)
+    ) {
       throw new Error('ATHLETE_NOT_IN_COACH_CLUB');
     }
 
@@ -350,7 +382,7 @@ export class RegistrationsService {
       where: { id: input.eventId, organisationId: input.organisationId },
     });
     if (!event) throw new Error('EVENT_NOT_FOUND');
-    this.assertEventAllowsRegistrationChanges(event, {
+    await this.assertEventAllowsRegistrationChanges(event, {
       actorClubId: input.actorClubId,
       override: input.override,
       reason: input.reason ?? null,
@@ -380,7 +412,7 @@ export class RegistrationsService {
           organisationId: input.organisationId,
           eventId: input.eventId,
           athleteId: input.athleteId,
-          clubId: athlete.clubId,
+          clubId: registrationClubId,
           categoryCode: resolvedCategory.categoryCode,
           eventWeightCategoryId: resolvedCategory.eventWeightCategoryId,
           registeredEventWeightCategoryId:

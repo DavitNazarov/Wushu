@@ -86,6 +86,12 @@ export const CreateEventSchema = z
         'slug must be lowercase kebab-case (e.g. geo-wushu-open-2026)',
       ),
     location: z.string().min(1, 'location is required'),
+    entryFee: z
+      .number()
+      .int('entryFee must be a whole number')
+      .nonnegative('entryFee cannot be negative')
+      .optional()
+      .nullable(),
     timezone: z
       .string()
       .trim()
@@ -96,6 +102,7 @@ export const CreateEventSchema = z
       )
       .default('Asia/Tbilisi'),
     autoAdvanceStage: z.boolean().optional().default(false),
+    accessType: z.enum(['OPEN', 'CLOSED']),
     categoryTemplateId: z.string().min(1).optional(),
     rulesetId: z.string().min(1).optional(),
     dates: z.union([LegacyDatesSchema, CanonicalDatesSchema]),

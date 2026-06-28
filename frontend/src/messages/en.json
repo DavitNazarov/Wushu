@@ -14,7 +14,7 @@
     "events": "Events",
     "registrations": "Registrations",
     "weighin": "Weigh-in",
-    "draw": "Draw",
+    "draw": "Weigh-in results",
     "brackets": "Brackets",
     "schedule": "Schedule",
     "live": "Live",
@@ -200,8 +200,8 @@
     "clubMedals": "Medals",
     "countries": "Countries",
     "countriesTitle": "Countries",
-    "countriesSubtitle": "Countries and regions participating in Geo Wushu events.",
-    "countryRegions": "Regions",
+    "countriesSubtitle": "Countries and cities participating in Geo Wushu events.",
+    "countryRegions": "Cities",
     "countryClubs": "Clubs",
     "news": "News",
     "newsTitle": "News",
@@ -389,6 +389,14 @@
     "description": "You don't have permission to view this page.",
     "goHome": "Go to home",
     "signInDifferent": "Sign in with different account"
+  },
+  "notFound": {
+    "eyebrow": "Error 404",
+    "title": "This page can't be found",
+    "description": "The page you're looking for doesn't exist or may have moved. Let's get you back on track.",
+    "goHome": "Back to home",
+    "goBack": "Go back",
+    "exploreLabel": "Or explore"
   },
   "admin": {
     "dashboard": {
@@ -596,8 +604,17 @@
         "slugPlaceholder": "tbilisi-open-2026",
         "slugHint": "Lowercase letters, numbers, and dashes only.",
         "locationLabel": "Location",
+        "entryFeeLabel": "Entry fee",
+        "entryFeePlaceholder": "e.g. 50",
+        "optional": "(optional)",
         "timezoneLabel": "Timezone",
-        "eventDatesLabel": "Event dates"
+        "eventDatesLabel": "Event dates",
+        "accessTypeLabel": "Access type",
+        "accessTypePlaceholder": "Select access type",
+        "accessTypeOpen": "Open",
+        "accessTypeClosed": "Closed",
+        "accessTypeOpenDesc": "Any club can register athletes for this event.",
+        "accessTypeClosedDesc": "Only official clubs can register athletes for this event."
       },
       "timezone": "Timezone",
       "dates": {
@@ -1294,6 +1311,8 @@
       "dateOfBirth": "Date of birth",
       "documentId": "Document ID",
       "club": "Club",
+      "clubMemberships": "Club memberships",
+      "primaryClub": "Primary club",
       "sex": "Sex",
       "sexOptions": {
         "male": "Male",
@@ -1473,32 +1492,38 @@
     "regionsCount": "{count, plural, =0 {No regions} one {# region} other {# regions}}",
     "clubsCount": "{count, plural, =0 {No clubs} one {# club} other {# clubs}}",
     "backToCountries": "Countries",
-    "regionsTitle": "Regions",
-    "newRegion": "New region",
-    "emptyRegionsTitle": "No regions yet",
-    "emptyRegionsDescription": "Add regions to group clubs inside this country.",
+    "regionsTitle": "Cities",
+    "newRegion": "New city",
+    "emptyRegionsTitle": "No cities yet",
+    "emptyRegionsDescription": "Add cities to group clubs inside this country.",
     "regionColumns": {
-      "name": "Region",
+      "name": "City",
       "clubs": "Clubs"
     },
     "regionFields": {
-      "name": "Region name (EN)",
-      "nameKa": "Region name (Georgian)"
+      "name": "City name (EN)",
+      "nameKa": "City name (Georgian)"
     },
-    "deleteRegionConfirm": "Delete this region? This cannot be undone.",
-    "regionNotEmpty": "Move or remove this region’s clubs, coaches and athletes first.",
+    "deleteRegionConfirm": "Delete this city? This cannot be undone.",
+    "regionNotEmpty": "Move or remove this city’s clubs, coaches and athletes first.",
     "clubsTitle": "Clubs",
-    "emptyClubsTitle": "No clubs in this region",
-    "emptyClubsDescription": "Clubs assigned to this region appear here."
+    "emptyClubsTitle": "No clubs in this city",
+    "emptyClubsDescription": "Clubs assigned to this city appear here.",
+    "independentClubs": "Independent clubs",
+    "noClubsInFederation": "No clubs in this federation yet."
   },
   "clubs": {
     "title": "Clubs",
     "new": "New club",
     "emptyTitle": "No clubs yet",
     "emptyDescription": "Create clubs to organise athletes by their teams.",
+    "badges": {
+      "official": "Official",
+      "unofficial": "Unofficial"
+    },
     "columns": {
       "name": "Club",
-      "region": "Region",
+      "federation": "Federation",
       "city": "City",
       "country": "Country"
     },
@@ -1506,12 +1531,17 @@
       "name": "Club name (EN)",
       "nameKa": "Club name (Georgian)",
       "country": "Country",
-      "region": "Region",
+      "region": "City",
       "city": "City",
+      "federation": "Federation",
       "selectCountry": "Select country",
-      "selectRegion": "Select region",
+      "selectRegion": "Select city",
+      "selectFederation": "Select federation (optional)",
+      "noFederation": "No federation (independent club)",
       "selectCountryFirst": "Select a country first",
-      "noRegions": "No regions in this country yet"
+      "noRegions": "No cities in this country yet",
+      "isOfficial": "Official club",
+      "isOfficialDesc": "Official clubs can register athletes in closed events."
     },
     "detail": {
       "title": "Club details",
@@ -1624,6 +1654,10 @@
     "noResults": "No registrations found",
     "noResultsHint": "Try adjusting filters or select a different event.",
     "pageSummary": "Showing {from}–{to} of {total}",
+    "income": {
+      "title": "Income",
+      "breakdown": "{count} approved {count, plural, one {athlete} other {athletes}} × {fee}"
+    },
     "filterStatus": "Status",
     "filterStatusAll": "All statuses",
     "filterClub": "Club",
@@ -2252,8 +2286,12 @@
     "addSessionDesc": "Define a time block for this competition day.",
     "sessionName": "Session name",
     "sessionNamePlaceholder": "Morning session",
-    "sessionStart": "Start time",
-    "sessionEnd": "End time",
+    "sessionNameKa": "Session name (Georgian)",
+    "sessionNameKaPlaceholder": "დილის სესია",
+    "sessionStart": "Start date",
+    "sessionStartTime": "Start time",
+    "sessionEnd": "End date",
+    "sessionEndTime": "End time",
     "sessionSaved": "Session saved",
     "sessionDeleted": "Session deleted",
     "deleteSessionTitle": "Delete session",
@@ -2266,8 +2304,15 @@
     "generatedWithConflicts": "Schedule generated — {count} rest-gap conflict(s) flagged below",
     "avgBoutSeconds": "Avg. bout duration (seconds)",
     "bufferSeconds": "Buffer between fights (seconds)",
-    "gapRuleNote": "Athletes must have at least 10 fights between their appearances. Conflicts will be flagged.",
-    "gapWarning": "Rest-gap conflict detected — affected fights are highlighted",
+    "gapRuleNote": "Athletes should have at least 15 fights between their appearances. Closer pairings are flagged on the schedule.",
+    "gapBadge": "gap",
+    "gapWarningDetail": "{name}: only a {gap}-fight gap before this bout (recommended {recommended})",
+    "orderErrorBadge": "order",
+    "orderErrorDetail": "{name}: bout {bout} runs after this one — reorder it earlier",
+    "winnerOf": "Winner of {n}",
+    "checkGaps": "Check schedule",
+    "hideGaps": "Hide checks",
+    "noGaps": "No scheduling issues found",
     "moveSaved": "Fight moved",
     "scheduled": "Scheduled",
     "unscheduled": "Unscheduled",
@@ -2277,8 +2322,7 @@
     "fightReady": "Ready",
     "fightWaiting": "Waiting",
     "errorGeneric": "Could not complete the action.",
-    "printSchedule": "Print schedule",
-    "printPopupBlocked": "Couldn't open the print window — allow pop-ups and try again."
+    "printSchedule": "Print schedule"
   },
   "live": {
     "title": "Live",

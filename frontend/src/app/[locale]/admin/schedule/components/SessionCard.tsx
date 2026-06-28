@@ -2,7 +2,10 @@
 
 import { useTranslations } from 'next-intl';
 import type { ScheduleFightRow, ScheduleSessionRow } from '@/types/api';
+import { localizedName } from '@/lib/bilingual';
 import { formatTime } from '../schedule.utils';
+import type { ScheduleIssue } from '../schedule.gaps';
+import type { BoutNumbering } from '../schedule.display';
 import type { DragFight, DropFightTarget } from '../schedule.types';
 import { FightCard } from './FightCard';
 import { DropZone } from './DropZone';
@@ -12,7 +15,8 @@ type Props = {
   fights: ScheduleFightRow[];
   locale: string;
   isEditable: boolean;
-  gapViolations: Set<string>;
+  numbering: BoutNumbering;
+  issues: Map<string, ScheduleIssue[]>;
   dragFight: DragFight | null;
   dropFightTarget: DropFightTarget | null;
   dragSessionId: string | null;
@@ -33,7 +37,8 @@ export function SessionCard({
   fights,
   locale,
   isEditable,
-  gapViolations,
+  numbering,
+  issues,
   dragFight,
   dropFightTarget,
   dragSessionId,
@@ -66,7 +71,9 @@ export function SessionCard({
           {isEditable && (
             <span className="select-none text-[var(--color-text-muted)]">⠿</span>
           )}
-          <span className="text-[13px] font-semibold text-[var(--color-text)]">{session.name}</span>
+          <span className="text-[13px] font-semibold text-[var(--color-text)]">
+            {localizedName(session.name, session.nameKa, locale)}
+          </span>
           <span className="text-[12px] text-[var(--color-text-muted)]">
             {formatTime(session.startTime)} – {formatTime(session.endTime)}
           </span>
@@ -112,7 +119,8 @@ export function SessionCard({
                 sessionId={session.id}
                 locale={locale}
                 isEditable={isEditable}
-                isGapViolation={gapViolations.has(fight.id)}
+                numbering={numbering}
+                issues={issues.get(fight.id)}
                 isDragging={dragFight?.fightId === fight.id}
                 onDragStart={onFightDragStart}
                 onDragEnd={onFightDragEnd}

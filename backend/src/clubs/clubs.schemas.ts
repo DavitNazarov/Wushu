@@ -1,17 +1,16 @@
 import { z } from 'zod';
 
 // POST /api/clubs body. `id` makes it an upsert: omitted → create, present →
-// update. 120-char ceilings everywhere match the DB column widths so we fail
-// fast before Prisma rejects the row. nameKa is the bilingual Georgian name
-// — required to be non-empty when provided; controller turns "" into null.
-// regionId is required (a club always belongs to a region); its country is
-// derived server-side. Not .cuid() because regions created by the backfill
-// migration have UUID ids.
+// update. nameKa is the bilingual Georgian name — required non-empty when
+// provided; controller turns "" into null. cityId is required (a club always
+// belongs to a city); its country is derived server-side. federationId is
+// optional (a club may sit directly under a city). Ids are plain strings (not
+// .cuid()) because rows from the backfill migration use UUIDs.
 export const upsertClubSchema = z.object({
-  id: z.string().cuid().optional(),
+  id: z.string().min(1).max(64).optional(),
   name: z.string().trim().min(1).max(120),
   nameKa: z.string().trim().min(1).max(120).optional().nullable(),
-  city: z.string().trim().max(120).optional().nullable(),
-  regionId: z.string().min(1).max(64),
+  cityId: z.string().min(1).max(64),
+  federationId: z.string().min(1).max(64).optional().nullable(),
+  isOfficial: z.boolean(),
 });
-

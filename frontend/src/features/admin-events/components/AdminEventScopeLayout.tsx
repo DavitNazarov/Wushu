@@ -45,7 +45,11 @@ export function AdminEventScopeLayout({ eventId, children }: Props) {
   const routeMatch = matchAdminEventRoute(pathname, locale);
   const currentPage = routeMatch?.page ?? 'overview';
 
-  if (eventsQuery.isFetched && !event) {
+  // Only 404 when the events list loaded *successfully* but this id is genuinely
+  // absent. On a fetch error isSuccess is false, so we fall through to the
+  // retryable error alert below instead of hard-404'ing on a transient blip
+  // (e.g. the API momentarily restarting) — a 404 here is unrecoverable.
+  if (eventsQuery.isSuccess && !event) {
     notFound();
   }
 

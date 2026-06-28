@@ -8,7 +8,8 @@ import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { apiGet } from '@/lib/api/client';
+import { apiGet, apiBlob, downloadBlob } from '@/lib/api/client';
+import { getCompactErrorMessage } from '@/lib/api/error';
 import { useToast } from '@/components/ui/Toast';
 import type { ScheduleFightRow, ScheduleSessionRow } from '@/types/api';
 import { AdminErrorAlert } from '@/components/admin/AdminErrorAlert';
@@ -25,7 +26,8 @@ import {
   type SessionFormState,
 } from './schedule.types';
 import { isoToLocalInput } from './schedule.utils';
-import { openSchedulePrint } from './schedule.print';
+import { computeScheduleIssues, type ScheduleIssue } from './schedule.gaps';
+import { buildBoutNumbering } from './schedule.display';
 import { useScheduleMutations } from './hooks/useScheduleMutations';
 import { useFightDragDrop } from './hooks/useFightDragDrop';
 import { useSessionDragDrop } from './hooks/useSessionDragDrop';
@@ -55,8 +57,11 @@ export function SchedulePageClient({ eventId }: Props) {
   const [generateOpen, setGenerateOpen] = useState(false);
   const [generateForm, setGenerateForm] = useState<GenerateFormState>(DEFAULT_GENERATE_FORM);
 
-  // Gap violations
-  const [gapViolations, setGapViolations] = useState<Set<string>>(new Set());
+  // Print
+  const [printing, setPrinting] = useState(false);
+
+  // Rest-gap check is opt-in: warnings only render after the admin asks for them.
+  const [showGaps, setShowGaps] = useState(false);
 
   const { events, selectedEvent, setSelectedEventId } = useAdminEventRoute({ eventId, page: 'schedule' });
   const eid = eventId;
@@ -107,6 +112,23 @@ export function SchedulePageClient({ eventId }: Props) {
     return { map, unassigned };
   }, [fights]);
 
+  // Continuous bout numbering across the whole running order (sessions in
+  // order, then orderInSession), so the badge and every "Winner of N" label
+  // reference the same number instead of a per-session 1-based index.
+  const boutNumbering = useMemo(() => {
+    const ordered = sortedSessions.flatMap((s) => fightsBySession.map.get(s.id) ?? []);
+    return buildBoutNumbering(ordered);
+  }, [sortedSessions, fightsBySession]);
+
+  // Schedule issues — red ordering errors (a bout fed by a later bout) + yellow
+  // per-session rest-gap warnings. Opt-in via the toggle, and page-only: never
+  // sent to the backend or shown in any PDF.
+  const issues = useMemo(() => {
+    if (!showGaps) return new Map<string, ScheduleIssue[]>();
+    const perSession = sortedSessions.map((s) => fightsBySession.map.get(s.id) ?? []);
+    return computeScheduleIssues(perSession);
+  }, [showGaps, sortedSessions, fightsBySession]);
+
   const mutations = useScheduleMutations(
     eid,
     { scheduleQK, sessionsQK },
@@ -117,11 +139,7 @@ export function SchedulePageClient({ eventId }: Props) {
         setSessionForm(EMPTY_SESSION_FORM);
       },
       onSessionDeleted: () => setDeleteSessionId(null),
-      onGenerated: () => {
-        setGapViolations(new Set());
-        setGenerateOpen(false);
-      },
-      onMoveResolved: (violations) => setGapViolations(new Set(violations)),
+      onGenerated: () => setGenerateOpen(false),
     },
     generateForm,
   );
@@ -139,6 +157,7 @@ export function SchedulePageClient({ eventId }: Props) {
     setEditingSession(s);
     setSessionForm({
       name: s.name,
+      nameKa: s.nameKa ?? '',
       startTime: isoToLocalInput(s.startTime),
       endTime: isoToLocalInput(s.endTime),
     });
@@ -149,6 +168,7 @@ export function SchedulePageClient({ eventId }: Props) {
     mutations.upsertSession.mutate({
       id: editingSession?.id,
       name: sessionForm.name,
+      nameKa: sessionForm.nameKa.trim() || null,
       startTime: new Date(sessionForm.startTime).toISOString(),
       endTime: new Date(sessionForm.endTime).toISOString(),
       order: editingSession?.order ?? sortedSessions.length + 1,
@@ -162,15 +182,32 @@ export function SchedulePageClient({ eventId }: Props) {
 
   const hasSessions = sortedSessions.length > 0;
   const totalScheduled = (fights ?? []).filter((f) => f.isScheduled).length;
-  const totalPlayable = (fights ?? []).filter((f) => f.isPlayable).length;
+  // Every row getSchedule returns is schedule-visible (incl. "Winner of N"
+  // placeholders), so the denominator is the full count, not just playable.
+  const totalFights = (fights ?? []).length;
+  // Fights not yet placed in a session — the only ones "Generate Schedule"
+  // touches. Generating leaves already-scheduled fights untouched, so the
+  // button is pointless (and disabled) once everything is assigned.
+  const pendingCount = (fights ?? []).filter(
+    (f) =>
+      (f.sessionId == null || f.orderInSession == null) &&
+      (f.status === 'QUEUED' || f.status === 'ON_DECK'),
+  ).length;
 
-  function handlePrint() {
-    const items = sortedSessions.map((session) => ({
-      session,
-      fights: fightsBySession.map.get(session.id) ?? [],
-    }));
-    const opened = openSchedulePrint(selectedEvent, items);
-    if (!opened) toast(t('printPopupBlocked'), 'error');
+  // Download the same server-rendered schedule PDF the results page exports,
+  // so the printed document and the on-screen schedule stay identical.
+  async function handlePrint() {
+    if (!eid || printing) return;
+    setPrinting(true);
+    try {
+      const lang = locale === 'ka' ? 'ka' : 'en';
+      const blob = await apiBlob(`/api/exports/${eid}/schedule.pdf?lang=${lang}`);
+      downloadBlob(blob, `schedule-${lang}.pdf`);
+    } catch (e) {
+      toast(getCompactErrorMessage(e, tCommon('error')), 'error');
+    } finally {
+      setPrinting(false);
+    }
   }
 
   return (
@@ -188,13 +225,27 @@ export function SchedulePageClient({ eventId }: Props) {
               className="min-w-[14rem]"
             />
             {showContent && hasSessions && (
-              <SecondaryButton onClick={handlePrint}>{t('printSchedule')}</SecondaryButton>
+              <SecondaryButton onClick={handlePrint} disabled={printing}>
+                {printing ? tCommon('loading') : t('printSchedule')}
+              </SecondaryButton>
+            )}
+            {showContent && hasSessions && (
+              <SecondaryButton
+                onClick={() => setShowGaps((v) => !v)}
+                className={
+                  showGaps
+                    ? 'border-[var(--color-warning)] text-[var(--color-warning)]'
+                    : ''
+                }
+              >
+                {showGaps ? t('hideGaps') : t('checkGaps')}
+              </SecondaryButton>
             )}
             {isEditable && (
               <>
                 <SecondaryButton onClick={openAddSession}>{t('addSession')}</SecondaryButton>
                 <PrimaryButton
-                  disabled={!hasSessions || totalPlayable === 0}
+                  disabled={!hasSessions || pendingCount === 0}
                   onClick={() => setGenerateOpen(true)}
                 >
                   {t('generateSchedule')}
@@ -230,11 +281,14 @@ export function SchedulePageClient({ eventId }: Props) {
       ) : showContent ? (
         <div className="space-y-4">
           <div className="flex items-center gap-3 text-[12px] text-[var(--color-text-muted)]">
-            <span>{totalScheduled}/{totalPlayable} {t('scheduled').toLowerCase()}</span>
+            <span>{totalScheduled}/{totalFights} {t('scheduled').toLowerCase()}</span>
             {fightsBySession.unassigned.length > 0 && (
               <span className="text-[var(--color-warning)]">
                 {fightsBySession.unassigned.length} {t('unscheduled').toLowerCase()}
               </span>
+            )}
+            {showGaps && issues.size === 0 && (
+              <span className="text-[var(--color-success)]">{t('noGaps')}</span>
             )}
           </div>
 
@@ -245,7 +299,8 @@ export function SchedulePageClient({ eventId }: Props) {
               fights={fightsBySession.map.get(session.id) ?? []}
               locale={locale}
               isEditable={isEditable}
-              gapViolations={gapViolations}
+              numbering={boutNumbering}
+              issues={issues}
               dragFight={fightDnd.dragFight}
               dropFightTarget={fightDnd.dropFightTarget}
               dragSessionId={sessionDnd.dragSessionId}
@@ -274,6 +329,7 @@ export function SchedulePageClient({ eventId }: Props) {
             form={sessionForm}
             setForm={setSessionForm}
             saving={mutations.upsertSession.isPending}
+            fightDays={selectedEvent?.dates?.fightDays ?? []}
             onClose={closeSessionForm}
             onSubmit={submitSession}
           />

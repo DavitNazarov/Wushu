@@ -131,6 +131,7 @@ export function AddAthleteToEventModal({ open, onClose, eventId }: Props) {
     mutationFn: (body: {
       eventId: string;
       athleteId: string;
+      clubId: string;
       eventWeightCategoryId: string;
       notes?: string;
     }) => apiPost<RegistrationRow>('/api/registrations', body),
@@ -190,10 +191,11 @@ export function AddAthleteToEventModal({ open, onClose, eventId }: Props) {
   }
 
   function handleRegister() {
-    if (!selectedAthlete || !weightCategoryId) return;
+    if (!selectedAthlete || !selectedClub || !weightCategoryId) return;
     createMut.mutate({
       eventId,
       athleteId: selectedAthlete.id,
+      clubId: selectedClub.id,
       eventWeightCategoryId: weightCategoryId,
       notes: notes.trim() || undefined,
     });

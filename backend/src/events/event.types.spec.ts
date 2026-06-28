@@ -6,6 +6,7 @@ function validPayload(overrides: Partial<any> = {}) {
     slug: 'georgia-open-cup-2026',
     location: 'Tbilisi',
     timezone: 'Asia/Tbilisi',
+    accessType: 'OPEN',
     dates: {
       range: {
         startDate: '2026-03-02',

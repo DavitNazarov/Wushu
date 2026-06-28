@@ -104,6 +104,7 @@ export type AthleteProfileResponse = {
     sex: AthleteSex | null;
     dateOfBirth?: string | null;
     club: AthleteProfileClubRow | null;
+    clubs: AthleteProfileClubRow[];
     coaches?: AthleteProfileCoachRow[];
   };
   registrations: AthleteProfileRegistrationRow[];

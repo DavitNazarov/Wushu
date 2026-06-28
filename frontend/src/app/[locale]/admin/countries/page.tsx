@@ -149,7 +149,7 @@ export default function CountriesPage() {
               <tr className="bg-[var(--color-surface-alt)]">
                 <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.name')}</th>
                 <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.code')}</th>
-                <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.regions')}</th>
+                <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.cities')}</th>
                 <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">{t('columns.clubs')}</th>
                 <th className="px-4 py-3 text-right font-medium text-[var(--color-text-muted)]">{tCommon('actions')}</th>
               </tr>
@@ -177,7 +177,7 @@ export default function CountriesPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-[var(--color-text-muted)]">{country.code || '—'}</td>
-                  <td className="px-4 py-3 text-[var(--color-text-muted)]">{t('regionsCount', { count: country.regionCount })}</td>
+                  <td className="px-4 py-3 text-[var(--color-text-muted)]">{t('regionsCount', { count: country.cityCount })}</td>
                   <td className="px-4 py-3 text-[var(--color-text-muted)]">{t('clubsCount', { count: country.clubCount })}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-3">

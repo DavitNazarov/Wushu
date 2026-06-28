@@ -13,6 +13,15 @@ import type {
   AthleteProfileResponse,
 } from './athlete-profile.types';
 
+type ProfileClub = {
+  id: string;
+  name: string;
+  nameKa: string | null;
+  city?: { name: string } | null;
+  country?: { name: string } | null;
+  coaches?: Array<{ id: string; displayName: string }>;
+};
+
 // Read-only assembler for the athlete profile pages — both the admin/coach
 // "private" detail view (sees DQ status, weigh-in notes, draft events) and
 // the unauthenticated "public" view (sees only published events, no personal
@@ -39,14 +48,39 @@ export class AthleteProfileService {
               orderBy: { displayName: 'asc' },
               select: { id: true, displayName: true },
             },
+            city: { select: { name: true } },
             country: { select: { name: true } },
           },
+        },
+        clubMemberships: {
+          include: {
+            club: {
+              include: {
+                coaches: {
+                  where: {
+                    role: UserRole.coach,
+                    isActive: true,
+                    deletedAt: null,
+                  },
+                  orderBy: { displayName: 'asc' },
+                  select: { id: true, displayName: true },
+                },
+                city: { select: { name: true } },
+                country: { select: { name: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
         },
       },
     });
 
     if (!athlete) return null;
-    if (input.actorClubId && athlete.clubId !== input.actorClubId) return null;
+    if (input.actorClubId && !this.athleteHasClub(athlete, input.actorClubId)) {
+      return null;
+    }
+
+    const clubs = this.profileClubs(athlete);
 
     return this.buildProfile({
       organisationId: athlete.organisationId,
@@ -61,16 +95,9 @@ export class AthleteProfileService {
         fullName: `${athlete.firstName} ${athlete.lastName}`.trim(),
         sex: athlete.sex,
         dateOfBirth: athlete.dateOfBirth.toISOString(),
-        club: athlete.club
-          ? {
-              id: athlete.club.id,
-              name: athlete.club.name,
-              nameKa: athlete.club.nameKa,
-              city: athlete.club.city,
-              country: athlete.club.country?.name ?? null,
-            }
-          : null,
-        coaches: athlete.club?.coaches ?? [],
+        club: athlete.club ? this.mapProfileClub(athlete.club) : (clubs[0] ?? null),
+        clubs,
+        coaches: this.profileCoaches(athlete),
       },
     });
   }
@@ -100,13 +127,35 @@ export class AthleteProfileService {
               orderBy: { displayName: 'asc' },
               select: { id: true, displayName: true },
             },
+            city: { select: { name: true } },
             country: { select: { name: true } },
           },
+        },
+        clubMemberships: {
+          include: {
+            club: {
+              include: {
+                coaches: {
+                  where: {
+                    role: UserRole.coach,
+                    isActive: true,
+                    deletedAt: null,
+                  },
+                  orderBy: { displayName: 'asc' },
+                  select: { id: true, displayName: true },
+                },
+                city: { select: { name: true } },
+                country: { select: { name: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
         },
       },
     });
     if (!athlete) return null;
 
+    const clubs = this.profileClubs(athlete);
     const profile = await this.buildProfile({
       organisationId: athlete.organisationId,
       athleteId: athlete.id,
@@ -119,20 +168,74 @@ export class AthleteProfileService {
         lastNameKa: athlete.lastNameKa,
         fullName: `${athlete.firstName} ${athlete.lastName}`.trim(),
         sex: athlete.sex,
-        club: athlete.club
-          ? {
-              id: athlete.club.id,
-              name: athlete.club.name,
-              nameKa: athlete.club.nameKa,
-              city: athlete.club.city,
-              country: athlete.club.country?.name ?? null,
-            }
-          : null,
-        coaches: athlete.club?.coaches ?? [],
+        club: athlete.club ? this.mapProfileClub(athlete.club) : (clubs[0] ?? null),
+        clubs,
+        coaches: this.profileCoaches(athlete),
       },
     });
 
     return profile;
+  }
+
+  private athleteHasClub(
+    athlete: {
+      clubId: string | null;
+      clubMemberships: Array<{ clubId: string }>;
+    },
+    clubId: string,
+  ): boolean {
+    return (
+      athlete.clubId === clubId ||
+      athlete.clubMemberships.some((membership) => membership.clubId === clubId)
+    );
+  }
+
+  private mapProfileClub(
+    club: ProfileClub,
+  ): AthleteProfileResponse['athlete']['club'] {
+    return {
+      id: club.id,
+      name: club.name,
+      nameKa: club.nameKa,
+      city: club.city?.name ?? null,
+      country: club.country?.name ?? null,
+    };
+  }
+
+  private profileClubs(athlete: {
+    club: ProfileClub | null;
+    clubMemberships: Array<{ club: ProfileClub }>;
+  }): NonNullable<AthleteProfileResponse['athlete']['clubs']> {
+    const seen = new Set<string>();
+    const clubs: NonNullable<AthleteProfileResponse['athlete']['clubs']> = [];
+    for (const club of [
+      athlete.club,
+      ...athlete.clubMemberships.map((membership) => membership.club),
+    ]) {
+      if (!club || seen.has(club.id)) continue;
+      seen.add(club.id);
+      clubs.push(this.mapProfileClub(club)!);
+    }
+    return clubs;
+  }
+
+  private profileCoaches(athlete: {
+    club: ProfileClub | null;
+    clubMemberships: Array<{ club: ProfileClub }>;
+  }): Array<{ id: string; displayName: string }> {
+    const seen = new Set<string>();
+    const coaches: Array<{ id: string; displayName: string }> = [];
+    for (const club of [
+      athlete.club,
+      ...athlete.clubMemberships.map((membership) => membership.club),
+    ]) {
+      for (const coach of club?.coaches ?? []) {
+        if (seen.has(coach.id)) continue;
+        seen.add(coach.id);
+        coaches.push(coach);
+      }
+    }
+    return coaches.sort((a, b) => a.displayName.localeCompare(b.displayName));
   }
 
   // Shared implementation that gathers registrations + fights for the

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { FightStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { assertId } from '../common/assert-id';
 import { DrawReadinessService } from './draw.readiness.service';
 import { DrawService } from './draw.service';
 import type { DrawCategoryComputedRow } from './draw.readiness.types';
@@ -542,6 +543,9 @@ export class BracketsService {
     fightId2: string;
     side2: 'red' | 'blue';
   }): Promise<void> {
+    assertId(input.eventId, 'EVENT_ID_REQUIRED');
+    assertId(input.fightId1, 'FIGHT_ID_REQUIRED');
+    assertId(input.fightId2, 'FIGHT_ID_REQUIRED');
     const field1 = input.side1 === 'red' ? 'redAthleteId' : 'blueAthleteId';
     const field2 = input.side2 === 'red' ? 'redAthleteId' : 'blueAthleteId';
 

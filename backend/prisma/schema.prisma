@@ -17,6 +17,11 @@ enum EventLifecycle {
   COMPLETED
 }
 
+enum EventAccessType {
+  OPEN
+  CLOSED
+}
+
 enum RulesetStatus {
   DRAFT
   ACTIVE
@@ -157,7 +162,9 @@ model Organisation {
   timerStates      TimerState[]
   scheduleSessions ScheduleSession[]
   countries        Country[]
-  regions          Region[]
+  cities           City[]
+  federations      Federation[]
+  coaches          Coach[]
   protocolSignatureTemplates ProtocolSignatureTemplate[]
 }
 
@@ -186,7 +193,7 @@ model User {
   displayName    String
   role           UserRole @default(athlete)
   clubId         String?
-  regionId       String?
+  cityId         String?
   countryId      String?
   nationality    String?
   isActive       Boolean  @default(true)
@@ -200,8 +207,9 @@ model User {
 
   organisation   Organisation     @relation(fields: [organisationId], references: [id])
   club           Club?            @relation(fields: [clubId], references: [id])
-  region         Region?          @relation(fields: [regionId], references: [id])
+  city           City?            @relation(fields: [cityId], references: [id])
   country        Country?         @relation(fields: [countryId], references: [id])
+  coachProfile   Coach?
   capabilities   UserCapability[]
   auditLogs      AuditLog[]       @relation("AuditActor")
   weighIns       WeighInAttempt[] @relation("WeighInOperator")
@@ -213,7 +221,7 @@ model User {
   @@unique([organisationId, email])
   @@index([email])
   @@index([organisationId, deletedAt])
-  @@index([regionId])
+  @@index([cityId])
   @@index([countryId])
 }
 
@@ -258,10 +266,15 @@ model Event {
   nameKa         String?
   slug           String
   location       String?
+  /// Optional entry/participation fee per athlete (whole currency units, GEL).
+  /// Drives the income tally on the admin registrations page and is shown on
+  /// the public event overview. Null = no fee configured.
+  entryFee       Int?
   timezone       String         @default("Asia/Tbilisi")
   lifecycle      EventLifecycle @default(REG_OPEN)
   published           Boolean        @default(false)
   autoAdvanceStage    Boolean        @default(false)
+  accessType          EventAccessType @default(OPEN)
   // When true, the confirmed weigh-in weights for this event are exposed on the
   // public site (/events/:slug/weights). Toggled from the Weigh-In Results page.
   weighInResultsPublic Boolean       @default(false)
@@ -524,17 +537,20 @@ model Country {
   updatedAt      DateTime @updatedAt
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
-  regions      Region[]
+  cities       City[]
+  federations  Federation[]
   clubs        Club[]
   coaches      User[]
+  coachRoster  Coach[]
   athletes     Athlete[]
 
   @@unique([organisationId, name])
   @@index([organisationId])
 }
 
-// A region belongs to a country and groups clubs (e.g. Georgian mkhare).
-model Region {
+// A city belongs to a country and groups federations/clubs (e.g. Tbilisi, Kutaisi).
+// Hierarchy: Country -> City -> Federation -> Club -> Coach -> Athlete.
+model City {
   id             String   @id @default(cuid())
   organisationId String
   countryId      String
@@ -545,8 +561,10 @@ model Region {
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
   country      Country      @relation(fields: [countryId], references: [id])
+  federations  Federation[]
   clubs        Club[]
   coaches      User[]
+  coachRoster  Coach[]
   athletes     Athlete[]
 
   @@unique([organisationId, countryId, name])
@@ -554,28 +572,113 @@ model Region {
   @@index([countryId])
 }
 
+// A federation belongs to a city and groups clubs (e.g. "Tbilisi Wushu Federation").
+model Federation {
+  id             String   @id @default(cuid())
+  organisationId String
+  countryId      String
+  cityId         String
+  name           String
+  nameKa         String?
+  isOfficial     Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  country      Country      @relation(fields: [countryId], references: [id])
+  city         City         @relation(fields: [cityId], references: [id])
+  clubs        Club[]
+
+  @@unique([organisationId, cityId, name])
+  @@index([organisationId])
+  @@index([cityId])
+  @@index([countryId])
+}
+
 model Club {
   id             String   @id @default(cuid())
   organisationId String
-  regionId       String
   countryId      String
+  cityId         String
+  federationId   String?
   name           String
   nameKa         String?
-  city           String?
+  isOfficial     Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   organisation  Organisation   @relation(fields: [organisationId], references: [id])
-  region        Region         @relation(fields: [regionId], references: [id])
   country       Country        @relation(fields: [countryId], references: [id])
+  city          City           @relation(fields: [cityId], references: [id])
+  federation    Federation?    @relation(fields: [federationId], references: [id])
   coaches       User[]
+  coachRoster   Coach[]
   athletes      Athlete[]
+  athleteMemberships AthleteClub[]
   registrations Registration[]
 
   // DB-1: FK column was unindexed.
   @@index([organisationId])
-  @@index([regionId])
+  @@index([cityId])
+  @@index([federationId])
   @@index([countryId])
+}
+
+// A coach belongs to a club. Athletes link to coaches many-to-many (an athlete
+// can train under several coaches). A coach optionally has a login User account.
+model Coach {
+  id             String   @id @default(cuid())
+  organisationId String
+  countryId      String?
+  cityId         String?
+  clubId         String?
+  firstName      String
+  firstNameKa    String?
+  lastName       String
+  lastNameKa     String?
+  nationality    String?
+  userId         String?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation   @relation(fields: [organisationId], references: [id])
+  country      Country?       @relation(fields: [countryId], references: [id])
+  city         City?          @relation(fields: [cityId], references: [id])
+  club         Club?          @relation(fields: [clubId], references: [id])
+  user         User?          @relation(fields: [userId], references: [id])
+  athletes     AthleteCoach[]
+
+  @@index([organisationId])
+  @@index([clubId])
+  @@index([cityId])
+  @@index([countryId])
+}
+
+// Join table: athlete <-> coach (many-to-many).
+model AthleteCoach {
+  athleteId String
+  coachId   String
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  coach   Coach   @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@id([athleteId, coachId])
+  @@index([coachId])
+}
+
+// Join table: athlete <-> club (many-to-many). Athlete.clubId remains the
+// primary/default club for backwards compatibility; this table stores every
+// club the athlete can belong to.
+model AthleteClub {
+  athleteId String
+  clubId    String
+  createdAt DateTime @default(now())
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  club    Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@id([athleteId, clubId])
+  @@index([clubId])
 }
 
 model ContactSubmission {
@@ -600,7 +703,7 @@ model Athlete {
   id             String      @id @default(cuid())
   organisationId String
   clubId         String?
-  regionId       String?
+  cityId         String?
   countryId      String?
   firstName      String
   firstNameKa    String?
@@ -614,8 +717,10 @@ model Athlete {
 
   organisation   Organisation   @relation(fields: [organisationId], references: [id])
   club           Club?          @relation(fields: [clubId], references: [id])
-  region         Region?        @relation(fields: [regionId], references: [id])
+  city           City?          @relation(fields: [cityId], references: [id])
   country        Country?       @relation(fields: [countryId], references: [id])
+  coaches        AthleteCoach[]
+  clubMemberships AthleteClub[]
   registrations  Registration[]
   redFights      Fight[]        @relation("FightRedAthlete")
   blueFights     Fight[]        @relation("FightBlueAthlete")
@@ -627,7 +732,7 @@ model Athlete {
   @@unique([organisationId, documentId])
   @@index([organisationId, lastName, firstName])
   @@index([organisationId, dateOfBirth, documentId])
-  @@index([regionId])
+  @@index([cityId])
   @@index([countryId])
 }
 
@@ -727,6 +832,7 @@ model ScheduleSession {
   organisationId String
   eventId        String
   name           String
+  nameKa         String?
   startTime      DateTime
   endTime        DateTime
   order          Int

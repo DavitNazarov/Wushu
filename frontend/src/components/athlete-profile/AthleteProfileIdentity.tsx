@@ -4,6 +4,7 @@ import { Building2, CalendarDays, ShieldCheck, UserRound } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/Card';
+import { localizedName } from '@/lib/bilingual';
 import type { AthleteProfileResponse } from '@/types/api';
 import { formatAthleteDate } from './athleteProfile.utils';
 
@@ -16,7 +17,7 @@ export function AthleteProfileIdentity({ athlete, scope }: Props) {
   const t = useTranslations('athleteProfile.identity');
   const locale = useLocale();
   const coachCount = athlete.coaches?.length ?? 0;
-  const clubMeta = [athlete.club?.city, athlete.club?.country].filter(Boolean).join(', ');
+  const clubs = athlete.clubs?.length ? athlete.clubs : athlete.club ? [athlete.club] : [];
 
   return (
     <motion.div
@@ -36,10 +37,27 @@ export function AthleteProfileIdentity({ athlete, scope }: Props) {
         <div className="divide-y divide-[var(--color-border)]/50">
           {/* Club */}
           <IdentityRow icon={Building2} label={t('club')}>
-            <div>
-              <p className="text-[14px] font-medium text-[var(--color-text)]">{athlete.club?.name ?? '—'}</p>
-              {clubMeta && <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">{clubMeta}</p>}
-            </div>
+            {clubs.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                {clubs.map((club) => {
+                  const clubMeta = [club.city, club.country].filter(Boolean).join(', ');
+                  return (
+                    <div key={club.id}>
+                      <p className="text-[14px] font-medium text-[var(--color-text)]">
+                        {localizedName(club.name, club.nameKa, locale)}
+                      </p>
+                      {clubMeta && (
+                        <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
+                          {clubMeta}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[14px] font-medium text-[var(--color-text)]">—</p>
+            )}
           </IdentityRow>
 
           {/* Sex */}

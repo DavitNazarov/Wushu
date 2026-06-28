@@ -459,7 +459,8 @@ export class WeighinService {
   //   - Trigger event stage auto-advance — completing the last weigh-in
   //     transitions WEIGHIN → WEIGH_IN_COMPLETED.
   // Throws INVALID_WEIGHT on non-positive/non-finite input,
-  // EVENT_NOT_IN_WEIGHIN if event isn't in that stage (override bypasses),
+  // EVENT_NOT_IN_WEIGHIN if event isn't in WEIGHIN (NOT override-waivable —
+  // recording past the draw desyncs brackets),
   // REGISTRATION_CATEGORY_NOT_SET if there's nothing to bound against.
   async record(input: {
     organisationId: string;
@@ -487,7 +488,11 @@ export class WeighinService {
       throw new Error('REGISTRATION_NOT_APPROVED');
     }
 
-    if (!isWeighInStage(registration.event.lifecycle) && !input.override) {
+    // Lifecycle is a hard wall, NOT an override-waivable rule: a weigh-in that
+    // lands after the draw silently desyncs already-drawn brackets (a category
+    // move-up has nowhere to go). Override may waive the auto-decision rules
+    // below, but never the requirement that the event is actually in WEIGHIN.
+    if (!isWeighInStage(registration.event.lifecycle)) {
       throw new Error('EVENT_NOT_IN_WEIGHIN');
     }
 
@@ -688,6 +693,8 @@ export class WeighinService {
   // Settle a pending "ONE_HOUR" attempt (IWUF strict policy). After a fail,
   // the athlete gets one hour to either reweigh successfully OR be moved up
   // to the next class — this endpoint records the final disposition.
+  // Refuses with EVENT_NOT_IN_WEIGHIN once the event has left WEIGHIN (the
+  // move-up would desync already-drawn brackets).
   //
   // For MOVE_UP, three ways to pick the target category, in priority order:
   //   - explicit nextEventWeightCategoryId — validated against the event.
@@ -718,6 +725,7 @@ export class WeighinService {
       include: {
         registration: {
           include: {
+            event: { select: { lifecycle: true } },
             eventWeightCategory: {
               include: {
                 categoryTemplateWeight: true,
@@ -737,6 +745,15 @@ export class WeighinService {
     });
     if (!attempt) throw new Error('ATTEMPT_NOT_FOUND');
     if (attempt.resolvedAt) throw new Error('ALREADY_RESOLVED');
+
+    // Resolving a one-hour decision moves the registration to a new category
+    // (MOVED_UP). That is only safe before the draw — once DRAWN/PUBLISHED/LIVE/
+    // COMPLETED the brackets are built and a silent move-up desyncs them. Hard-
+    // block here; a post-draw category change must go through a redraw-repair
+    // flow (not built yet).
+    if (!isWeighInStage(attempt.registration.event.lifecycle)) {
+      throw new Error('EVENT_NOT_IN_WEIGHIN');
+    }
 
     let nextEventWeightCategoryId = input.nextEventWeightCategoryId ?? null;
     let newCategoryCode = input.newCategoryCode ?? null;

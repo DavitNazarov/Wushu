@@ -14,6 +14,8 @@ import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CapabilityGuard } from '../auth/capability.guard';
 import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
+import { parseBody } from '../common/parse-body';
+import { integrityLockSchema } from './integrity.schemas';
 
 @Controller('integrity')
 @UseGuards(AuthGuard, CapabilityGuard)
@@ -44,23 +46,20 @@ export class IntegrityController {
   }
 
   @Post('lock')
-  async lock(
-    @Req() req: AuthenticatedRequest,
-    @Body() body: { eventId: string; override?: boolean; reason?: string },
-  ) {
+  async lock(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
     const auth = req.auth!;
-    if (!body.eventId)
-      throw new HttpException('eventId_REQUIRED', HttpStatus.BAD_REQUEST);
+    const parsed = parseBody(integrityLockSchema, body);
 
     try {
       return await this.integrity.lock({
         organisationId: auth.organisationId,
-        eventId: body.eventId,
+        eventId: parsed.eventId,
         actorUserId: auth.sub,
-        override: body.override ?? false,
-        reason: body.reason ?? null,
+        override: parsed.override ?? false,
+        reason: parsed.reason ?? null,
       });
     } catch (e) {
+      if (e instanceof HttpException) throw e;
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'EVENT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);

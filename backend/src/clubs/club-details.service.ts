@@ -43,8 +43,8 @@ export class ClubDetailsService {
       select: {
         id: true,
         name: true,
-        city: true,
-        region: { select: { name: true, nameKa: true } },
+        nameKa: true,
+        city: { select: { name: true, nameKa: true } },
         country: { select: { name: true, nameKa: true } },
         createdAt: true,
         updatedAt: true,
@@ -76,7 +76,10 @@ export class ClubDetailsService {
       this.prisma.athlete.findMany({
         where: {
           organisationId: input.organisationId,
-          clubId: club.id,
+          OR: [
+            { clubId: club.id },
+            { clubMemberships: { some: { clubId: club.id } } },
+          ],
         },
         select: {
           id: true,
@@ -229,11 +232,11 @@ export class ClubDetailsService {
       club: {
         id: club.id,
         name: club.name,
-        city: club.city,
+        nameKa: club.nameKa,
         country: club.country.name,
         countryNameKa: club.country.nameKa,
-        regionName: club.region.name,
-        regionNameKa: club.region.nameKa,
+        cityName: club.city.name,
+        cityNameKa: club.city.nameKa,
         createdAt: club.createdAt.toISOString(),
         updatedAt: club.updatedAt.toISOString(),
         contactEmails,

@@ -18,6 +18,8 @@ import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CapabilityGuard } from '../auth/capability.guard';
 import { RequireCapability } from '../auth/capability.decorator';
 import { CAPABILITIES } from '../auth/capabilities';
+import { parseBody } from '../common/parse-body';
+import { resetDrawSchema, unreviewCategorySchema } from './draw.schemas';
 
 // Admin-only draw + bracket routes. Mixes two top-level prefixes (/api/draw
 // and /api/brackets) under one controller because they share the same
@@ -73,6 +75,7 @@ export class DrawController {
         reason: body.reason ?? null,
       });
     } catch (e) {
+      if (e instanceof HttpException) throw e;
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       this.logger.error(
         'Draw executeDraw failed',
@@ -107,20 +110,19 @@ export class DrawController {
   //   OVERRIDE_REQUIRED / REASON_REQUIRED / DRAW_MUTATION_BLOCKED → 400
   @Post('draw/reset')
   @RequireCapability(CAPABILITIES.DRAW_RUN)
-  async resetDraw(
-    @Req() req: AuthenticatedRequest,
-    @Body() body: { eventId: string; override: boolean; reason: string },
-  ) {
+  async resetDraw(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
     const auth = req.auth!;
+    const parsed = parseBody(resetDrawSchema, body);
     try {
       return await this.draw.resetDraw({
         organisationId: auth.organisationId,
-        eventId: body.eventId,
+        eventId: parsed.eventId,
         actorUserId: auth.sub,
-        override: body.override ?? false,
-        reason: body.reason ?? '',
+        override: parsed.override ?? false,
+        reason: parsed.reason ?? '',
       });
     } catch (e) {
+      if (e instanceof HttpException) throw e;
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'EVENT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
@@ -236,6 +238,7 @@ export class DrawController {
         reason: body.reason ?? null,
       });
     } catch (e) {
+      if (e instanceof HttpException) throw e;
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'EVENT_NOT_FOUND' || msg === 'CATEGORY_NOT_FOUND') {
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
@@ -257,23 +260,19 @@ export class DrawController {
   @RequireCapability(CAPABILITIES.DRAW_RUN)
   async unreviewCategory(
     @Req() req: AuthenticatedRequest,
-    @Body() body: { eventId: string; eventWeightCategoryId: string },
+    @Body() body: unknown,
   ) {
     const auth = req.auth!;
-    if (!body.eventId || !body.eventWeightCategoryId) {
-      throw new HttpException(
-        'eventId_and_eventWeightCategoryId_REQUIRED',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
+    const parsed = parseBody(unreviewCategorySchema, body);
     try {
       return await this.draw.unreviewCategory({
         organisationId: auth.organisationId,
-        eventId: body.eventId,
-        eventWeightCategoryId: body.eventWeightCategoryId,
+        eventId: parsed.eventId,
+        eventWeightCategoryId: parsed.eventWeightCategoryId,
         actorUserId: auth.sub,
       });
     } catch (e) {
+      if (e instanceof HttpException) throw e;
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'EVENT_NOT_FOUND' || msg === 'CATEGORY_NOT_FOUND') {
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
@@ -405,6 +404,7 @@ export class DrawController {
       });
       return { ok: true };
     } catch (e) {
+      if (e instanceof HttpException) throw e;
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'FIGHT_NOT_FOUND' || msg === 'EVENT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);

@@ -1,0 +1,4 @@
+{
+  "errors": 154,
+  "note": "Max allowed strict-type-aware ESLint errors. Ratchet (scripts/lint-ratchet.mjs) blocks any increase; lower this as the backlog is fixed. Never raise it."
+}

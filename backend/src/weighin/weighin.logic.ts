@@ -47,16 +47,29 @@ function sortCategories(
   return [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
+// DATA-1: weights and category bounds are kg values to ~0.1kg precision, stored
+// as Float and parsed from decimal strings. Direct comparisons of two clean
+// values are exact, but any arithmetic upstream can introduce sub-gram IEEE-754
+// noise that would flip a boundary classification (e.g. an athlete sitting
+// exactly on a category cap). Snap every operand to the nearest gram before
+// comparing so the exclusive/inclusive boundary is deterministic. (Switching the
+// column to Decimal would NOT remove this need — the input is still a parsed
+// float and the arithmetic still happens here.)
+function roundKg(kg: number): number {
+  return Math.round(kg * 1000) / 1000;
+}
+
 // Standalone bounds check, exported because the preview service uses it too.
 // Both nulls mean unbounded on that side.
 export function isWithinCategoryBounds(
   weightKg: number,
   category: WeightCategoryBounds,
 ): boolean {
+  const w = roundKg(weightKg);
   const aboveMin =
-    category.minWeightKgExcl == null || weightKg > category.minWeightKgExcl;
+    category.minWeightKgExcl == null || w > roundKg(category.minWeightKgExcl);
   const belowMax =
-    category.maxWeightKgIncl == null || weightKg <= category.maxWeightKgIncl;
+    category.maxWeightKgIncl == null || w <= roundKg(category.maxWeightKgIncl);
   return aboveMin && belowMax;
 }
 
@@ -176,16 +189,17 @@ export function computePolicyWeighInOutcome(input: {
     return buildPassedOutcome('WEIGHT_IN_REGISTERED_CATEGORY');
   }
 
+  const weight = roundKg(input.weightKg);
   const isUnderLowerBound =
     input.currentCategory.minWeightKgExcl != null &&
-    input.weightKg <= input.currentCategory.minWeightKgExcl;
+    weight <= roundKg(input.currentCategory.minWeightKgExcl);
   if (isUnderLowerBound) {
     return buildFailOutcome('FAIL', 'UNDER_MINIMUM_WEIGHT_LIMIT');
   }
 
   const isOverUpperBound =
     input.currentCategory.maxWeightKgIncl != null &&
-    input.weightKg > input.currentCategory.maxWeightKgIncl;
+    weight > roundKg(input.currentCategory.maxWeightKgIncl);
 
   if (!isOverUpperBound)
     return buildFailOutcome('FAIL', 'OUTSIDE_CATEGORY_RANGE');

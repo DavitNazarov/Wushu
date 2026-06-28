@@ -71,6 +71,7 @@ export class ScheduleController {
         actorUserId: auth.sub,
         id: parsed.id,
         name: parsed.name,
+        nameKa: parsed.nameKa ?? null,
         startTime: parsed.startTime,
         endTime: parsed.endTime,
         order: parsed.order ?? 0,

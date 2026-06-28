@@ -26,7 +26,7 @@ type CountryRow = {
   name: string;
   nameKa: string | null;
   code: string | null;
-  regionCount: number;
+  cityCount: number;
   clubCount: number;
 };
 
@@ -96,7 +96,7 @@ export default async function CountriesPage() {
                       {displayName}
                     </p>
                     <p className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
-                      {country.regionCount} {tPublic('countryRegions').toLowerCase()} · {country.clubCount} {tPublic('countryClubs').toLowerCase()}
+                      {country.cityCount} {tPublic('countryRegions').toLowerCase()} · {country.clubCount} {tPublic('countryClubs').toLowerCase()}
                     </p>
                   </div>
                   <svg className="h-4 w-4 shrink-0 text-[var(--color-text-muted)] opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100 group-hover:text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

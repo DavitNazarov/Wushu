@@ -207,7 +207,8 @@ export class WeighinController {
       if (
         msg === 'INVALID_MOVE_UP_CATEGORY' ||
         msg === 'NO_HIGHER_CATEGORY_AVAILABLE' ||
-        msg === 'MOVE_UP_CATEGORY_REQUIRED'
+        msg === 'MOVE_UP_CATEGORY_REQUIRED' ||
+        msg === 'EVENT_NOT_IN_WEIGHIN'
       ) {
         throw new HttpException(msg, HttpStatus.BAD_REQUEST);
       }

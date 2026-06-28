@@ -4,8 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { resolvePublicOrg } from '../common/public-org';
 
-// Country CRUD — top of the geography hierarchy (Country → Region → Club).
-// Org-scoped; writes are admin-only (enforced in the controller) and audited.
+// Country CRUD — top of the geography hierarchy (Country → City → Federation →
+// Club). Org-scoped; writes are admin-only (enforced in the controller) and audited.
 @Injectable()
 export class CountriesService {
   constructor(
@@ -26,7 +26,7 @@ export class CountriesService {
         name: true,
         nameKa: true,
         code: true,
-        _count: { select: { regions: true, clubs: true } },
+        _count: { select: { cities: true, clubs: true } },
       },
     });
     return rows.map((c) => ({
@@ -34,7 +34,7 @@ export class CountriesService {
       name: c.name,
       nameKa: c.nameKa,
       code: c.code,
-      regionCount: c._count.regions,
+      cityCount: c._count.cities,
       clubCount: c._count.clubs,
     }));
   }
@@ -51,7 +51,7 @@ export class CountriesService {
         name: true,
         nameKa: true,
         code: true,
-        regions: {
+        cities: {
           orderBy: [{ name: 'asc' }],
           select: {
             id: true,
@@ -66,8 +66,7 @@ export class CountriesService {
             id: true,
             name: true,
             nameKa: true,
-            city: true,
-            region: { select: { id: true, name: true, nameKa: true } },
+            city: { select: { id: true, name: true, nameKa: true } },
           },
         },
       },
@@ -78,25 +77,24 @@ export class CountriesService {
       name: country.name,
       nameKa: country.nameKa,
       code: country.code,
-      regions: country.regions.map((r) => ({
-        id: r.id,
-        name: r.name,
-        nameKa: r.nameKa,
-        clubCount: r._count.clubs,
+      cities: country.cities.map((c) => ({
+        id: c.id,
+        name: c.name,
+        nameKa: c.nameKa,
+        clubCount: c._count.clubs,
       })),
       clubs: country.clubs.map((c) => ({
         id: c.id,
         name: c.name,
         nameKa: c.nameKa,
-        city: c.city,
-        region: c.region
-          ? { id: c.region.id, name: c.region.name, nameKa: c.region.nameKa }
+        city: c.city
+          ? { id: c.city.id, name: c.city.name, nameKa: c.city.nameKa }
           : null,
       })),
     };
   }
 
-  // Admin list, alphabetical, with region + club counts for the table.
+  // Admin list, alphabetical, with city + club counts for the table.
   async list(organisationId: string) {
     const rows = await this.prisma.country.findMany({
       where: { organisationId },
@@ -106,7 +104,7 @@ export class CountriesService {
         name: true,
         nameKa: true,
         code: true,
-        _count: { select: { regions: true, clubs: true } },
+        _count: { select: { cities: true, clubs: true } },
       },
     });
     return rows.map((c) => ({
@@ -114,12 +112,12 @@ export class CountriesService {
       name: c.name,
       nameKa: c.nameKa,
       code: c.code,
-      regionCount: c._count.regions,
+      cityCount: c._count.cities,
       clubCount: c._count.clubs,
     }));
   }
 
-  // Country detail for the drill-down page: the country + its regions (each
+  // Country detail for the drill-down page: the country + its cities (each
   // with a club count). Returns null when not found in this org.
   async getById(organisationId: string, id: string) {
     const country = await this.prisma.country.findFirst({
@@ -129,7 +127,7 @@ export class CountriesService {
         name: true,
         nameKa: true,
         code: true,
-        regions: {
+        cities: {
           orderBy: [{ name: 'asc' }],
           select: {
             id: true,
@@ -146,11 +144,11 @@ export class CountriesService {
       name: country.name,
       nameKa: country.nameKa,
       code: country.code,
-      regions: country.regions.map((r) => ({
-        id: r.id,
-        name: r.name,
-        nameKa: r.nameKa,
-        clubCount: r._count.clubs,
+      cities: country.cities.map((c) => ({
+        id: c.id,
+        name: c.name,
+        nameKa: c.nameKa,
+        clubCount: c._count.clubs,
       })),
     };
   }
@@ -201,17 +199,15 @@ export class CountriesService {
     });
   }
 
-  // Delete — blocked while the country still has regions, clubs, coaches or
-  // athletes attached, so the hierarchy can never be left dangling. Coaches and
-  // athletes carry a denormalised countryId that can be set without a club, so
-  // they are checked directly (their FK relation is optional → SetNull).
+  // Delete — blocked while the country still has cities, clubs, coaches or
+  // athletes attached, so the hierarchy can never be left dangling.
   async remove(organisationId: string, actorUserId: string, id: string) {
     const existing = await this.prisma.country.findFirst({
       where: { id, organisationId },
       select: {
         id: true,
         _count: {
-          select: { regions: true, clubs: true, coaches: true, athletes: true },
+          select: { cities: true, clubs: true, coaches: true, athletes: true },
         },
       },
     });
@@ -222,7 +218,7 @@ export class CountriesService {
       );
     }
     if (
-      existing._count.regions > 0 ||
+      existing._count.cities > 0 ||
       existing._count.clubs > 0 ||
       existing._count.coaches > 0 ||
       existing._count.athletes > 0
@@ -231,7 +227,7 @@ export class CountriesService {
         {
           code: 'COUNTRY_NOT_EMPTY',
           message:
-            'Remove this country’s regions, clubs, coaches and athletes first',
+            'Remove this country’s cities, clubs, coaches and athletes first',
         },
         HttpStatus.CONFLICT,
       );

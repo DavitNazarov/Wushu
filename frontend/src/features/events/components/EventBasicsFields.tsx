@@ -7,7 +7,10 @@ type Props = {
   nameKa: string;
   slug: string;
   location: string;
+  /** Digits-only string; empty = no fee. */
+  entryFee: string;
   timezone: string;
+  accessType: 'OPEN' | 'CLOSED' | '';
   slugIsValid: boolean;
   issuesByPath: Map<string, string[]>;
   /** 1 = single column (default), 2 = pair related fields side by side. */
@@ -16,7 +19,9 @@ type Props = {
   onNameKaChange: (value: string) => void;
   onSlugChange: (value: string) => void;
   onLocationChange: (value: string) => void;
+  onEntryFeeChange: (value: string) => void;
   onTimezoneChange: (value: string) => void;
+  onAccessTypeChange: (value: 'OPEN' | 'CLOSED') => void;
 };
 
 export function EventBasicsFields({
@@ -24,7 +29,9 @@ export function EventBasicsFields({
   nameKa,
   slug,
   location,
+  entryFee,
   timezone,
+  accessType,
   slugIsValid,
   issuesByPath,
   columns = 1,
@@ -32,7 +39,9 @@ export function EventBasicsFields({
   onNameKaChange,
   onSlugChange,
   onLocationChange,
+  onEntryFeeChange,
   onTimezoneChange,
+  onAccessTypeChange,
 }: Props) {
   const tEvents = useTranslations('admin.events');
   const inputClassName =
@@ -106,6 +115,55 @@ export function EventBasicsFields({
             onChange={(event) => onTimezoneChange(event.target.value)}
           />
         </div>
+      </div>
+
+      <div className={pairClassName}>
+        <div>
+          <label className={labelClassName}>
+            {tEvents('form.entryFeeLabel')}
+            <span className="ml-1 font-normal text-[var(--color-text-muted)]">
+              {tEvents('form.optional')}
+            </span>
+          </label>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 select-none text-[13px] text-[var(--color-text-muted)]">
+              ₾
+            </span>
+            <input
+              className={`${inputClassName} pl-7`}
+              value={entryFee}
+              inputMode="numeric"
+              placeholder={tEvents('form.entryFeePlaceholder')}
+              // Numbers only — strip everything but digits as the user types.
+              onChange={(event) => onEntryFeeChange(event.target.value.replace(/\D/g, ''))}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className={labelClassName}>
+          {tEvents('form.accessTypeLabel')}
+        </label>
+        <select
+          className={`${inputClassName} cursor-pointer`}
+          value={accessType}
+          onChange={(e) => {
+            if (e.target.value === 'OPEN' || e.target.value === 'CLOSED') {
+              onAccessTypeChange(e.target.value);
+            }
+          }}
+        >
+          <option value="" disabled>{tEvents('form.accessTypePlaceholder')}</option>
+          <option value="OPEN">{tEvents('form.accessTypeOpen')}</option>
+          <option value="CLOSED">{tEvents('form.accessTypeClosed')}</option>
+        </select>
+        {accessType === 'OPEN' && (
+          <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{tEvents('form.accessTypeOpenDesc')}</p>
+        )}
+        {accessType === 'CLOSED' && (
+          <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{tEvents('form.accessTypeClosedDesc')}</p>
+        )}
       </div>
     </div>
   );

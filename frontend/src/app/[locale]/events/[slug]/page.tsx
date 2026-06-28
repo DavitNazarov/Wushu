@@ -93,14 +93,23 @@ const PinIcon = (
   </svg>
 );
 
+const FeeIcon = (
+  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 8h6m-6 4h6m-7 8h8a2 2 0 002-2V6a2 2 0 00-2-2H8a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 12v4m0-8v0" />
+  </svg>
+);
+
 export default function PublicEventDetailPage({ params }: Props) {
   const tPublic = useTranslations('public');
   const tCommon = useTranslations('common');
   const locale = useLocale();
   const { slug: eventSlug } = use(params);
-  const { data: event, isLoading, error, refetch, isFetched } = usePublicEvent(eventSlug);
+  const { data: event, isLoading, error, refetch, isSuccess } = usePublicEvent(eventSlug);
 
-  if (isFetched && !isLoading && !event) notFound();
+  // 404 only when the fetch succeeded and the slug genuinely has no event. On a
+  // transient error, fall through to the retryable alert below — don't hard-404.
+  if (isSuccess && !event) notFound();
 
   return (
     <PublicLayout>
@@ -293,6 +302,17 @@ export default function PublicEventDetailPage({ params }: Props) {
                           <p className="mt-0.5 text-[14px] text-[var(--color-text)]">
                             {fmtDate(event.registrationStartDate, locale)}
                             {event.registrationEndDate ? ` – ${fmtDate(event.registrationEndDate, locale)}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {event.entryFee != null && (
+                      <div className="flex items-start gap-3 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4">
+                        <span className="mt-0.5 shrink-0 text-[var(--color-text-muted)]">{FeeIcon}</span>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Entry fee</p>
+                          <p className="mt-0.5 text-[14px] text-[var(--color-text)]">
+                            ₾{event.entryFee.toLocaleString(locale)}
                           </p>
                         </div>
                       </div>

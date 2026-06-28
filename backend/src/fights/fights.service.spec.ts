@@ -13,6 +13,12 @@ const createPrismaMock = () => {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      // finalizeFightResult's lost-update guard writes the result via a
+      // compare-and-swap updateMany({ where: { id, status, updatedAt,
+      // winnerAthleteId }}). Default { count: 1 } = "the swap matched" so the
+      // happy path proceeds; tests override with { count: 0 } to exercise the
+      // FIGHT_STALE_UPDATE abort.
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       // finalizeFightResult counts remaining playable fights to decide LIVE →
       // COMPLETED auto-complete; default 1 = "fights remain" so result tests
       // don't accidentally drive event completion.
@@ -152,6 +158,7 @@ describe('FightsService state transitions', () => {
         to: 'COMPLETE',
         override: true,
         reason: 'manual correction',
+        actorCapabilities: ['RESULTS_OVERRIDE'],
       }),
     ).rejects.toThrow('WINNER_REQUIRED_FOR_COMPLETE');
 
@@ -213,6 +220,9 @@ describe('FightsService result propagation', () => {
     const audit = createAuditMock();
     const service = new FightsService(prisma, audit as any);
 
+    // updatedAt the pre-transaction read observed; the compare-and-swap keys on
+    // this exact value, so we assert the same instance flows into updateMany.
+    const observedUpdatedAt = new Date('2026-03-07T10:00:00.000Z');
     prisma.fight.findFirst.mockResolvedValue({
       id: 'sf1',
       organisationId: 'org_1',
@@ -220,27 +230,23 @@ describe('FightsService result propagation', () => {
       status: 'IN_PROGRESS',
       redAthleteId: 'a_red',
       blueAthleteId: 'a_blue',
+      winnerAthleteId: null,
       nextFightId: 'final_1',
       nextFightSlot: 'RED',
+      updatedAt: observedUpdatedAt,
       event: { id: 'event_1', lifecycle: 'LIVE' },
     });
 
-    prisma.fight.update
-      .mockResolvedValueOnce({
-        id: 'sf1',
-        winnerAthleteId: 'a_red',
-        loserAthleteId: 'a_blue',
-        status: 'CONFIRMED',
-        confirmedByUserId: 'user_1',
-        nextFightId: 'final_1',
-        nextFightSlot: 'RED',
-      })
-      .mockResolvedValueOnce({
-        id: 'final_1',
-        redAthleteId: 'a_red',
-        blueAthleteId: 'a_other',
-      });
-    prisma.fight.findUnique.mockResolvedValue({
+    // The CAS write succeeds (matched the observed row). Flip a flag so the
+    // post-write re-fetch below returns the CONFIRMED row, mirroring the DB
+    // transitioning from pre-write (winner null) to post-write (winner set).
+    let swapped = false;
+    prisma.fight.updateMany.mockImplementation(async () => {
+      swapped = true;
+      return { count: 1 };
+    });
+
+    const downstreamFinal = {
       id: 'final_1',
       status: 'QUEUED',
       redAthleteId: null,
@@ -250,6 +256,30 @@ describe('FightsService result propagation', () => {
       winMethod: null,
       confirmedAt: null,
       timerState: null,
+    };
+    prisma.fight.findUnique.mockImplementation(async ({ where }: any) => {
+      if (where.id === 'sf1') {
+        // Pre-swap: the in-tx hasRecordedResult re-read (winner still null).
+        // Post-swap: the re-fetched CONFIRMED row the propagation path reads.
+        return swapped
+          ? {
+              id: 'sf1',
+              status: 'CONFIRMED',
+              winnerAthleteId: 'a_red',
+              loserAthleteId: 'a_blue',
+              nextFightId: 'final_1',
+              nextFightSlot: 'RED',
+            }
+          : { status: 'IN_PROGRESS', winnerAthleteId: null };
+      }
+      // Downstream next fight — read pre-tx (RESULT_CORRECTION_BLOCKED guard)
+      // and again during propagation; unlocked so the winner copies in.
+      return downstreamFinal;
+    });
+    prisma.fight.update.mockResolvedValue({
+      id: 'final_1',
+      redAthleteId: 'a_red',
+      blueAthleteId: 'a_other',
     });
 
     await service.setResult({
@@ -260,10 +290,18 @@ describe('FightsService result propagation', () => {
       method: 'POINTS',
     });
 
-    expect(prisma.fight.update).toHaveBeenNthCalledWith(
-      1,
+    // The result is written via the compare-and-swap, keyed on the exact
+    // (status, updatedAt, winnerAthleteId: null) observed before the tx — not a
+    // bare update({ where: { id }}). Exactly one swap.
+    expect(prisma.fight.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.fight.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'sf1' },
+        where: {
+          id: 'sf1',
+          status: 'IN_PROGRESS',
+          updatedAt: observedUpdatedAt,
+          winnerAthleteId: null,
+        },
         data: expect.objectContaining({
           winnerAthleteId: 'a_red',
           loserAthleteId: 'a_blue',
@@ -272,16 +310,69 @@ describe('FightsService result propagation', () => {
         }),
       }),
     );
-    expect(prisma.fight.update).toHaveBeenNthCalledWith(
-      2,
+
+    // The re-fetched winner propagates exactly once into the next fight's RED
+    // slot — fight.update is now only the downstream copy, never the source.
+    expect(prisma.fight.update).toHaveBeenCalledTimes(1);
+    expect(prisma.fight.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'final_1' },
         data: { redAthleteId: 'a_red' },
       }),
     );
+
+    // Exactly one FIGHT_RESULT_SET audit row — no duplicate finalize.
+    const resultSetWrites = audit.write.mock.calls.filter(
+      ([entry]: any[]) => entry.action === 'FIGHT_RESULT_SET',
+    );
+    expect(resultSetWrites).toHaveLength(1);
   });
 
-  it('blocks result correction when the downstream fight has already moved on', async () => {
+  it('aborts with FIGHT_STALE_UPDATE when the compare-and-swap matches no row', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new FightsService(prisma, audit as any);
+
+    prisma.fight.findFirst.mockResolvedValue({
+      id: 'sf1',
+      organisationId: 'org_1',
+      eventId: 'event_1',
+      status: 'IN_PROGRESS',
+      redAthleteId: 'a_red',
+      blueAthleteId: 'a_blue',
+      winnerAthleteId: null,
+      nextFightId: null,
+      nextFightSlot: null,
+      updatedAt: new Date('2026-03-07T10:00:00.000Z'),
+      event: { id: 'event_1', lifecycle: 'LIVE' },
+    });
+
+    // The in-tx hasRecordedResult re-read still shows the fight unscored, so the
+    // guard passes the row through to the CAS...
+    prisma.fight.findUnique.mockResolvedValue({
+      status: 'IN_PROGRESS',
+      winnerAthleteId: null,
+    });
+    // ...but a racing submission already advanced the row, so the swap matches
+    // nothing. We must abort instead of last-writer-wins overwriting the winner.
+    prisma.fight.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.setResult({
+        organisationId: 'org_1',
+        fightId: 'sf1',
+        actorUserId: 'user_1',
+        winner: 'RED',
+        method: 'POINTS',
+      }),
+    ).rejects.toThrow('FIGHT_STALE_UPDATE');
+
+    expect(prisma.fight.updateMany).toHaveBeenCalledTimes(1);
+    // Bailed before the post-swap re-fetch: no winner write, no propagation.
+    expect(prisma.fight.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses to mutate a finalized (CONFIRMED) fight even with RESULTS_OVERRIDE', async () => {
     const prisma = createPrismaMock();
     const audit = createAuditMock();
     const service = new FightsService(prisma, audit as any);
@@ -299,18 +390,8 @@ describe('FightsService result propagation', () => {
       event: { id: 'event_1', lifecycle: 'LIVE' },
     });
 
-    prisma.fight.findUnique.mockResolvedValue({
-      id: 'final_1',
-      status: 'ON_DECK',
-      redAthleteId: 'a_red',
-      blueAthleteId: 'a_other',
-      winnerAthleteId: null,
-      loserAthleteId: null,
-      winMethod: null,
-      confirmedAt: null,
-      timerState: null,
-    });
-
+    // Even an admin holding RESULTS_OVERRIDE cannot rewrite a terminal result —
+    // corrections must go through a dedicated audited flow, not override.
     await expect(
       service.setResult({
         organisationId: 'org_1',
@@ -319,11 +400,50 @@ describe('FightsService result propagation', () => {
         winner: 'BLUE',
         method: 'POINTS',
         override: true,
-        reason: 'attempted correction after next fight staged',
+        reason: 'attempted correction after fight was confirmed',
+        actorCapabilities: ['RESULTS_OVERRIDE'],
       }),
-    ).rejects.toThrow('RESULT_CORRECTION_BLOCKED');
+    ).rejects.toThrow('FIGHT_ALREADY_FINALIZED');
 
     expect(prisma.fight.update).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects an override without RESULTS_OVERRIDE (LIVE_RUN is not enough)', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new FightsService(prisma, audit as any);
+
+    prisma.fight.findFirst.mockResolvedValue({
+      id: 'sf1',
+      organisationId: 'org_1',
+      eventId: 'event_1',
+      status: 'IN_PROGRESS',
+      redAthleteId: 'a_red',
+      blueAthleteId: 'a_blue',
+      winnerAthleteId: null,
+      nextFightId: null,
+      nextFightSlot: null,
+      event: { id: 'event_1', lifecycle: 'WEIGH_IN_COMPLETED' },
+    });
+
+    // A judge/timekeeper holds LIVE_RUN but not RESULTS_OVERRIDE — an override
+    // attempt is refused before any guard it was trying to waive is evaluated.
+    await expect(
+      service.setResult({
+        organisationId: 'org_1',
+        fightId: 'sf1',
+        actorUserId: 'judge_1',
+        winner: 'RED',
+        method: 'POINTS',
+        override: true,
+        reason: 'recording before event is live',
+        actorCapabilities: ['LIVE_RUN'],
+      }),
+    ).rejects.toThrow('OVERRIDE_NOT_PERMITTED');
+
+    expect(prisma.fight.update).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
 

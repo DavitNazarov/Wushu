@@ -12,6 +12,7 @@ export type PublicEvent = {
   nameKa?: string | null;
   slug: string;
   location: string | null;
+  entryFee?: number | null;
   lifecycle: string;
   published: boolean;
   competitionStartDate: string;

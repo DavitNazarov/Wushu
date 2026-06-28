@@ -117,6 +117,22 @@ export function RegistrationsPageClient({ eventId }: Props) {
     enabled: !!eventId && showContent,
   });
 
+  // Event-wide count of APPROVED registrations (not just the current page) —
+  // drives the income tally. We only need the X-Total-Count header, so cap the
+  // body at a single row. Shares the ['registrations', eventId] key prefix so a
+  // status change invalidates it alongside the main list.
+  const entryFee = selectedEvent?.entryFee ?? null;
+  const { data: approvedData } = useQuery({
+    queryKey: ['registrations', eventId, 'approved-count'],
+    queryFn: () =>
+      apiGetWithTotal<RegistrationRow[]>(
+        `/api/registrations?eventId=${eventId}&status=APPROVED&limit=1&offset=0`,
+      ),
+    enabled: !!eventId && showContent && entryFee != null,
+  });
+  const approvedCount = approvedData?.total ?? 0;
+  const income = entryFee != null ? entryFee * approvedCount : null;
+
   const [confirmModal, setConfirmModal] = useState<ConfirmModalState | null>(null);
   const [addAthleteOpen, setAddAthleteOpen] = useState(false);
 
@@ -220,6 +236,25 @@ export function RegistrationsPageClient({ eventId }: Props) {
           ) : undefined
         }
       />
+
+      {showContent && entryFee != null && income != null && (
+        <div className="flex items-center justify-between gap-4 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              {t('income.title')}
+            </p>
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+              {t('income.breakdown', {
+                count: approvedCount,
+                fee: `₾${entryFee.toLocaleString(locale)}`,
+              })}
+            </p>
+          </div>
+          <p className="text-[22px] font-semibold tabular-nums text-[var(--color-text)]">
+            ₾{income.toLocaleString(locale)}
+          </p>
+        </div>
+      )}
 
       <RegistrationFilters
         eventId={eventId}

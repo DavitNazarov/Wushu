@@ -50,6 +50,7 @@ export function CreateEventModal({ open, onClose }: Props) {
   const [nameKa, setNameKa] = useState('');
   const [slug, setSlug] = useState('');
   const [location, setLocation] = useState('');
+  const [entryFee, setEntryFee] = useState('');
   const [timezone, setTimezone] = useState('Asia/Tbilisi');
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
@@ -58,6 +59,7 @@ export function CreateEventModal({ open, onClose }: Props) {
   const [regOpensAt, setRegOpensAt] = useState('');
   const [regClosesAt, setRegClosesAt] = useState('');
   const [autoAdvanceStage, setAutoAdvanceStage] = useState(false);
+  const [accessType, setAccessType] = useState<'OPEN' | 'CLOSED' | ''>('');
   const [categorySelection, setCategorySelection] = useState<CategorySelection | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null);
 
@@ -85,7 +87,7 @@ export function CreateEventModal({ open, onClose }: Props) {
   // Per-step completeness — drives Next gating, stepper status and jump-ahead.
   const stepValid = useMemo(
     () => [
-      Boolean(name.trim() && slug.trim() && slugIsValid && location.trim()),
+      Boolean(name.trim() && slug.trim() && slugIsValid && location.trim() && accessType),
       Boolean(
         rangeStart &&
           rangeEnd &&
@@ -102,6 +104,7 @@ export function CreateEventModal({ open, onClose }: Props) {
       slug,
       slugIsValid,
       location,
+      accessType,
       rangeStart,
       rangeEnd,
       registrationDays.length,
@@ -122,8 +125,10 @@ export function CreateEventModal({ open, onClose }: Props) {
         nameKa: nameKa.trim() || null,
         slug: slug.trim(),
         location: location.trim().replace(/,\s*$/, ''),
+        entryFee: entryFee.trim() ? Number(entryFee) : null,
         timezone: timezone.trim() || 'Asia/Tbilisi',
         autoAdvanceStage,
+        accessType: accessType as 'OPEN' | 'CLOSED',
         categoryTemplateId: categorySelection?.categoryTemplateId,
         dates: {
           range: { startDate: rangeStart, endDate: rangeEnd },
@@ -169,6 +174,7 @@ export function CreateEventModal({ open, onClose }: Props) {
     setNameKa('');
     setSlug('');
     setLocation('');
+    setEntryFee('');
     setTimezone('Asia/Tbilisi');
     setRangeStart('');
     setRangeEnd('');
@@ -177,6 +183,7 @@ export function CreateEventModal({ open, onClose }: Props) {
     setRegOpensAt('');
     setRegClosesAt('');
     setAutoAdvanceStage(false);
+    setAccessType('');
     setCategorySelection(null);
     setIssues(null);
   }
@@ -266,7 +273,9 @@ export function CreateEventModal({ open, onClose }: Props) {
               nameKa={nameKa}
               slug={slug}
               location={location}
+              entryFee={entryFee}
               timezone={timezone}
+              accessType={accessType}
               slugIsValid={slugIsValid}
               issuesByPath={issuesByPath}
               columns={2}
@@ -277,7 +286,9 @@ export function CreateEventModal({ open, onClose }: Props) {
               onNameKaChange={setNameKa}
               onSlugChange={setSlug}
               onLocationChange={setLocation}
+              onEntryFeeChange={setEntryFee}
               onTimezoneChange={setTimezone}
+              onAccessTypeChange={setAccessType}
             />
           </div>
         ) : null}
@@ -369,6 +380,12 @@ export function CreateEventModal({ open, onClose }: Props) {
                 value={slug ? `/${slug}` : tEvents('wizard.review.empty')}
               />
               <ReviewRow label={tEvents('form.locationLabel')} value={location || tEvents('wizard.review.empty')} />
+              <ReviewRow label={tEvents('form.accessTypeLabel')} value={
+                accessType === 'OPEN' ? tEvents('form.accessTypeOpen') :
+                accessType === 'CLOSED' ? tEvents('form.accessTypeClosed') :
+                tEvents('wizard.review.empty')
+              } />
+              <ReviewRow label={tEvents('form.entryFeeLabel')} value={entryFee ? `₾${entryFee}` : tEvents('wizard.review.empty')} />
               <ReviewRow label={tEvents('form.timezoneLabel')} value={timezone || tEvents('wizard.review.empty')} />
               <ReviewRow
                 label={tEvents('form.eventDatesLabel')}

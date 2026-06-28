@@ -185,17 +185,57 @@ export class AuthService {
     }
 
     const tokenHash = this.hashToken(incomingToken);
-    let stored: {
-      id: string;
-      userId: string;
-      revokedAt: Date | null;
-      expiresAt: Date;
-    } | null = null;
+    const userId = validated.payload.sub;
+
     try {
-      stored = await this.prisma.refreshToken.findUnique({
-        where: { tokenHash },
-        select: { id: true, userId: true, revokedAt: true, expiresAt: true },
+      const now = new Date();
+      const rotated = await this.prisma.$transaction(async (tx) => {
+        // Atomic consume (compare-and-swap): flip revokedAt null→now only while
+        // the row is still live. Concurrent refreshes presenting the same token
+        // race on this row's write lock, so exactly one transaction sees
+        // count===1 and every other sees count===0. This closes the old
+        // read-then-update TOCTOU where two simultaneous refreshes could both
+        // observe revokedAt=null and both rotate a single (possibly stolen) token.
+        const consumed = await tx.refreshToken.updateMany({
+          where: { tokenHash, revokedAt: null, expiresAt: { gt: now } },
+          data: { revokedAt: now },
+        });
+
+        // count===0 ⇒ the token is unknown, already revoked, or expired. A valid
+        // refresh JWT whose stored row is no longer live means it was already
+        // rotated (or replayed by a thief); the caller revokes the whole chain.
+        if (consumed.count === 0) return null;
+
+        // The single winner mints exactly one new pair and persists its hash in
+        // the same transaction, so the consume rolls back if the store fails.
+        const accessToken = this.signToken(validated.payload);
+        const refreshToken = this.signRefreshToken(validated.payload);
+        await tx.refreshToken.create({
+          data: {
+            userId,
+            tokenHash: this.hashToken(refreshToken),
+            expiresAt: new Date(Date.now() + REFRESH_EXPIRES_IN_SECONDS * 1000),
+          },
+        });
+        return { accessToken, refreshToken };
       });
+
+      if (!rotated) {
+        // Reuse / theft detection — same precaution as before: revoke every
+        // active token in this user's chain, then reject (→ INVALID_REFRESH_TOKEN).
+        this.logger.warn(
+          '[auth] refresh token already consumed/revoked/expired — possible token theft; revoking chain',
+        );
+        await this.revokeUserRefreshTokens(userId);
+        return null;
+      }
+
+      this.logger.log(`[auth] refresh rotated for user ${userId}`);
+      return {
+        accessToken: rotated.accessToken,
+        refreshToken: rotated.refreshToken,
+        payload: validated.payload,
+      };
     } catch (error) {
       if (this.isRefreshTokenStorageUnavailableError(error)) {
         const isProd = process.env.NODE_ENV === 'production';
@@ -214,57 +254,6 @@ export class AuthService {
       }
       throw error;
     }
-
-    if (!stored) {
-      this.logger.warn(
-        '[auth] refresh token not found in DB (unknown or already rotated)',
-      );
-      return null;
-    }
-    if (stored.revokedAt) {
-      this.logger.warn(
-        '[auth] refresh token already revoked — possible token theft',
-      );
-      // Revoke ALL tokens for this user as a precaution
-      await this.prisma.refreshToken.updateMany({
-        where: { userId: stored.userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-      return null;
-    }
-    if (stored.expiresAt < new Date()) {
-      this.logger.warn('[auth] refresh token expired in DB');
-      return null;
-    }
-
-    // Revoke the old token
-    try {
-      await this.prisma.refreshToken.update({
-        where: { id: stored.id },
-        data: { revokedAt: new Date() },
-      });
-    } catch (error) {
-      if (!this.isRefreshTokenStorageUnavailableError(error)) {
-        throw error;
-      }
-      const isProd = process.env.NODE_ENV === 'production';
-      this.logger.warn(
-        '[auth] RefreshToken revoke failed due to missing schema.',
-      );
-      if (isProd) {
-        throw new Error(
-          'Refresh token storage is unavailable in production. Run migrations before enabling auth.',
-        );
-      }
-    }
-
-    // Issue new tokens
-    const accessToken = this.signToken(validated.payload);
-    const refreshToken = this.signRefreshToken(validated.payload);
-    await this.storeRefreshToken(validated.payload.sub, refreshToken);
-
-    this.logger.log(`[auth] refresh rotated for user ${validated.payload.sub}`);
-    return { accessToken, refreshToken, payload: validated.payload };
   }
 
   async validateAuthenticatedUser(

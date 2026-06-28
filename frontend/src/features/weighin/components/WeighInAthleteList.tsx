@@ -46,7 +46,7 @@ export function WeighInAthleteList({
       {groups.map((group) => (
         <section key={group.key} className="space-y-2 pt-1 first:pt-0">
           <div className="flex min-w-0 items-center gap-2">
-            <h3 className="min-w-0 truncate text-[14px] font-bold text-[var(--color-text)]">
+            <h3 className="shrink-0 text-[14px] font-bold text-[var(--color-text)]">
               {group.headingLabel}
             </h3>
             <span className="shrink-0 text-[11px] text-[var(--color-text-muted)]">

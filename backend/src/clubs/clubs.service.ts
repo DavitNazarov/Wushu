@@ -18,17 +18,17 @@ export type ClubMedalTally = {
   total: number;
 };
 
-export const EMPTY_CLUB_MEDALS: ClubMedalTally = {
+// Internal-only zero tally; not exported (no external consumer).
+const EMPTY_CLUB_MEDALS: ClubMedalTally = {
   gold: 0,
   silver: 0,
   bronze: 0,
   total: 0,
 };
 
-// Club CRUD + public-facing club page assembly. The "public" methods
-// (listPublic, getPublicDetails) intentionally don't take an organisationId —
-// they resolve "the" public org via resolvePublicOrg(), used by the
-// unauthenticated public site which has no tenant context.
+// Club CRUD + public-facing club page assembly. A club sits in the hierarchy as
+// Country → City → Federation → Club → Coach → Athlete. City + country are
+// required relations; federation is optional.
 @Injectable()
 export class ClubsService {
   constructor(
@@ -36,10 +36,8 @@ export class ClubsService {
     private readonly audit: AuditService,
   ) {}
 
-  // Admin/coach club list, alphabetical by EN name. Region + country are
-  // required relations, so they're always present; `country` is exposed as the
-  // country NAME (back-compat with the old free-text field) alongside the
-  // structured region/country ids + Georgian names.
+  // Admin/coach club list, alphabetical by EN name, with the structured
+  // city/federation/country ids + bilingual names.
   async list(organisationId: string) {
     const rows = await this.prisma.club.findMany({
       where: { organisationId },
@@ -48,10 +46,12 @@ export class ClubsService {
         id: true,
         name: true,
         nameKa: true,
-        city: true,
-        regionId: true,
+        isOfficial: true,
+        cityId: true,
+        federationId: true,
         countryId: true,
-        region: { select: { name: true, nameKa: true } },
+        city: { select: { name: true, nameKa: true } },
+        federation: { select: { name: true, nameKa: true } },
         country: { select: { name: true, nameKa: true } },
       },
     });
@@ -59,40 +59,67 @@ export class ClubsService {
       id: c.id,
       name: c.name,
       nameKa: c.nameKa,
-      city: c.city,
-      regionId: c.regionId,
-      regionName: c.region.name,
-      regionNameKa: c.region.nameKa,
+      isOfficial: c.isOfficial,
+      cityId: c.cityId,
+      cityName: c.city.name,
+      cityNameKa: c.city.nameKa,
+      federationId: c.federationId,
+      federationName: c.federation?.name ?? null,
+      federationNameKa: c.federation?.nameKa ?? null,
       countryId: c.countryId,
       country: c.country.name,
       countryNameKa: c.country.nameKa,
     }));
   }
 
-  // Create-or-update a club. If input.id matches a club in this org, updates
-  // it; otherwise creates a new row. regionId is required; the club's countryId
-  // is derived from the chosen region (validated to be in this org). When an
-  // existing club's region/country changes, the denormalised regionId/countryId
-  // on its coaches + athletes are cascaded in the same transaction so they
-  // never drift. Wrapped with the CLUB_CREATED / CLUB_UPDATED audit row.
+  // Create-or-update a club. cityId is required; countryId is derived from the
+  // chosen city (validated to be in this org). federationId is optional and, if
+  // given, must belong to the same city. When an existing club's city/country
+  // changes, the denormalised cityId/countryId on its coaches + athletes are
+  // cascaded in the same transaction so they never drift.
   async upsert(input: {
     organisationId: string;
     actorUserId: string;
     id?: string;
     name: string;
     nameKa?: string | null;
-    city?: string | null;
-    regionId: string;
+    cityId: string;
+    federationId?: string | null;
+    isOfficial: boolean;
   }): Promise<Club> {
-    const region = await this.prisma.region.findFirst({
-      where: { id: input.regionId, organisationId: input.organisationId },
+    const city = await this.prisma.city.findFirst({
+      where: { id: input.cityId, organisationId: input.organisationId },
       select: { id: true, countryId: true },
     });
-    if (!region) {
+    if (!city) {
       throw new HttpException(
-        { code: 'REGION_NOT_FOUND', message: 'Region not found' },
+        { code: 'CITY_NOT_FOUND', message: 'City not found' },
         HttpStatus.NOT_FOUND,
       );
+    }
+
+    let federationId: string | null = null;
+    if (input.federationId) {
+      const federation = await this.prisma.federation.findFirst({
+        where: { id: input.federationId, organisationId: input.organisationId },
+        select: { id: true, cityId: true },
+      });
+      if (!federation) {
+        throw new HttpException(
+          { code: 'FEDERATION_NOT_FOUND', message: 'Federation not found' },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      if (federation.cityId !== city.id) {
+        throw new HttpException(
+          {
+            code: 'FEDERATION_CITY_MISMATCH',
+            message: 'Federation belongs to a different city',
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      federationId = federation.id;
     }
 
     const existing = input.id
@@ -105,9 +132,10 @@ export class ClubsService {
       organisationId: input.organisationId,
       name: input.name.trim(),
       nameKa: input.nameKa?.trim() || null,
-      city: input.city?.trim() || null,
-      regionId: region.id,
-      countryId: region.countryId,
+      isOfficial: input.isOfficial,
+      cityId: city.id,
+      federationId,
+      countryId: city.countryId,
     };
 
     return this.prisma.$transaction(async (tx) => {
@@ -115,19 +143,23 @@ export class ClubsService {
         ? await tx.club.update({ where: { id: existing.id }, data })
         : await tx.club.create({ data });
 
-      // Keep coaches/athletes of this club aligned with its region/country.
+      // Keep coaches/athletes of this club aligned with its city/country.
       if (
         existing &&
-        (existing.regionId !== saved.regionId ||
+        (existing.cityId !== saved.cityId ||
           existing.countryId !== saved.countryId)
       ) {
         await tx.user.updateMany({
           where: { clubId: saved.id },
-          data: { regionId: saved.regionId, countryId: saved.countryId },
+          data: { cityId: saved.cityId, countryId: saved.countryId },
+        });
+        await tx.coach.updateMany({
+          where: { clubId: saved.id },
+          data: { cityId: saved.cityId, countryId: saved.countryId },
         });
         await tx.athlete.updateMany({
           where: { clubId: saved.id },
-          data: { regionId: saved.regionId, countryId: saved.countryId },
+          data: { cityId: saved.cityId, countryId: saved.countryId },
         });
       }
 
@@ -151,8 +183,7 @@ export class ClubsService {
   }
 
   // Public site clubs listing. Resolves the canonical public org first; if
-  // none exists yet, returns an empty array rather than throwing — that way
-  // the public homepage gracefully shows "no clubs" instead of a 500.
+  // none exists yet, returns an empty array rather than throwing.
   async listPublic(): Promise<Club[]> {
     const org = await resolvePublicOrg(this.prisma);
     if (!org) return [];
@@ -164,14 +195,8 @@ export class ClubsService {
   }
 
   // Build the unauthenticated /clubs/:id detail payload: club header + coach
-  // list + athlete roster (with the latest registration's category as a
-  // human-readable string). For each athlete we only pull their most-recent
-  // registration (take: 1) — enough to display a category tag without
-  // exposing their full event history.
-  //
-  // Per-athlete `name`/`nameKa` are pre-joined into a single string for
-  // the UI's bilingual selector. `category` collapses "AgeGroup · WeightClass"
-  // into one display label.
+  // roster + athlete roster (with the latest registration's category as a
+  // human-readable string).
   async getPublicDetails(clubId: string) {
     const org = await resolvePublicOrg(this.prisma);
     if (!org) return null;
@@ -182,21 +207,34 @@ export class ClubsService {
         id: true,
         name: true,
         nameKa: true,
-        city: true,
-        region: { select: { name: true, nameKa: true } },
+        city: { select: { name: true, nameKa: true } },
+        federation: { select: { name: true, nameKa: true } },
         country: { select: { name: true, nameKa: true } },
       },
     });
     if (!club) return null;
 
-    const coaches = await this.prisma.user.findMany({
-      where: { organisationId: org.id, clubId: club.id, role: 'coach' },
-      select: { id: true, displayName: true },
-      orderBy: { displayName: 'asc' },
+    // Coach roster = Coach entities attached to this club.
+    const coaches = await this.prisma.coach.findMany({
+      where: { organisationId: org.id, clubId: club.id },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        firstNameKa: true,
+        lastNameKa: true,
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     });
 
     const athletes = await this.prisma.athlete.findMany({
-      where: { organisationId: org.id, clubId: club.id },
+      where: {
+        organisationId: org.id,
+        OR: [
+          { clubId: club.id },
+          { clubMemberships: { some: { clubId: club.id } } },
+        ],
+      },
       select: {
         id: true,
         firstName: true,
@@ -232,16 +270,21 @@ export class ClubsService {
         id: club.id,
         name: club.name,
         nameKa: club.nameKa ?? null,
-        city: club.city,
         country: club.country.name,
         countryNameKa: club.country.nameKa,
-        regionName: club.region.name,
-        regionNameKa: club.region.nameKa,
+        cityName: club.city.name,
+        cityNameKa: club.city.nameKa,
+        federationName: club.federation?.name ?? null,
+        federationNameKa: club.federation?.nameKa ?? null,
       },
       medals,
       coaches: coaches.map((c) => ({
         id: c.id,
-        displayName: c.displayName,
+        displayName: `${c.firstName} ${c.lastName}`.trim(),
+        displayNameKa:
+          c.firstNameKa && c.lastNameKa
+            ? `${c.firstNameKa} ${c.lastNameKa}`.trim()
+            : null,
       })),
       athletes: athletes.map((a) => {
         const reg = a.registrations[0];
@@ -272,11 +315,7 @@ export class ClubsService {
   }
 
   // Aggregate podium medals (gold/silver/bronze) per club across every weight
-  // category that has fights in a *published* event. We run the same placement
-  // logic the public results page uses (computeCategoryResults) per category,
-  // read off the medalists, and credit each medal to that athlete's current
-  // club — the same attribution the old wins ranking used. Returns a map keyed
-  // by clubId; clubs with no medals are simply absent.
+  // category that has fights in a *published* event.
   async computeMedalsByClub(
     organisationId: string,
   ): Promise<Map<string, ClubMedalTally>> {
@@ -303,7 +342,6 @@ export class ClubsService {
       },
     });
 
-    // Map every athlete appearing in these fights to their current club.
     const athleteIds = new Set<string>();
     for (const f of fights) {
       if (f.redAthleteId) athleteIds.add(f.redAthleteId);
@@ -315,12 +353,6 @@ export class ClubsService {
     });
     const clubByAthlete = new Map(athletes.map((a) => [a.id, a.clubId]));
 
-    // Bucket fights per bracket so each category draw is scored as a unit.
-    // Key by bracketId (always set at draw/seed time); fall back to an
-    // event-scoped category key for any fight missing a bracket so we never
-    // merge same-named categories across different events. Keying off
-    // eventWeightCategoryId alone used to drop every fight where that column is
-    // NULL (seeded/legacy data) — the cause of the empty medal tables.
     const byBracket = new Map<
       string,
       { fights: CompetitionFight[]; bronzePolicy: 'TWO_BRONZES' }

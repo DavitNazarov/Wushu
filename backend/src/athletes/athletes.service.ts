@@ -22,6 +22,11 @@ export type AthleteFilters = {
 // limit/offset; absent params they get the first MAX_LIST_ROWS.
 const MAX_LIST_ROWS = 500;
 
+type AthleteClubSummary = Pick<Club, 'id' | 'name' | 'nameKa'> & {
+  city: string | null;
+  country: string | null;
+};
+
 // Row shape returned to the admin/coach UI. `duplicateCount` is computed at
 // query time so the UI can show a "looks like a duplicate" pill without a
 // second roundtrip.
@@ -29,9 +34,9 @@ export type AthleteWithDuplicates = Athlete & {
   duplicateCount: number;
   // `country` is the derived country NAME (Club no longer stores a free-text
   // country — it comes from the club's Country relation).
-  club:
-    | (Pick<Club, 'id' | 'name' | 'city'> & { country: string | null })
-    | null;
+  club: AthleteClubSummary | null;
+  clubIds: string[];
+  clubs: AthleteClubSummary[];
 };
 
 // Minimal projection returned as `possibleDuplicates` after a create/update.
@@ -62,22 +67,29 @@ export class AthletesService {
     filters: AthleteFilters = {},
   ): Promise<AthleteWithDuplicates[]> {
     const where: Prisma.AthleteWhereInput = { organisationId };
+    const andConditions: Prisma.AthleteWhereInput[] = [];
 
-    if (filters.clubId) where.clubId = filters.clubId;
+    if (filters.clubId) {
+      andConditions.push(this.clubMembershipFilter(filters.clubId));
+    }
     if (filters.dateOfBirth) where.dateOfBirth = filters.dateOfBirth;
     if (filters.documentId) where.documentId = filters.documentId;
 
     if (filters.search?.trim()) {
       const search = filters.search.trim();
       // Match EN + KA names so Georgian-language search hits bilingual names.
-      where.OR = [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { firstNameKa: { contains: search, mode: 'insensitive' } },
-        { lastNameKa: { contains: search, mode: 'insensitive' } },
-        { documentId: { contains: search, mode: 'insensitive' } },
-      ];
+      andConditions.push({
+        OR: [
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { firstNameKa: { contains: search, mode: 'insensitive' } },
+          { lastNameKa: { contains: search, mode: 'insensitive' } },
+          { documentId: { contains: search, mode: 'insensitive' } },
+        ],
+      });
     }
+
+    if (andConditions.length > 0) where.AND = andConditions;
 
     const take = Math.min(
       Math.max(filters.limit ?? MAX_LIST_ROWS, 1),
@@ -92,9 +104,24 @@ export class AthletesService {
           select: {
             id: true,
             name: true,
-            city: true,
+            nameKa: true,
+            city: { select: { name: true } },
             country: { select: { name: true } },
           },
+        },
+        clubMemberships: {
+          include: {
+            club: {
+              select: {
+                id: true,
+                name: true,
+                nameKa: true,
+                city: { select: { name: true } },
+                country: { select: { name: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
         },
       },
       orderBy: [
@@ -115,17 +142,15 @@ export class AthletesService {
     }
 
     return athletes.map((a) => {
-      const { club, ...rest } = a;
+      const { club, clubMemberships, ...rest } = a;
+      const clubs = clubMemberships.map((membership) =>
+        this.mapClubSummary(membership.club),
+      );
       return {
         ...rest,
-        club: club
-          ? {
-              id: club.id,
-              name: club.name,
-              city: club.city,
-              country: club.country.name,
-            }
-          : null,
+        club: club ? this.mapClubSummary(club) : null,
+        clubIds: clubs.map((membershipClub) => membershipClub.id),
+        clubs,
         duplicateCount: duplicateMap.get(this.getDuplicateKey(a)) ?? 0,
       };
     });
@@ -146,9 +171,12 @@ export class AthletesService {
     actorUserId: string;
     id?: string;
     clubId?: string | null;
+    // All clubs the athlete belongs to. clubId remains the primary/default
+    // club; when clubIds is present it replaces the membership set.
+    clubIds?: string[];
     // Only used when the athlete has no club (club-less athlete still has a
-    // region). When clubId is set, region/country are derived from the club.
-    regionId?: string | null;
+    // city). When clubId is set, city/country are derived from the club.
+    cityId?: string | null;
     actorClubId?: string | null;
     firstName: string;
     firstNameKa?: string | null;
@@ -157,57 +185,84 @@ export class AthletesService {
     dateOfBirth: Date;
     documentId: string;
     sex?: AthleteSex | null;
+    // Athlete ↔ coach is many-to-many. When provided, replaces the athlete's
+    // coach set with these coach ids (validated to be in this org).
+    coachIds?: string[];
   }): Promise<{ athlete: Athlete; possibleDuplicates: PossibleDuplicate[] }> {
-    // Resolve the athlete's denormalised region/country. With a club, both are
-    // derived from the club (single source of truth). Without a club, an
-    // explicit region may be supplied; its country is derived from the region.
-    let derivedRegionId: string | null = null;
-    let derivedCountryId: string | null = null;
-    if (input.clubId) {
-      const club = await this.prisma.club.findFirst({
-        where: { id: input.clubId, organisationId: input.organisationId },
-        select: { id: true, regionId: true, countryId: true },
-      });
-
-      if (!club) {
-        throw new HttpException(
-          {
-            code: 'INVALID_CLUB',
-            message: 'clubId not found for organisation',
-          },
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-      derivedRegionId = club.regionId;
-      derivedCountryId = club.countryId;
-    } else if (input.regionId) {
-      const region = await this.prisma.region.findFirst({
-        where: { id: input.regionId, organisationId: input.organisationId },
-        select: { id: true, countryId: true },
-      });
-      if (!region) {
-        throw new HttpException(
-          { code: 'REGION_NOT_FOUND', message: 'Region not found' },
-          HttpStatus.NOT_FOUND,
-        );
-      }
-      derivedRegionId = region.id;
-      derivedCountryId = region.countryId;
-    }
-
     const existing = input.id
       ? await this.prisma.athlete.findFirst({
           where: { id: input.id, organisationId: input.organisationId },
         })
       : null;
 
-    // Coach can only update athletes in their club
-    if (
-      input.actorClubId &&
-      existing &&
-      existing.clubId !== input.actorClubId
-    ) {
-      throw new Error('ATHLETE_NOT_IN_COACH_CLUB');
+    const requestedClubIds = this.dedupeIds(input.clubIds);
+    const primaryClubId =
+      input.clubId !== undefined
+        ? input.clubId
+        : (existing?.clubId ?? requestedClubIds[0] ?? null);
+    const membershipClubIds = this.dedupeIds([
+      ...requestedClubIds,
+      primaryClubId,
+      input.actorClubId ?? null,
+    ]);
+
+    if (input.actorClubId && existing) {
+      const canManage = await this.athleteHasClub(
+        existing,
+        input.actorClubId,
+      );
+      if (!canManage) throw new Error('ATHLETE_NOT_IN_COACH_CLUB');
+    }
+
+    const clubIdsToValidate = this.dedupeIds([
+      ...requestedClubIds,
+      primaryClubId,
+    ]);
+    const clubs =
+      clubIdsToValidate.length > 0
+        ? await this.prisma.club.findMany({
+            where: {
+              id: { in: clubIdsToValidate },
+              organisationId: input.organisationId,
+            },
+            select: { id: true, cityId: true, countryId: true },
+          })
+        : [];
+
+    if (clubs.length !== clubIdsToValidate.length) {
+      throw new HttpException(
+        {
+          code: 'INVALID_CLUB',
+          message: 'clubId not found for organisation',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const clubById = new Map(clubs.map((club) => [club.id, club]));
+
+    // Resolve the athlete's denormalised city/country. With a club, both are
+    // derived from the club (single source of truth). Without a club, an
+    // explicit city may be supplied; its country is derived from the city.
+    let derivedCityId: string | null = null;
+    let derivedCountryId: string | null = null;
+    if (primaryClubId) {
+      const club = clubById.get(primaryClubId)!;
+      derivedCityId = club.cityId;
+      derivedCountryId = club.countryId;
+    } else if (input.cityId) {
+      const city = await this.prisma.city.findFirst({
+        where: { id: input.cityId, organisationId: input.organisationId },
+        select: { id: true, countryId: true },
+      });
+      if (!city) {
+        throw new HttpException(
+          { code: 'CITY_NOT_FOUND', message: 'City not found' },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      derivedCityId = city.id;
+      derivedCountryId = city.countryId;
     }
 
     const documentId = input.documentId.trim();
@@ -227,8 +282,8 @@ export class AthletesService {
 
     const data: Prisma.AthleteUncheckedCreateInput = {
       organisationId: input.organisationId,
-      clubId: input.clubId ?? null,
-      regionId: derivedRegionId,
+      clubId: primaryClubId,
+      cityId: derivedCityId,
       countryId: derivedCountryId,
       firstName: input.firstName.trim(),
       firstNameKa: input.firstNameKa?.trim() || null,
@@ -251,10 +306,57 @@ export class AthletesService {
 
     let athlete: Athlete;
     try {
+      // Validate any supplied coach ids belong to this org before the write.
+      let validCoachIds: string[] | null = null;
+      if (input.coachIds) {
+        const found = await this.prisma.coach.findMany({
+          where: {
+            organisationId: input.organisationId,
+            id: { in: input.coachIds },
+          },
+          select: { id: true },
+        });
+        validCoachIds = found.map((c) => c.id);
+      }
+
       athlete = await this.prisma.$transaction(async (tx) => {
         const saved = existing
           ? await tx.athlete.update({ where: { id: existing.id }, data })
           : await tx.athlete.create({ data });
+
+        if (input.clubIds !== undefined) {
+          await tx.athleteClub.deleteMany({ where: { athleteId: saved.id } });
+          if (membershipClubIds.length > 0) {
+            await tx.athleteClub.createMany({
+              data: membershipClubIds.map((clubId) => ({
+                athleteId: saved.id,
+                clubId,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        } else if (membershipClubIds.length > 0) {
+          await tx.athleteClub.createMany({
+            data: membershipClubIds.map((clubId) => ({
+              athleteId: saved.id,
+              clubId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        // Replace the athlete's coach links when coachIds was provided.
+        if (validCoachIds) {
+          await tx.athleteCoach.deleteMany({ where: { athleteId: saved.id } });
+          if (validCoachIds.length > 0) {
+            await tx.athleteCoach.createMany({
+              data: validCoachIds.map((coachId) => ({
+                athleteId: saved.id,
+                coachId,
+              })),
+            });
+          }
+        }
 
         await this.audit.write({
           organisationId: input.organisationId,
@@ -310,12 +412,14 @@ export class AthletesService {
     ]);
 
     if (!primary || !secondary) throw new Error('ATHLETE_NOT_FOUND');
-    if (
-      input.actorClubId &&
-      (primary.clubId !== input.actorClubId ||
-        secondary.clubId !== input.actorClubId)
-    ) {
-      throw new Error('ATHLETE_NOT_IN_COACH_CLUB');
+    if (input.actorClubId) {
+      const [primaryInClub, secondaryInClub] = await Promise.all([
+        this.athleteHasClub(primary, input.actorClubId),
+        this.athleteHasClub(secondary, input.actorClubId),
+      ]);
+      if (!primaryInClub || !secondaryInClub) {
+        throw new Error('ATHLETE_NOT_IN_COACH_CLUB');
+      }
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -356,6 +460,25 @@ export class AthletesService {
         },
       });
 
+      const secondaryMemberships = await tx.athleteClub.findMany({
+        where: { athleteId: secondary.id },
+        select: { clubId: true },
+      });
+      const mergedMembershipIds = this.dedupeIds([
+        primary.clubId,
+        secondary.clubId,
+        ...secondaryMemberships.map((membership) => membership.clubId),
+      ]);
+      if (mergedMembershipIds.length > 0) {
+        await tx.athleteClub.createMany({
+          data: mergedMembershipIds.map((clubId) => ({
+            athleteId: primary.id,
+            clubId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
       await tx.athlete.delete({ where: { id: secondary.id } });
 
       await tx.athleteMerge.create({
@@ -386,6 +509,51 @@ export class AthletesService {
   // Stable signature for "looks like the same person": org + DOB + lowercase
   // documentId. Used by list() to count duplicates per row. Lowercasing the
   // documentId keeps passport-case noise from breaking the grouping.
+  private mapClubSummary(
+    club: Pick<Club, 'id' | 'name' | 'nameKa'> & {
+      city?: { name: string } | null;
+      country?: { name: string } | null;
+    },
+  ): AthleteClubSummary {
+    return {
+      id: club.id,
+      name: club.name,
+      nameKa: club.nameKa,
+      city: club.city?.name ?? null,
+      country: club.country?.name ?? null,
+    };
+  }
+
+  private clubMembershipFilter(clubId: string): Prisma.AthleteWhereInput {
+    return {
+      OR: [
+        { clubId },
+        { clubMemberships: { some: { clubId } } },
+      ],
+    };
+  }
+
+  private dedupeIds(ids: Array<string | null | undefined> | undefined): string[] {
+    return [...new Set((ids ?? []).filter((id): id is string => Boolean(id)))];
+  }
+
+  private async athleteHasClub(
+    athlete: Pick<Athlete, 'id' | 'clubId'>,
+    clubId: string,
+  ): Promise<boolean> {
+    if (athlete.clubId === clubId) return true;
+    const membership = await this.prisma.athleteClub.findUnique({
+      where: {
+        athleteId_clubId: {
+          athleteId: athlete.id,
+          clubId,
+        },
+      },
+      select: { athleteId: true },
+    });
+    return Boolean(membership);
+  }
+
   private getDuplicateKey(athlete: Athlete): string {
     return `${athlete.organisationId}:${athlete.dateOfBirth.toISOString()}:${athlete.documentId.toLowerCase()}`;
   }
@@ -410,10 +578,12 @@ export class AthletesService {
   }): Promise<PossibleDuplicate[]> {
     const andConditions: Prisma.AthleteWhereInput[] = [];
     if (input.excludeId) andConditions.push({ id: { not: input.excludeId } });
+    if (input.actorClubId) {
+      andConditions.push(this.clubMembershipFilter(input.actorClubId));
+    }
 
     const where: Prisma.AthleteWhereInput = {
       organisationId: input.organisationId,
-      ...(input.actorClubId ? { clubId: input.actorClubId } : {}),
       dateOfBirth: input.dateOfBirth,
       AND: andConditions.length > 0 ? andConditions : undefined,
       OR: [

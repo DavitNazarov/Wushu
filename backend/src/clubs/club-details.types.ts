@@ -72,11 +72,11 @@ export type ClubDetailsResponse = {
   club: {
     id: string;
     name: string;
-    city: string | null;
+    nameKa: string | null;
     country: string | null;
     countryNameKa: string | null;
-    regionName: string | null;
-    regionNameKa: string | null;
+    cityName: string | null;
+    cityNameKa: string | null;
     createdAt: string;
     updatedAt: string;
     contactEmails: string[];

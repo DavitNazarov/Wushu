@@ -87,8 +87,9 @@ export class ClubsController {
       id: parsed.data.id,
       name: parsed.data.name,
       nameKa: parsed.data.nameKa ?? null,
-      city: parsed.data.city ?? null,
-      regionId: parsed.data.regionId,
+      cityId: parsed.data.cityId,
+      federationId: parsed.data.federationId ?? null,
+      isOfficial: parsed.data.isOfficial,
     });
   }
 }

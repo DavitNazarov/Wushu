@@ -14,7 +14,7 @@
     "events": "ღონისძიებები",
     "registrations": "რეგისტრაციები",
     "weighin": "წონის კონტროლი",
-    "draw": "გათამაშება",
+    "draw": "წონის კონტროლის შედეგები",
     "brackets": "ბადეები",
     "schedule": "განრიგი",
     "live": "ლაივი",
@@ -200,8 +200,8 @@
     "clubMedals": "მედლები",
     "countries": "ქვეყნები",
     "countriesTitle": "ქვეყნები",
-    "countriesSubtitle": "Geo Wushu-ის ღონისძიებებში მონაწილე ქვეყნები და რეგიონები.",
-    "countryRegions": "რეგიონები",
+    "countriesSubtitle": "Geo Wushu-ის ღონისძიებებში მონაწილე ქვეყნები და ქალაქები.",
+    "countryRegions": "ქალაქები",
     "countryClubs": "კლუბები",
     "news": "სიახლეები",
     "newsTitle": "სიახლეები",
@@ -389,6 +389,14 @@
     "description": "You don't have permission to view this page.",
     "goHome": "Go to home",
     "signInDifferent": "Sign in with different account"
+  },
+  "notFound": {
+    "eyebrow": "შეცდომა 404",
+    "title": "გვერდი ვერ მოიძებნა",
+    "description": "გვერდი, რომელსაც ეძებთ, არ არსებობს ან გადატანილია. დავბრუნდეთ სწორ გზაზე.",
+    "goHome": "მთავარ გვერდზე",
+    "goBack": "უკან",
+    "exploreLabel": "ან დაათვალიერეთ"
   },
   "admin": {
     "dashboard": {
@@ -596,8 +604,17 @@
         "slugPlaceholder": "tbilisi-open-2026",
         "slugHint": "გამოიყენეთ მხოლოდ პატარა ასოები, ციფრები და დეფისები.",
         "locationLabel": "ლოკაცია",
+        "entryFeeLabel": "მონაწილეობის საფასური",
+        "entryFeePlaceholder": "მაგ. 50",
+        "optional": "(არასავალდებულო)",
         "timezoneLabel": "დროის სარტყელი",
-        "eventDatesLabel": "ღონისძიების თარიღები"
+        "eventDatesLabel": "ღონისძიების თარიღები",
+        "accessTypeLabel": "წვდომის ტიპი",
+        "accessTypePlaceholder": "აირჩიეთ წვდომის ტიპი",
+        "accessTypeOpen": "ღია",
+        "accessTypeClosed": "დახურული",
+        "accessTypeOpenDesc": "ნებისმიერ კლუბს შეუძლია სპორტსმენების რეგისტრაცია.",
+        "accessTypeClosedDesc": "მხოლოდ ოფიციალურ კლუბებს შეუძლიათ სპორტსმენების რეგისტრაცია."
       },
       "timezone": "დროის სარტყელი",
       "dates": {
@@ -1294,6 +1311,8 @@
       "dateOfBirth": "დაბადების თარიღი",
       "documentId": "დოკუმენტის ID",
       "club": "კლუბი",
+      "clubMemberships": "კლუბის წევრობები",
+      "primaryClub": "ძირითადი კლუბი",
       "sex": "სქესი",
       "sexOptions": {
         "male": "მამრობითი",
@@ -1473,32 +1492,38 @@
     "regionsCount": "{count, plural, =0 {რეგიონები არ არის} one {# რეგიონი} other {# რეგიონი}}",
     "clubsCount": "{count, plural, =0 {კლუბები არ არის} one {# კლუბი} other {# კლუბი}}",
     "backToCountries": "ქვეყნები",
-    "regionsTitle": "რეგიონები",
-    "newRegion": "ახალი რეგიონი",
-    "emptyRegionsTitle": "რეგიონები ჯერ არ არის",
-    "emptyRegionsDescription": "დაამატეთ რეგიონები ამ ქვეყნის კლუბების დასაჯგუფებლად.",
+    "regionsTitle": "ქალაქები",
+    "newRegion": "ახალი ქალაქი",
+    "emptyRegionsTitle": "ქალაქები ჯერ არ არის",
+    "emptyRegionsDescription": "დაამატეთ ქალაქები ამ ქვეყნის კლუბების დასაჯგუფებლად.",
     "regionColumns": {
-      "name": "რეგიონი",
+      "name": "ქალაქი",
       "clubs": "კლუბები"
     },
     "regionFields": {
-      "name": "რეგიონის სახელი (EN)",
-      "nameKa": "რეგიონის სახელი (ქართ.)"
+      "name": "ქალაქის სახელი (EN)",
+      "nameKa": "ქალაქის სახელი (ქართ.)"
     },
-    "deleteRegionConfirm": "წავშალოთ ეს რეგიონი? ამის გაუქმება ვერ მოხერხდება.",
-    "regionNotEmpty": "ჯერ გადაიტანეთ ან წაშალეთ ამ რეგიონის კლუბები, მწვრთნელები და სპორტსმენები.",
+    "deleteRegionConfirm": "წავშალოთ ეს ქალაქი? ამის გაუქმება ვერ მოხერხდება.",
+    "regionNotEmpty": "ჯერ გადაიტანეთ ან წაშალეთ ამ ქალაქის კლუბები, მწვრთნელები და სპორტსმენები.",
     "clubsTitle": "კლუბები",
-    "emptyClubsTitle": "ამ რეგიონში კლუბები არ არის",
-    "emptyClubsDescription": "ამ რეგიონზე მიბმული კლუბები აქ გამოჩნდება."
+    "emptyClubsTitle": "ამ ქალაქში კლუბები არ არის",
+    "emptyClubsDescription": "ამ ქალაქზე მიბმული კლუბები აქ გამოჩნდება.",
+    "independentClubs": "დამოუკიდებელი კლუბები",
+    "noClubsInFederation": "ამ ფედერაციაში კლუბები ჯერ არ არის."
   },
   "clubs": {
     "title": "კლუბები",
     "new": "ახალი კლუბი",
     "emptyTitle": "კლუბები ჯერ არ არის",
     "emptyDescription": "შექმენით კლუბები სპორტსმენების გუნდების მიხედვით დასაჯგუფებლად.",
+    "badges": {
+      "official": "ოფიციალური",
+      "unofficial": "არაოფიციალური"
+    },
     "columns": {
       "name": "კლუბი",
-      "region": "რეგიონი",
+      "federation": "ფედერაცია",
       "city": "ქალაქი",
       "country": "ქვეყანა"
     },
@@ -1506,12 +1531,17 @@
       "name": "კლუბის სახელი (EN)",
       "nameKa": "კლუბის სახელი (ქართ.)",
       "country": "ქვეყანა",
-      "region": "რეგიონი",
+      "region": "ქალაქი",
       "city": "ქალაქი",
+      "federation": "ფედერაცია",
       "selectCountry": "აირჩიეთ ქვეყანა",
-      "selectRegion": "აირჩიეთ რეგიონი",
+      "selectRegion": "აირჩიეთ ქალაქი",
+      "selectFederation": "აირჩიეთ ფედერაცია (არასავალდებულო)",
+      "noFederation": "ფედერაციის გარეშე (დამოუკიდებელი კლუბი)",
       "selectCountryFirst": "ჯერ აირჩიეთ ქვეყანა",
-      "noRegions": "ამ ქვეყანაში რეგიონები ჯერ არ არის"
+      "noRegions": "ამ ქვეყანაში ქალაქები ჯერ არ არის",
+      "isOfficial": "ოფიციალური კლუბი",
+      "isOfficialDesc": "ოფიციალურ კლუბებს შეუძლიათ სპორტსმენების რეგისტრაცია დახურულ ღონისძიებებზე."
     },
     "detail": {
       "title": "კლუბის დეტალები",
@@ -1624,6 +1654,10 @@
     "noResults": "რეგისტრაციები ვერ მოიძებნა",
     "noResultsHint": "სცადეთ ფილტრების შეცვლა ან აირჩიეთ სხვა ღონისძიება.",
     "pageSummary": "ნაჩვენებია {from}–{to} / {total}",
+    "income": {
+      "title": "შემოსავალი",
+      "breakdown": "{count} დადასტურებული მონაწილე × {fee}"
+    },
     "filterStatus": "სტატუსი",
     "filterStatusAll": "ყველა სტატუსი",
     "filterClub": "კლუბი",
@@ -2251,9 +2285,13 @@
     "editSession": "სესიის რედაქტირება",
     "addSessionDesc": "განსაზღვრეთ დროის ბლოკი შეჯიბრის დღისათვის.",
     "sessionName": "სესიის სახელი",
-    "sessionNamePlaceholder": "დილის სესია",
-    "sessionStart": "დაწყების დრო",
-    "sessionEnd": "დასრულების დრო",
+    "sessionNamePlaceholder": "Morning session",
+    "sessionNameKa": "სესიის სახელი (ქართულად)",
+    "sessionNameKaPlaceholder": "დილის სესია",
+    "sessionStart": "დაწყების თარიღი",
+    "sessionStartTime": "დაწყების დრო",
+    "sessionEnd": "დასრულების თარიღი",
+    "sessionEndTime": "დასრულების დრო",
     "sessionSaved": "სესია შენახულია",
     "sessionDeleted": "სესია წაშლილია",
     "deleteSessionTitle": "სესიის წაშლა",
@@ -2266,8 +2304,15 @@
     "generatedWithConflicts": "გრაფიკი შეიქმნა — {count} კონფლიქტი აღმოჩნდა",
     "avgBoutSeconds": "საშ. ბრძოლის ხანგრძლივობა (წმ)",
     "bufferSeconds": "ბუფერი ბრძოლებს შორის (წმ)",
-    "gapRuleNote": "სპორტსმელს მინ. 10 ბრძოლის ინტერვალი ესაჭიროება. კონფლიქტები მოინიშნება.",
-    "gapWarning": "ინტერვალის დარღვევა — პრობლემური ბრძოლები მოინიშნა",
+    "gapRuleNote": "სპორტსმენს სასურველია მინ. 15 ბრძოლის ინტერვალი გამოსვლებს შორის. უფრო ახლო წყვილები განრიგში მოინიშნება.",
+    "gapBadge": "ინტერვალი",
+    "gapWarningDetail": "{name}: ამ ბრძოლამდე მხოლოდ {gap}-ბრძოლიანი ინტერვალია (სასურველია {recommended})",
+    "orderErrorBadge": "თანმიმდევრობა",
+    "orderErrorDetail": "{name}: ბრძოლა {bout} ამ ბრძოლის შემდეგ ტარდება — გადაიტანეთ ადრე",
+    "winnerOf": "ბრძოლა {n}-ის გამარჯვებული",
+    "checkGaps": "განრიგის შემოწმება",
+    "hideGaps": "შემოწმების დამალვა",
+    "noGaps": "განრიგში პრობლემა არ მოიძებნა",
     "moveSaved": "ბრძოლა გადატანილია",
     "scheduled": "განაწილებული",
     "unscheduled": "განუნაწილებელი",
@@ -2277,8 +2322,7 @@
     "fightReady": "მზადაა",
     "fightWaiting": "ლოდინი",
     "errorGeneric": "მოქმედება ვერ შესრულდა.",
-    "printSchedule": "განრიგის ბეჭდვა",
-    "printPopupBlocked": "ბეჭდვის ფანჯარა ვერ გაიხსნა — დაუშვით ამომხტარი ფანჯრები და სცადეთ ხელახლა."
+    "printSchedule": "განრიგის ბეჭდვა"
   },
   "live": {
     "title": "პირდაპირი ეთერი",

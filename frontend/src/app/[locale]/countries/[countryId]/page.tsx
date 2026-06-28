@@ -10,13 +10,12 @@ type CountryPublicDetail = {
   name: string;
   nameKa: string | null;
   code: string | null;
-  regions: { id: string; name: string; nameKa: string | null; clubCount: number }[];
+  cities: { id: string; name: string; nameKa: string | null; clubCount: number }[];
   clubs: {
     id: string;
     name: string;
     nameKa: string | null;
-    city: string | null;
-    region: { id: string; name: string; nameKa: string | null } | null;
+    city: { id: string; name: string; nameKa: string | null } | null;
   }[];
 };
 
@@ -72,28 +71,28 @@ export default async function PublicCountryPage({ params }: Props) {
 
         {/* Stats row */}
         <div className="grid grid-cols-2 gap-3 max-w-sm">
-          <StatCard value={country.regions.length} label={tPublic('countryRegions')} />
+          <StatCard value={country.cities.length} label={tPublic('countryRegions')} />
           <StatCard value={country.clubs.length} label={tPublic('countryClubs')} />
         </div>
 
-        {/* Regions */}
-        {country.regions.length > 0 && (
+        {/* Cities */}
+        {country.cities.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-[13px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
               {tPublic('countryRegions')}
             </h2>
             <div className="flex flex-wrap gap-2">
-              {country.regions.map((region) => {
-                const regionName = localizedName(region.name, region.nameKa, locale);
+              {country.cities.map((city) => {
+                const cityName = localizedName(city.name, city.nameKa, locale);
                 return (
                   <div
-                    key={region.id}
+                    key={city.id}
                     className="flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5"
                   >
-                    <span className="text-[13px] text-[var(--color-text)]">{regionName}</span>
-                    {region.clubCount > 0 && (
+                    <span className="text-[13px] text-[var(--color-text)]">{cityName}</span>
+                    {city.clubCount > 0 && (
                       <span className="rounded-full bg-[var(--color-surface-alt)] px-1.5 py-0.5 text-[11px] tabular-nums text-[var(--color-text-muted)]">
-                        {region.clubCount}
+                        {city.clubCount}
                       </span>
                     )}
                   </div>
@@ -112,8 +111,8 @@ export default async function PublicCountryPage({ params }: Props) {
             <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)]">
               {country.clubs.map((club, i) => {
                 const clubName = localizedName(club.name, club.nameKa, locale);
-                const regionName = club.region
-                  ? localizedName(club.region.name, club.region.nameKa, locale)
+                const cityName = club.city
+                  ? localizedName(club.city.name, club.city.nameKa, locale)
                   : null;
                 return (
                   <Link
@@ -131,9 +130,9 @@ export default async function PublicCountryPage({ params }: Props) {
                         <span className="text-[14px] text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">
                           {clubName}
                         </span>
-                        {(club.city || regionName) && (
+                        {(club.city || cityName) && (
                           <p className="text-[12px] text-[var(--color-text-muted)]">
-                            {[club.city, regionName].filter(Boolean).join(', ')}
+                            {[club.city, cityName].filter(Boolean).join(', ')}
                           </p>
                         )}
                       </div>
@@ -154,8 +153,8 @@ export default async function PublicCountryPage({ params }: Props) {
           </section>
         )}
 
-        {country.clubs.length === 0 && country.regions.length === 0 && (
-          <p className="text-[14px] text-[var(--color-text-muted)]">No regions or clubs registered yet.</p>
+        {country.clubs.length === 0 && country.cities.length === 0 && (
+          <p className="text-[14px] text-[var(--color-text-muted)]">No cities or clubs registered yet.</p>
         )}
 
       </div>

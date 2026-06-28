@@ -23,9 +23,11 @@ export default function NewsPostPage({ params }: Props) {
   const tCommon = useTranslations('common');
   const locale  = useLocale();
   const { slug } = use(params);
-  const { data: post, isLoading, error, refetch, isFetched } = usePublicNewsPost(slug);
+  const { data: post, isLoading, error, refetch, isSuccess } = usePublicNewsPost(slug);
 
-  if (isFetched && !isLoading && !post) notFound();
+  // 404 only when the fetch succeeded and the slug genuinely has no post. On a
+  // transient error, fall through to the retryable alert below — don't hard-404.
+  if (isSuccess && !post) notFound();
 
   return (
     <PublicLayout>

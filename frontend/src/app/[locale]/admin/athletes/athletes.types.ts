@@ -7,10 +7,11 @@ export type AthleteFormState = {
   documentId: string;
   sex: 'MALE' | 'FEMALE' | '';
   clubId: string;
+  clubIds: string[];
   // Only used for club-less athletes; ignored (derived from club) when a club
   // is selected.
   countryId: string;
-  regionId: string;
+  cityId: string;
 };
 
 export const EMPTY_ATHLETE_FORM: AthleteFormState = {
@@ -22,8 +23,9 @@ export const EMPTY_ATHLETE_FORM: AthleteFormState = {
   documentId: '',
   sex: '',
   clubId: '',
+  clubIds: [],
   countryId: '',
-  regionId: '',
+  cityId: '',
 };
 
 export const PAGE_SIZE = 10;

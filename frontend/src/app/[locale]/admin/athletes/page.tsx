@@ -12,10 +12,11 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { Input } from '@/components/ui/primitives/input';
 import { ApiError, apiGet, apiPost } from '@/lib/api/client';
 import { localizedName } from '@/lib/bilingual';
-import type { AthleteRow, ClubRow, CountryRow, RegionRow } from '@/types/api';
+import type { AthleteRow, ClubRow, CountryRow, CityRow } from '@/types/api';
 
 import {
   ATHLETES_CARD_CLASS,
@@ -47,19 +48,23 @@ export default function AthletesPage() {
   const [form, setForm] = useState<AthleteFormState>(EMPTY_ATHLETE_FORM);
   const [docIdError, setDocIdError] = useState<string | null>(null);
 
+  // Debounce so a request is fired ~1s after the admin stops typing, not on
+  // every keystroke. The input stays bound to `search` for instant feedback.
+  const debouncedSearch = useDebouncedValue(search, 1000);
+
   function setSearchAndReset(v: string) { setSearch(v); setPage(1); }
   function setClubAndReset(v: string) { setSelectedClubId(v); setPage(1); }
 
   const athleteQueryPath = useMemo(() => {
     const params = new URLSearchParams();
-    if (search.trim()) params.set('search', search.trim());
+    if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
     if (selectedClubId) params.set('clubId', selectedClubId);
     const query = params.toString();
     return query ? `/api/athletes?${query}` : '/api/athletes';
-  }, [search, selectedClubId]);
+  }, [debouncedSearch, selectedClubId]);
 
   const { data: athletes, isLoading, error, refetch } = useQuery({
-    queryKey: ['athletes', search, selectedClubId],
+    queryKey: ['athletes', debouncedSearch, selectedClubId],
     queryFn: () => apiGet<AthleteRow[]>(athleteQueryPath),
   });
 
@@ -71,9 +76,9 @@ export default function AthletesPage() {
     queryKey: ['countries'],
     queryFn: () => apiGet<CountryRow[]>('/api/countries'),
   });
-  const { data: regions } = useQuery({
-    queryKey: ['regions'],
-    queryFn: () => apiGet<RegionRow[]>('/api/regions'),
+  const { data: cities } = useQuery({
+    queryKey: ['cities'],
+    queryFn: () => apiGet<CityRow[]>('/api/cities'),
   });
 
   const clubMap = useMemo(() => new Map((clubs ?? []).map((c) => [c.id, c])), [clubs]);
@@ -104,7 +109,15 @@ export default function AthletesPage() {
     setModalOpen(true);
   }
 
+  function membershipIdsForAthlete(a: AthleteRow) {
+    const ids = a.clubIds?.length
+      ? a.clubIds
+      : a.clubs?.map((club) => club.id) ?? [];
+    return Array.from(new Set([a.clubId, ...ids].filter((id): id is string => Boolean(id))));
+  }
+
   function openEdit(a: AthleteRow) {
+    const clubIds = membershipIdsForAthlete(a);
     setEditingAthlete(a);
     setForm({
       firstName: a.firstName,
@@ -115,8 +128,9 @@ export default function AthletesPage() {
       documentId: a.documentId ?? '',
       sex: a.sex ?? '',
       clubId: a.clubId ?? '',
+      clubIds,
       countryId: a.countryId ?? '',
-      regionId: a.regionId ?? '',
+      cityId: a.cityId ?? '',
     });
     setDocIdError(null);
     setModalOpen(true);
@@ -137,6 +151,10 @@ export default function AthletesPage() {
       return;
     }
 
+    const clubIds = Array.from(
+      new Set([form.clubId, ...form.clubIds].filter((id): id is string => Boolean(id))),
+    );
+
     const body: Record<string, unknown> = {
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
@@ -147,10 +165,11 @@ export default function AthletesPage() {
       dateOfBirth: form.dateOfBirth,
       documentId: form.documentId.trim(),
       sex: form.sex || undefined,
-      clubId: form.clubId || undefined,
-      // Region only matters for club-less athletes — when a club is set the
-      // server derives region/country from it and ignores this.
-      regionId: form.clubId ? undefined : form.regionId || null,
+      clubId: form.clubId || null,
+      clubIds,
+      // City only matters for club-less athletes — when a club is set the
+      // server derives city/country from it and ignores this.
+      cityId: form.clubId ? undefined : form.cityId || null,
     };
 
     if (editingAthlete) body.id = editingAthlete.id;
@@ -174,6 +193,7 @@ export default function AthletesPage() {
 
   function getClub(athlete: AthleteRow) {
     if (athlete.club) return athlete.club;
+    if (athlete.clubs?.length) return athlete.clubs[0];
     if (!athlete.clubId) return null;
     return clubMap.get(athlete.clubId) ?? null;
   }
@@ -181,7 +201,9 @@ export default function AthletesPage() {
   function getClubLabel(athlete: AthleteRow) {
     const club = getClub(athlete);
     if (!club) return t('badges.missingClub');
-    return localizedName(club.name, club.nameKa, locale);
+    const clubCount = membershipIdsForAthlete(athlete).length;
+    const primaryLabel = localizedName(club.name, club.nameKa, locale);
+    return clubCount > 1 ? `${primaryLabel} +${clubCount - 1}` : primaryLabel;
   }
 
   function getClubMeta(athlete: AthleteRow) {
@@ -296,7 +318,7 @@ export default function AthletesPage() {
         setForm={setForm}
         clubs={clubs ?? []}
         countries={countries ?? []}
-        regions={regions ?? []}
+        cities={cities ?? []}
         showKaFields={showKaFields}
         docIdError={docIdError}
         setDocIdError={setDocIdError}

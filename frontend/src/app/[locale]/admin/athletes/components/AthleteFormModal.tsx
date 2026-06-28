@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/primitives/select';
 import { localizedFullName, localizedName } from '@/lib/bilingual';
-import type { AthleteRow, ClubRow, CountryRow, RegionRow } from '@/types/api';
+import type { AthleteRow, ClubRow, CountryRow, CityRow } from '@/types/api';
 import {
   EMPTY_CLUB,
   EMPTY_COUNTRY,
@@ -32,7 +32,7 @@ type Props = {
   setForm: React.Dispatch<React.SetStateAction<AthleteFormState>>;
   clubs: ClubRow[];
   countries: CountryRow[];
-  regions: RegionRow[];
+  cities: CityRow[];
   showKaFields: boolean;
   docIdError: string | null;
   setDocIdError: (v: string | null) => void;
@@ -50,7 +50,7 @@ export function AthleteFormModal({
   setForm,
   clubs,
   countries,
-  regions,
+  cities,
   showKaFields,
   docIdError,
   setDocIdError,
@@ -62,6 +62,29 @@ export function AthleteFormModal({
   const t = useTranslations('athletes');
   const tClubs = useTranslations('clubs');
   const tCommon = useTranslations('common');
+  const selectedClubIds = new Set(
+    [form.clubId, ...form.clubIds].filter((id): id is string => Boolean(id)),
+  );
+
+  function setPrimaryClub(nextClubId: string) {
+    setForm((f) => {
+      const clubId = nextClubId === EMPTY_CLUB ? '' : nextClubId;
+      const clubIds = clubId
+        ? Array.from(new Set([clubId, ...f.clubIds]))
+        : f.clubIds.filter((id) => id !== f.clubId);
+      return { ...f, clubId, clubIds };
+    });
+  }
+
+  function toggleClubMembership(clubId: string, checked: boolean) {
+    setForm((f) => {
+      if (clubId === f.clubId) return f;
+      const next = checked
+        ? Array.from(new Set([...f.clubIds, clubId]))
+        : f.clubIds.filter((id) => id !== clubId);
+      return { ...f, clubIds: next };
+    });
+  }
 
   return (
     <Modal
@@ -169,12 +192,10 @@ export function AthleteFormModal({
         </div>
 
         <div className="space-y-1.5">
-          <Label>{t('fields.club')}</Label>
+          <Label>{t('fields.primaryClub')}</Label>
           <Select
             value={form.clubId || EMPTY_CLUB}
-            onValueChange={(v) =>
-              setForm((f) => ({ ...f, clubId: v === EMPTY_CLUB ? '' : v }))
-            }
+            onValueChange={setPrimaryClub}
           >
             <SelectTrigger className="h-10 w-full">
               <SelectValue placeholder="—" />
@@ -188,15 +209,49 @@ export function AthleteFormModal({
           </Select>
         </div>
 
-        {/* Region/country: derived from the club when set; chosen directly for
+        {clubs.length > 0 && (
+          <div className="space-y-2">
+            <Label>{t('fields.clubMemberships')}</Label>
+            <div className="max-h-40 space-y-1 overflow-y-auto rounded-[var(--radius-input)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+              {clubs.map((club) => {
+                const checked = selectedClubIds.has(club.id);
+                const primary = form.clubId === club.id;
+                return (
+                  <label
+                    key={club.id}
+                    className="flex cursor-pointer items-center gap-2 rounded-[var(--radius-input)] px-2 py-1.5 text-[13px] text-[var(--color-text)] hover:bg-[var(--color-surface-alt)]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={primary}
+                      onChange={(e) => toggleClubMembership(club.id, e.target.checked)}
+                      className="h-4 w-4 accent-[var(--color-primary)]"
+                    />
+                    <span className="min-w-0 flex-1 truncate">
+                      {localizedName(club.name, club.nameKa, locale)}
+                    </span>
+                    {primary && (
+                      <span className="shrink-0 text-[11px] text-[var(--color-text-muted)]">
+                        {t('fields.primaryClub')}
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* City/country: derived from the club when set; chosen directly for
             a club-less athlete. */}
         {form.clubId ? (
           (() => {
             const selectedClub = clubs.find((c) => c.id === form.clubId);
-            const region = selectedClub?.regionName
-              ? localizedName(selectedClub.regionName, selectedClub.regionNameKa, locale)
+            const city = selectedClub?.cityName
+              ? localizedName(selectedClub.cityName, selectedClub.cityNameKa, locale)
               : null;
-            const label = [region, selectedClub?.country].filter(Boolean).join(' · ');
+            const label = [city, selectedClub?.country].filter(Boolean).join(' · ');
             return label ? (
               <p className="text-[12px] text-[var(--color-text-muted)]">{label}</p>
             ) : null;
@@ -211,7 +266,7 @@ export function AthleteFormModal({
                   setForm((f) => ({
                     ...f,
                     countryId: v === EMPTY_COUNTRY ? '' : v,
-                    regionId: '',
+                    cityId: '',
                   }))
                 }
               >
@@ -227,12 +282,12 @@ export function AthleteFormModal({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>{tClubs('fields.region')}</Label>
+              <Label>{tClubs('fields.city')}</Label>
               <Select
-                value={form.regionId || EMPTY_REGION}
+                value={form.cityId || EMPTY_REGION}
                 disabled={!form.countryId}
                 onValueChange={(v) =>
-                  setForm((f) => ({ ...f, regionId: v === EMPTY_REGION ? '' : v }))
+                  setForm((f) => ({ ...f, cityId: v === EMPTY_REGION ? '' : v }))
                 }
               >
                 <SelectTrigger className="h-10 w-full">
@@ -240,7 +295,7 @@ export function AthleteFormModal({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={EMPTY_REGION}>—</SelectItem>
-                  {regions
+                  {cities
                     .filter((r) => r.countryId === form.countryId)
                     .map((r) => (
                       <SelectItem key={r.id} value={r.id}>{localizedName(r.name, r.nameKa, locale)}</SelectItem>

@@ -3,19 +3,19 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 
-// Region CRUD — middle of the geography hierarchy (Country → Region → Club).
+// City CRUD — middle of the geography hierarchy (Country → City → Club).
 // Org-scoped; writes are admin-only (enforced in the controller) and audited.
 @Injectable()
-export class RegionsService {
+export class CitiesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
 
-  // List regions, optionally filtered to one country (used by the club form's
-  // cascading region picker). Includes the parent country name + club count.
+  // List cities, optionally filtered to one country (used by the club form's
+  // cascading city picker). Includes the parent country name + club count.
   async list(organisationId: string, countryId?: string) {
-    const rows = await this.prisma.region.findMany({
+    const rows = await this.prisma.city.findMany({
       where: { organisationId, ...(countryId ? { countryId } : {}) },
       orderBy: [{ name: 'asc' }],
       select: {
@@ -39,7 +39,7 @@ export class RegionsService {
   }
 
   // Create-or-update. Validates the target country is in the same org. If an
-  // existing region is re-parented to a different country, cascade the new
+  // existing city is re-parented to a different country, cascade the new
   // countryId down to its clubs/coaches/athletes so the denormalised copies
   // stay consistent.
   async upsert(input: {
@@ -62,12 +62,12 @@ export class RegionsService {
     }
 
     const existing = input.id
-      ? await this.prisma.region.findFirst({
+      ? await this.prisma.city.findFirst({
           where: { id: input.id, organisationId: input.organisationId },
         })
       : null;
 
-    const data: Prisma.RegionUncheckedCreateInput = {
+    const data: Prisma.CityUncheckedCreateInput = {
       organisationId: input.organisationId,
       countryId: input.countryId,
       name: input.name.trim(),
@@ -76,21 +76,21 @@ export class RegionsService {
 
     return this.prisma.$transaction(async (tx) => {
       const saved = existing
-        ? await tx.region.update({ where: { id: existing.id }, data })
-        : await tx.region.create({ data });
+        ? await tx.city.update({ where: { id: existing.id }, data })
+        : await tx.city.create({ data });
 
       // Re-parented to another country → keep denormalised countryId in sync.
       if (existing && existing.countryId !== saved.countryId) {
         await tx.club.updateMany({
-          where: { regionId: saved.id },
+          where: { cityId: saved.id },
           data: { countryId: saved.countryId },
         });
         await tx.user.updateMany({
-          where: { regionId: saved.id },
+          where: { cityId: saved.id },
           data: { countryId: saved.countryId },
         });
         await tx.athlete.updateMany({
-          where: { regionId: saved.id },
+          where: { cityId: saved.id },
           data: { countryId: saved.countryId },
         });
       }
@@ -99,8 +99,8 @@ export class RegionsService {
         {
           organisationId: input.organisationId,
           actorUserId: input.actorUserId,
-          action: existing ? 'REGION_UPDATED' : 'REGION_CREATED',
-          entityType: 'region',
+          action: existing ? 'CITY_UPDATED' : 'CITY_CREATED',
+          entityType: 'city',
           entityId: saved.id,
           before: existing as unknown as Prisma.JsonValue | null,
           after: saved as unknown as Prisma.JsonValue,
@@ -114,11 +114,11 @@ export class RegionsService {
     });
   }
 
-  // Delete — blocked while the region still has clubs, coaches or athletes.
-  // Coaches/athletes carry a denormalised regionId that can be set without a
+  // Delete — blocked while the city still has clubs, coaches or athletes.
+  // Coaches/athletes carry a denormalised cityId that can be set without a
   // club, so they are checked directly (their FK relation is optional → SetNull).
   async remove(organisationId: string, actorUserId: string, id: string) {
-    const existing = await this.prisma.region.findFirst({
+    const existing = await this.prisma.city.findFirst({
       where: { id, organisationId },
       select: {
         id: true,
@@ -127,7 +127,7 @@ export class RegionsService {
     });
     if (!existing) {
       throw new HttpException(
-        { code: 'REGION_NOT_FOUND', message: 'Region not found' },
+        { code: 'CITY_NOT_FOUND', message: 'City not found' },
         HttpStatus.NOT_FOUND,
       );
     }
@@ -138,21 +138,21 @@ export class RegionsService {
     ) {
       throw new HttpException(
         {
-          code: 'REGION_NOT_EMPTY',
-          message: 'Move or remove this region’s clubs, coaches and athletes first',
+          code: 'CITY_NOT_EMPTY',
+          message: 'Move or remove this city’s clubs, coaches and athletes first',
         },
         HttpStatus.CONFLICT,
       );
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.region.delete({ where: { id } });
+      await tx.city.delete({ where: { id } });
       await this.audit.write(
         {
           organisationId,
           actorUserId,
-          action: 'REGION_DELETED',
-          entityType: 'region',
+          action: 'CITY_DELETED',
+          entityType: 'city',
           entityId: id,
           before: null,
           after: null,

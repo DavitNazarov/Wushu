@@ -107,7 +107,7 @@ export class UsersService {
 
     await this.assertRoleClubRules(input.organisationId, nextRole, nextClubId);
 
-    // Keep the coach's denormalised region/country aligned with their club
+    // Keep the coach's denormalised city/country aligned with their club
     // (cleared when promoted to admin / club removed).
     const geo = await this.resolveClubGeo(input.organisationId, nextClubId);
 
@@ -116,7 +116,7 @@ export class UsersService {
       displayName: input.displayName?.trim(),
       role: nextRole,
       clubId: nextClubId,
-      regionId: geo.regionId,
+      cityId: geo.cityId,
       countryId: geo.countryId,
       nationality:
         input.nationality !== undefined
@@ -404,20 +404,20 @@ export class UsersService {
     });
   }
 
-  // Resolve a club's region/country for the denormalised copy on the user.
+  // Resolve a club's city/country for the denormalised copy on the user.
   // Returns nulls when there's no club (admins). Club existence is validated
   // separately by assertRoleClubRules.
   private async resolveClubGeo(
     organisationId: string,
     clubId: string | null | undefined,
-  ): Promise<{ regionId: string | null; countryId: string | null }> {
-    if (!clubId) return { regionId: null, countryId: null };
+  ): Promise<{ cityId: string | null; countryId: string | null }> {
+    if (!clubId) return { cityId: null, countryId: null };
     const club = await this.prisma.club.findFirst({
       where: { id: clubId, organisationId },
-      select: { regionId: true, countryId: true },
+      select: { cityId: true, countryId: true },
     });
     return {
-      regionId: club?.regionId ?? null,
+      cityId: club?.cityId ?? null,
       countryId: club?.countryId ?? null,
     };
   }

@@ -167,6 +167,7 @@ export class FightsController {
         to: parsed.to as FightStatus,
         override: parsed.override ?? false,
         reason: parsed.reason ?? null,
+        actorCapabilities: auth.capabilities,
       });
       this.gateway.emitFightUpdate(updated.eventId, updated.matId, updated);
       this.gateway.emitScheduleUpdate(updated.eventId, {
@@ -189,6 +190,10 @@ export class FightsController {
       const msg = e instanceof Error ? e.message : 'UNKNOWN';
       if (msg === 'FIGHT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
+      if (msg === 'OVERRIDE_NOT_PERMITTED')
+        throw new HttpException(msg, HttpStatus.FORBIDDEN);
+      if (msg === 'FIGHT_ALREADY_FINALIZED')
+        throw new HttpException(msg, HttpStatus.CONFLICT);
       if (
         msg === 'INVALID_STATE_TRANSITION' ||
         msg === 'OVERRIDE_REASON_REQUIRED' ||
@@ -272,6 +277,7 @@ export class FightsController {
         override: parsed.override ?? false,
         reason: parsed.reason ?? null,
         expectedUpdatedAt: parsed.expectedUpdatedAt ?? null,
+        actorCapabilities: auth.capabilities,
       });
       this.gateway.emitFightUpdate(updated.eventId, updated.matId, updated);
       this.gateway.emitScheduleUpdate(updated.eventId, {
@@ -295,6 +301,10 @@ export class FightsController {
       if (msg === 'FIGHT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
       if (msg === 'FIGHT_STALE_UPDATE')
+        throw new HttpException(msg, HttpStatus.CONFLICT);
+      if (msg === 'OVERRIDE_NOT_PERMITTED')
+        throw new HttpException(msg, HttpStatus.FORBIDDEN);
+      if (msg === 'FIGHT_ALREADY_FINALIZED')
         throw new HttpException(msg, HttpStatus.CONFLICT);
       if (
         msg === 'RESULT_ALREADY_RECORDED' ||
@@ -419,12 +429,18 @@ export class FightsController {
       if (msg === 'FIGHT_NOT_FOUND') {
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
       }
+      // finalizeFightResult's compare-and-swap can lose the race when two
+      // submissions land at once — surface it as a 409 like the /result path.
+      if (msg === 'FIGHT_STALE_UPDATE') {
+        throw new HttpException(msg, HttpStatus.CONFLICT);
+      }
       if (
         msg === 'TIMER_NOT_INITIALIZED' ||
         msg === 'INVALID_TIMER_PHASE' ||
         msg === 'ROUND_STILL_RUNNING' ||
         msg === 'TIMER_STALE_UPDATE' ||
         msg === 'ROUND_RESULT_ALREADY_SET' ||
+        msg === 'RESULT_ALREADY_RECORDED' ||
         msg === 'EVENT_NOT_LIVE' ||
         msg === 'WINNER_NOT_PRESENT'
       ) {
@@ -460,6 +476,7 @@ export class FightsController {
         override: parsed.override ?? false,
         reason: parsed.reason ?? null,
         expectedUpdatedAt: parsed.expectedUpdatedAt ?? null,
+        actorCapabilities: auth.capabilities,
       });
       this.gateway.emitFightUpdate(updated.eventId, updated.matId, updated);
       this.gateway.emitScheduleUpdate(updated.eventId, {
@@ -483,6 +500,10 @@ export class FightsController {
       if (msg === 'FIGHT_NOT_FOUND')
         throw new HttpException(msg, HttpStatus.NOT_FOUND);
       if (msg === 'FIGHT_STALE_UPDATE')
+        throw new HttpException(msg, HttpStatus.CONFLICT);
+      if (msg === 'OVERRIDE_NOT_PERMITTED')
+        throw new HttpException(msg, HttpStatus.FORBIDDEN);
+      if (msg === 'FIGHT_ALREADY_FINALIZED')
         throw new HttpException(msg, HttpStatus.CONFLICT);
       if (
         msg === 'RESULT_ALREADY_RECORDED' ||

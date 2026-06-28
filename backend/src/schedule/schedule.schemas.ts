@@ -14,6 +14,7 @@ export const upsertSessionSchema = z.object({
   eventId: id,
   id: id.optional(),
   name: z.string().trim().min(1).max(200),
+  nameKa: z.string().trim().max(200).nullish(),
   startTime: z.string().trim().min(1),
   endTime: z.string().trim().min(1),
   order: orderInt.optional(),

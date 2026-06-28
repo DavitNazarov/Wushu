@@ -23,6 +23,14 @@ import { CAPABILITIES } from '../auth/capabilities';
 import { CreateEventSchema, UpdateEventSchema } from './event.types';
 import type { EventLifecycle } from '@prisma/client';
 import { EventCategorySelectionSchema } from './event-category-selection.schema';
+import { z } from 'zod';
+
+// Strict boolean bodies for the two visibility toggles. These were previously
+// read as `body.published` / `Boolean(body.public)` — the latter treats the
+// string "false" as truthy, so a malformed request could publish weigh-in
+// results. Reject anything that isn't a real boolean with a 400 INVALID_BODY.
+const PublishEventSchema = z.object({ published: z.boolean() });
+const WeighInVisibilitySchema = z.object({ public: z.boolean() });
 
 // Narrow type-guard for Prisma-style errors that carry a `.code` like 'P2002'
 // (unique constraint violation). Used so we can map DB constraint hits to
@@ -328,13 +336,20 @@ export class EventsController {
   async setPublished(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
-    @Body() body: { published: boolean },
+    @Body() body: unknown,
   ) {
     const auth = req.auth!;
+    const parsed = PublishEventSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new HttpException(
+        { message: 'published must be a boolean', code: 'INVALID_BODY' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     const event = await this.eventOps.setPublished(
       id,
       auth.organisationId,
-      body.published,
+      parsed.data.published,
       auth.sub,
     );
     if (!event)
@@ -349,13 +364,20 @@ export class EventsController {
   async setWeighInResultsVisibility(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
-    @Body() body: { public: boolean },
+    @Body() body: unknown,
   ) {
     const auth = req.auth!;
+    const parsed = WeighInVisibilitySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new HttpException(
+        { message: 'public must be a boolean', code: 'INVALID_BODY' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     const event = await this.eventOps.setWeighInResultsPublic(
       id,
       auth.organisationId,
-      Boolean(body.public),
+      parsed.data.public,
       auth.sub,
     );
     if (!event)

@@ -9,6 +9,10 @@ import {
 } from '../fights/live-queue.logic';
 import { buildScheduleRows } from './schedule-order.logic';
 import { planAutoScheduleOrder } from './auto-schedule-order.logic';
+import {
+  buildFightCandidates,
+  compareFightCandidate,
+} from './schedule-fight-candidates.logic';
 import { isFightPlayable } from '../competition/fight-visibility';
 
 // Schedule service: mats, sessions, fight ordering, and the auto-scheduler.
@@ -31,12 +35,16 @@ export class ScheduleService {
   // in a lifecycle that allows it AND, if the override flag is set, a reason
   // is supplied. EVENT_READ_ONLY beats EVENT_NOT_READY_FOR_SCHEDULE in the
   // check order so admins get the more-specific error first.
+  //
+  // A COMPLETED event is terminal: EVENT_READ_ONLY is NOT override-waivable —
+  // override only relaxes the "not yet ready" / rest-policy cases below, never
+  // re-opens a finished event for schedule edits.
   private assertScheduleMutable(input: {
     event: Event;
     override?: boolean;
     reason?: string | null;
   }): void {
-    if (isEventReadOnly(input.event.lifecycle) && !input.override) {
+    if (isEventReadOnly(input.event.lifecycle)) {
       throw new Error('EVENT_READ_ONLY');
     }
 
@@ -113,6 +121,7 @@ export class ScheduleService {
     actorUserId: string;
     id?: string;
     name: string;
+    nameKa?: string | null;
     startTime: string;
     endTime: string;
     order: number;
@@ -143,7 +152,7 @@ export class ScheduleService {
       if (!existing) throw new Error('SESSION_NOT_FOUND');
       return this.prisma.scheduleSession.update({
         where: { id: input.id },
-        data: { name: input.name, startTime, endTime, order: input.order },
+        data: { name: input.name, nameKa: input.nameKa ?? null, startTime, endTime, order: input.order },
       });
     }
     return this.prisma.scheduleSession.create({
@@ -151,6 +160,7 @@ export class ScheduleService {
         organisationId: input.organisationId,
         eventId: input.eventId,
         name: input.name,
+        nameKa: input.nameKa ?? null,
         startTime,
         endTime,
         order: input.order,
@@ -820,9 +830,31 @@ export class ScheduleService {
       },
     });
 
-    const { fights: orderedFights, diagnostics } =
-      planAutoScheduleOrder(fights);
+    // Incremental: only place fights that aren't in a session yet — real bouts
+    // AND "Winner of N" placeholders — in canonical bracket order (the same
+    // order buildScheduleRows / the schedule PDF use). Already-scheduled fights
+    // are left exactly where they are (preserving any manual drag arrangement);
+    // generating again only appends the still-unassigned ones. Rest-gap
+    // proximity is surfaced as an on-page warning, not enforced here.
+    const orderedFights = buildFightCandidates(fights)
+      .sort(compareFightCandidate)
+      .map((candidate) => candidate.fight)
+      .filter(
+        (f) =>
+          (f.status === 'QUEUED' || f.status === 'ON_DECK') &&
+          f.winnerAthleteId == null &&
+          (f.sessionId == null || f.orderInSession == null),
+      );
     if (orderedFights.length === 0) throw new Error('NO_SCHEDULABLE_FIGHTS');
+
+    // Rest-gap diagnostics are no longer computed server-side: the admin
+    // schedule page flags too-close bouts inline against the live ordering.
+    const diagnostics = {
+      minFightGap: 0,
+      fullySatisfied: true,
+      conflictCount: 0,
+      conflicts: [] as never[],
+    };
 
     const boutMs = (input.avgBoutSeconds + input.bufferSeconds) * 1000;
 
@@ -844,32 +876,24 @@ export class ScheduleService {
       fights: [],
     }));
 
-    // BF-4 (cont.): the clear step below leaves COMPLETE/CONFIRMED/IN_PROGRESS/
-    // PAUSED fights where they are. Their session slots are still occupied, so
-    // new orderInSession values must start AFTER the highest slot they hold and
-    // they must consume session capacity — otherwise a newly-ready fight (e.g. a
-    // final that just became playable mid-event) is numbered from 1 and collides
-    // with / is ordered ahead of already-played bouts in the same session.
+    // Every fight already placed in a session is retained as-is — we never move
+    // or renumber it. Its slot stays occupied, so appended fights consume the
+    // remaining capacity and start numbering AFTER the highest slot in use.
     const retainedMaxOrderBySession = new Map<string, number>();
     const retainedCountBySession = new Map<string, number>();
     for (const f of fights) {
-      const reschedulable =
-        (f.status === 'QUEUED' || f.status === 'ON_DECK') &&
-        f.winnerAthleteId == null;
-      if (reschedulable || f.sessionId == null) continue;
+      if (f.sessionId == null || f.orderInSession == null) continue;
       retainedCountBySession.set(
         f.sessionId,
         (retainedCountBySession.get(f.sessionId) ?? 0) + 1,
       );
-      if (f.orderInSession != null) {
-        retainedMaxOrderBySession.set(
-          f.sessionId,
-          Math.max(
-            retainedMaxOrderBySession.get(f.sessionId) ?? 0,
-            f.orderInSession,
-          ),
-        );
-      }
+      retainedMaxOrderBySession.set(
+        f.sessionId,
+        Math.max(
+          retainedMaxOrderBySession.get(f.sessionId) ?? 0,
+          f.orderInSession,
+        ),
+      );
     }
 
     let sessionIdx = 0;
@@ -911,22 +935,9 @@ export class ScheduleService {
       assignments[sessionIdx].fights.push(fight.id);
     }
 
-    // Clear session assignments for reschedulable fights only, then apply new
-    // ones in a single batch transaction. BF-4: a blanket clear would orphan
-    // IN_PROGRESS/PAUSED/COMPLETE/CONFIRMED fights from their session mid-event,
-    // so we only touch not-yet-started fights with no result (the same set the
-    // planner reassigns).
-    const writes: Prisma.PrismaPromise<unknown>[] = [
-      this.prisma.fight.updateMany({
-        where: {
-          organisationId: input.organisationId,
-          eventId: input.eventId,
-          status: { in: ['QUEUED', 'ON_DECK'] },
-          winnerAthleteId: null,
-        },
-        data: { sessionId: null, orderInSession: null },
-      }),
-    ];
+    // Apply only the new placements — no clear step, so already-scheduled
+    // fights keep their session + orderInSession untouched.
+    const writes: Prisma.PrismaPromise<unknown>[] = [];
     for (const assignment of assignments) {
       // Start numbering after the slots retained (still-placed) fights occupy.
       const offset = retainedMaxOrderBySession.get(assignment.sessionId) ?? 0;

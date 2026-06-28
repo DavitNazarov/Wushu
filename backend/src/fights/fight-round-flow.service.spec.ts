@@ -6,6 +6,10 @@ function createPrismaMock() {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      // finalizeFightResult writes the result through a compare-and-swap
+      // updateMany({ where: { id, status, updatedAt, winnerAthleteId }}).
+      // Default { count: 1 } = "the swap matched" so the finalize path proceeds.
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       // finalizeFightResult counts remaining playable fights to decide LIVE →
       // COMPLETED auto-complete; default to 1 so a fight finishing never trips
       // event completion in these round-flow unit tests.
@@ -126,6 +130,21 @@ describe('FightsService round flow', () => {
 
     prisma.fight.findFirst.mockResolvedValue(fight);
     prisma.timerState.findUnique.mockResolvedValue(fight.timerState);
+    // finalizeFightResult re-reads the fight twice: first a lost-update guard
+    // (select status + winnerAthleteId), then the full row after the swap.
+    prisma.fight.findUnique
+      .mockResolvedValueOnce({ status: 'PAUSED', winnerAthleteId: null })
+      .mockResolvedValueOnce({
+        id: 'fight_1',
+        eventId: 'event_1',
+        matId: null,
+        redAthleteId: 'red_1',
+        blueAthleteId: 'blue_1',
+        winnerAthleteId: 'red_1',
+        status: 'CONFIRMED',
+        nextFightId: null,
+        nextFightSlot: null,
+      });
     prisma.timerState.update
       .mockResolvedValueOnce({
         ...fight.timerState,

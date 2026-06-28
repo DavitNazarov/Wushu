@@ -27,9 +27,10 @@ import { AthleteProfileService } from './athlete-profile.service';
 const athleteBodySchema = z.object({
   id: z.string().cuid().optional(),
   clubId: z.string().cuid().optional().nullable(),
-  // Used only for club-less athletes; ignored when a club is set (region is
-  // then derived from the club). Not .cuid() — migrated regions use UUIDs.
-  regionId: z.string().min(1).max(64).optional().nullable(),
+  clubIds: z.array(z.string().cuid()).max(20).optional(),
+  // Used only for club-less athletes; ignored when a club is set (city is
+  // then derived from the club). Not .cuid() — migrated cities use UUIDs.
+  cityId: z.string().min(1).max(64).optional().nullable(),
   firstName: z.string().trim().min(1),
   firstNameKa: z.string().trim().min(1).optional().nullable(),
   lastName: z.string().trim().min(1),
@@ -46,6 +47,8 @@ const athleteBodySchema = z.object({
     ),
   documentId: z.string().trim().min(1),
   sex: z.enum(['MALE', 'FEMALE']).optional().nullable(),
+  // Many-to-many: replaces the athlete's coach set when present.
+  coachIds: z.array(z.string().min(1).max(64)).max(10).optional(),
 });
 
 type AthleteBodyInput = z.infer<typeof athleteBodySchema>;
@@ -142,9 +145,20 @@ export class AthletesController {
     const parsed = athleteBodySchema.parse(body);
     const dob = new Date(`${parsed.dateOfBirth}T00:00:00.000Z`);
 
-    // Coach: ignore client clubId, use auth.clubId only
+    // Coaches may edit athletes in their membership club, but they don't get
+    // to rewrite the athlete's primary/membership clubs on update.
     const effectiveClubId =
-      auth.role === 'coach' ? auth.clubId! : (parsed.clubId ?? null);
+      auth.role === 'coach'
+        ? parsed.id
+          ? undefined
+          : auth.clubId!
+        : (parsed.clubId ?? null);
+    const effectiveClubIds =
+      auth.role === 'coach'
+        ? parsed.id
+          ? undefined
+          : [auth.clubId!]
+        : parsed.clubIds;
 
     try {
       const { athlete, possibleDuplicates } =
@@ -153,7 +167,8 @@ export class AthletesController {
           actorUserId: auth.sub,
           id: parsed.id,
           clubId: effectiveClubId,
-          regionId: parsed.regionId ?? null,
+          clubIds: effectiveClubIds,
+          cityId: parsed.cityId ?? null,
           actorClubId: auth.role === 'coach' ? (auth.clubId ?? null) : null,
           firstName: parsed.firstName,
           firstNameKa: parsed.firstNameKa ?? null,
@@ -162,6 +177,7 @@ export class AthletesController {
           dateOfBirth: dob,
           documentId: parsed.documentId,
           sex: parsed.sex ?? null,
+          coachIds: parsed.coachIds,
         });
 
       return { athlete, possibleDuplicates };

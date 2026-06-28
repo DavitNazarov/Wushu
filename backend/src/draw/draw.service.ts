@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { assertId } from '../common/assert-id';
 import {
   buildRoundRobinBracket,
   buildSingleElimBracket,
@@ -115,6 +116,7 @@ export class DrawService {
     override?: boolean;
     reason?: string | null;
   }) {
+    assertId(input.eventId, 'EVENT_ID_REQUIRED');
     const event = await this.prisma.event.findFirst({
       where: { id: input.eventId, organisationId: input.organisationId },
     });
@@ -182,7 +184,7 @@ export class DrawService {
         eventWeightCategoryId: { not: null },
       },
       include: {
-        athlete: { select: { id: true, clubId: true } },
+        athlete: { select: { id: true } },
         eventWeightCategory: {
           include: {
             categoryTemplateWeight: { select: { name: true } },
@@ -286,7 +288,7 @@ export class DrawService {
           if (input.sameClubSeparation) {
             athleteIds = this.separateSameClub(
               athleteIds,
-              regs.map((r) => ({ id: r.athlete.id, clubId: r.athlete.clubId })),
+              regs.map((r) => ({ id: r.athlete.id, clubId: r.clubId })),
             );
           }
 
@@ -418,6 +420,7 @@ export class DrawService {
     override: boolean;
     reason: string;
   }) {
+    assertId(input.eventId, 'EVENT_ID_REQUIRED');
     if (!input.override) throw new Error('OVERRIDE_REQUIRED');
     if (!input.reason?.trim()) throw new Error('REASON_REQUIRED');
 
@@ -497,6 +500,8 @@ export class DrawService {
     actorUserId: string;
     reason?: string | null;
   }) {
+    assertId(input.eventId, 'EVENT_ID_REQUIRED');
+    assertId(input.eventWeightCategoryId, 'CATEGORY_ID_REQUIRED');
     const event = await this.prisma.event.findFirst({
       where: { id: input.eventId, organisationId: input.organisationId },
       select: { id: true, lifecycle: true },
@@ -550,6 +555,8 @@ export class DrawService {
     eventWeightCategoryId: string;
     actorUserId: string;
   }) {
+    assertId(input.eventId, 'EVENT_ID_REQUIRED');
+    assertId(input.eventWeightCategoryId, 'CATEGORY_ID_REQUIRED');
     const event = await this.prisma.event.findFirst({
       where: { id: input.eventId, organisationId: input.organisationId },
       select: { id: true },

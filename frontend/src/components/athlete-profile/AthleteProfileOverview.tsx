@@ -26,7 +26,15 @@ export function AthleteProfileOverview({ athlete, registrations, fights, scope }
   const latestRegistration = [...registrations].sort(
     (a, b) => new Date(b.competitionStartDate).getTime() - new Date(a.competitionStartDate).getTime(),
   )[0];
-  const clubMeta = [athlete.club?.city, athlete.club?.country].filter(Boolean).join(', ');
+  const clubs = athlete.clubs?.length ? athlete.clubs : athlete.club ? [athlete.club] : [];
+  const primaryClub = athlete.club ?? clubs[0] ?? null;
+  const clubLabel = primaryClub
+    ? `${localizedName(primaryClub.name, primaryClub.nameKa, locale)}${clubs.length > 1 ? ` +${clubs.length - 1}` : ''}`
+    : t('unassignedClub');
+  const clubMeta = clubs
+    .map((club) => [club.city, club.country].filter(Boolean).join(', '))
+    .filter(Boolean)
+    .join(' · ');
   const displayFullName = localizedFullName(athlete.firstName, athlete.lastName, athlete.firstNameKa, athlete.lastNameKa, locale);
   const initials = `${athlete.firstName.charAt(0)}${athlete.lastName.charAt(0)}`.toUpperCase();
 
@@ -69,7 +77,7 @@ export function AthleteProfileOverview({ athlete, registrations, fights, scope }
                 {displayFullName}
               </h2>
               <div className="mt-2.5 flex flex-wrap gap-1.5">
-                <Pill icon={Building2}>{athlete.club ? localizedName(athlete.club.name, athlete.club.nameKa, locale) : t('unassignedClub')}</Pill>
+                <Pill icon={Building2}>{clubLabel}</Pill>
                 {scope !== 'public' && (
                   <Pill icon={CalendarDays}>{formatAthleteDate(athlete.dateOfBirth, locale)}</Pill>
                 )}

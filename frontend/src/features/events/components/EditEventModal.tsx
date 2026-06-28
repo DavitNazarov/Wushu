@@ -44,7 +44,9 @@ export function EditEventModal({ open, onClose, event }: Props) {
   const [nameKa, setNameKa] = useState(event.nameKa ?? '');
   const [slug, setSlug] = useState(event.slug);
   const [location, setLocation] = useState(event.location ?? '');
+  const [entryFee, setEntryFee] = useState(event.entryFee != null ? String(event.entryFee) : '');
   const [timezone, setTimezone] = useState(event.timezone);
+  const [accessType, setAccessType] = useState<'OPEN' | 'CLOSED' | ''>(event.accessType);
   const [rangeStart, setRangeStart] = useState(initRangeStart);
   const [rangeEnd, setRangeEnd] = useState(initRangeEnd);
   const [registrationDays, setRegistrationDays] = useState<string[]>(initRegDays);
@@ -110,7 +112,9 @@ export function EditEventModal({ open, onClose, event }: Props) {
         nameKa: nameKa.trim() || null,
         slug: slug.trim(),
         location: location.trim().replace(/,\s*$/, ''),
+        entryFee: entryFee.trim() ? Number(entryFee) : null,
         timezone: timezone.trim() || 'Asia/Tbilisi',
+        accessType: accessType as 'OPEN' | 'CLOSED',
         autoAdvanceStage,
         dates: {
           range: { startDate: rangeStart, endDate: rangeEnd },
@@ -127,8 +131,12 @@ export function EditEventModal({ open, onClose, event }: Props) {
       }
 
       const updatedEvent = await apiPatch<EventRow>(`/api/events/${event.id}`, payload);
-      if (effectiveCategorySelection && effectiveCategorySelection.ageGroups.length > 0) {
-        await apiPost(`/api/events/${event.id}/categories`, effectiveCategorySelection);
+      // Only re-submit categories when the user actually edited them. `categorySelection`
+      // stays null until the category panel fires onChange, so basic-field edits (name,
+      // location, entry fee…) no longer re-POST the unchanged selection — which would trip
+      // EVENT_CATEGORIES_LOCKED_AFTER_ACTIVITY on events that already have registrations.
+      if (categorySelection && categorySelection.ageGroups.length > 0) {
+        await apiPost(`/api/events/${event.id}/categories`, categorySelection);
         queryClient.invalidateQueries({ queryKey: ['event-categories', event.id] });
       }
       return updatedEvent;
@@ -163,7 +171,9 @@ export function EditEventModal({ open, onClose, event }: Props) {
     setNameKa(event.nameKa ?? '');
     setSlug(event.slug);
     setLocation(event.location ?? '');
+    setEntryFee(event.entryFee != null ? String(event.entryFee) : '');
     setTimezone(event.timezone);
+    setAccessType(event.accessType);
     setAutoAdvanceStage(event.autoAdvanceStage ?? false);
     resetDates();
     setIssues(null);
@@ -198,6 +208,7 @@ export function EditEventModal({ open, onClose, event }: Props) {
             nameKa={nameKa}
             slug={slug}
             location={location}
+            entryFee={entryFee}
             timezone={timezone}
             slugIsValid={slugIsValid}
             issuesByPath={issuesByPath}
@@ -211,7 +222,10 @@ export function EditEventModal({ open, onClose, event }: Props) {
               setIssues(null);
             }}
             onLocationChange={setLocation}
+            onEntryFeeChange={setEntryFee}
             onTimezoneChange={setTimezone}
+            accessType={accessType}
+            onAccessTypeChange={setAccessType}
           />
         </EventFormSection>
 

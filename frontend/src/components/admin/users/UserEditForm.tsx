@@ -57,13 +57,13 @@ export function UserEditForm({
 
   const showClubField = role === 'coach';
 
-  // Region + country are derived from the selected club (server-side); show
+  // City + country are derived from the selected club (server-side); show
   // them read-only so the admin sees where this coach lands in the hierarchy.
   const selectedClub = (clubs ?? []).find((c) => c.id === clubId) ?? null;
   const clubRegionLabel = selectedClub
     ? [
-        selectedClub.regionName
-          ? localizedName(selectedClub.regionName, selectedClub.regionNameKa, locale)
+        selectedClub.cityName
+          ? localizedName(selectedClub.cityName, selectedClub.cityNameKa, locale)
           : null,
         selectedClub.country,
       ]
